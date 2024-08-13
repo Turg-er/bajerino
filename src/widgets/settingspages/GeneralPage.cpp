@@ -615,6 +615,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                            "Google",
                        },
                        s.emojiSet);
+    layout.addCheckbox("Show BajTV global emotes", s.enableBajTVGlobalEmotes);
+    layout.addCheckbox("Show BajTV channel emotes", s.enableBajTVChannelEmotes);
     layout.addCheckbox("Show BTTV global emotes", s.enableBTTVGlobalEmotes);
     layout.addCheckbox("Show BTTV channel emotes", s.enableBTTVChannelEmotes);
     layout.addCheckbox("Enable BTTV live emote updates (requires restart)",

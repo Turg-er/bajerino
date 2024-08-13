@@ -1,5 +1,6 @@
 #include "Application.hpp"
 
+#include "common/Aliases.hpp"
 #include "common/Args.hpp"
 #include "common/Channel.hpp"
 #include "common/QLogging.hpp"
@@ -12,6 +13,8 @@
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/notifications/NotificationController.hpp"
 #include "controllers/sound/ISoundController.hpp"
+#include "messages/Emote.hpp"
+#include "providers/bajtv/BajTvEmotes.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/irc/AbstractIrcServer.hpp"
@@ -144,6 +147,7 @@ Application::Application(Settings &_settings, const Paths &paths,
     , bttvEmotes(new BttvEmotes)
     , ffzEmotes(new FfzEmotes)
     , seventvEmotes(new SeventvEmotes)
+    , bajtvEmotes(new BajTvEmotes)
     , logging(new Logging(_settings))
     , linkResolver(new LinkResolver)
     , streamerMode(new StreamerMode)
@@ -175,6 +179,7 @@ void Application::fakeDtor()
     this->bttvEmotes.reset();
     this->ffzEmotes.reset();
     this->seventvEmotes.reset();
+    this->bajtvEmotes.reset();
     this->notifications.reset();
     this->commands.reset();
     // If a crash happens after crashHandler has been reset, we'll assert
@@ -354,6 +359,12 @@ int Application::run(QApplication &qtApp)
             this->twitch->reloadAllSevenTVChannelEmotes();
         },
         false);
+    getSettings()->enableBajTVGlobalEmotes.connect([this] {
+        this->twitch->reloadBajTvGlobalEmotes();
+    });
+    getSettings()->enableBajTVChannelEmotes.connect([this] {
+        this->twitch->reloadAllBajTvChannelEmotes();
+    });
 
     return qtApp.exec();
 }
@@ -588,6 +599,13 @@ SeventvEmotes *Application::getSeventvEmotes()
     assert(this->seventvEmotes);
 
     return this->seventvEmotes.get();
+}
+BajTvEmotes *Application::getBajTvEmotes()
+{
+    assertInGuiThread();
+    assert(this->bajtvEmotes);
+
+    return this->bajtvEmotes.get();
 }
 
 void Application::save()

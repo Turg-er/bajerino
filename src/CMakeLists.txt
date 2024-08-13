@@ -388,6 +388,11 @@ set(SOURCE_FILES
         providers/seventv/eventapi/Subscription.cpp
         providers/seventv/eventapi/Subscription.hpp
 
+        providers/bajtv/BajTvEmotes.cpp
+        providers/bajtv/BajTvEmotes.hpp
+        providers/bajtv/BajTvUtil.cpp
+        providers/bajtv/BajTvUtil.hpp
+
         providers/twitch/ChannelPointReward.cpp
         providers/twitch/ChannelPointReward.hpp
         providers/twitch/IrcMessageHandler.cpp

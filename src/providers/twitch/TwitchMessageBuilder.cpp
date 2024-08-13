@@ -13,6 +13,7 @@
 #include "messages/Image.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageThread.hpp"
+#include "providers/bajtv/BajTvEmotes.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/colors/ColorProvider.hpp"
@@ -1261,6 +1262,7 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
     const auto *globalBttvEmotes = app->getBttvEmotes();
     const auto *globalFfzEmotes = app->getFfzEmotes();
     const auto *globalSeventvEmotes = app->getSeventvEmotes();
+    const auto *globalBajtvEmotes = app->getBajTvEmotes();
 
     auto flags = MessageElementFlags();
     auto emote = std::optional<EmotePtr>{};
@@ -1278,6 +1280,12 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
         flags = MessageElementFlag::FfzEmote;
     }
     else if (this->twitchChannel &&
+             (emote = this->twitchChannel->bajtvEmote(name)))
+    {
+        flags = MessageElementFlag::BttvEmote;
+        // zeroWidth = emote.value()->zeroWidth;
+    }
+    else if (this->twitchChannel &&
              (emote = this->twitchChannel->bttvEmote(name)))
     {
         flags = MessageElementFlag::BttvEmote;
@@ -1287,6 +1295,10 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
     {
         flags = MessageElementFlag::SevenTVEmote;
         zeroWidth = emote.value()->zeroWidth;
+    }
+    else if ((emote = globalBajtvEmotes->emote(name)))
+    {
+        flags = MessageElementFlag::BttvEmote;
     }
     else if ((emote = globalFfzEmotes->emote(name)))
     {

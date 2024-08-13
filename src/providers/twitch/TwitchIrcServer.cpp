@@ -7,6 +7,7 @@
 #include "controllers/accounts/AccountController.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
+#include "providers/bajtv/BajTvEmotes.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/bttv/BttvLiveUpdates.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
@@ -176,6 +177,7 @@ void TwitchIrcServer::initialize()
     this->reloadBTTVGlobalEmotes();
     this->reloadFFZGlobalEmotes();
     this->reloadSevenTVGlobalEmotes();
+    this->reloadBajTvGlobalEmotes();
 }
 
 void TwitchIrcServer::initializeConnection(IrcConnection *connection,
@@ -717,10 +719,24 @@ void TwitchIrcServer::reloadAllFFZChannelEmotes()
         }
     });
 }
+void TwitchIrcServer::reloadAllBajTvChannelEmotes()
+{
+    this->forEachChannel([](const auto &chan) {
+        if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get()))
+        {
+            channel->refreshBajTvChannelEmotes(false);
+        }
+    });
+}
 
 void TwitchIrcServer::reloadSevenTVGlobalEmotes()
 {
     getApp()->getSeventvEmotes()->loadGlobalEmotes();
+}
+void TwitchIrcServer::reloadBajTvGlobalEmotes()
+{
+    std::cout << "TwitchIrcServer::reloadBajTvGlobalEmotes()" << std::endl;
+    getApp()->getBajTvEmotes()->loadEmotes();
 }
 
 void TwitchIrcServer::reloadAllSevenTVChannelEmotes()

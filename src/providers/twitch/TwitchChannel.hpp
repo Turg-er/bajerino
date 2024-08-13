@@ -161,18 +161,22 @@ public:
     // Emotes
     std::optional<EmotePtr> bttvEmote(const EmoteName &name) const;
     std::optional<EmotePtr> ffzEmote(const EmoteName &name) const;
+    std::optional<EmotePtr> bajtvEmote(const EmoteName &name) const;
     std::optional<EmotePtr> seventvEmote(const EmoteName &name) const;
     std::shared_ptr<const EmoteMap> bttvEmotes() const;
     std::shared_ptr<const EmoteMap> ffzEmotes() const;
+    std::shared_ptr<const EmoteMap> bajtvEmotes() const;
     std::shared_ptr<const EmoteMap> seventvEmotes() const;
 
     void refreshBTTVChannelEmotes(bool manualRefresh);
     void refreshFFZChannelEmotes(bool manualRefresh);
     void refreshSevenTVChannelEmotes(bool manualRefresh);
+    void refreshBajTvChannelEmotes(bool manualRefresh);
 
     void setBttvEmotes(std::shared_ptr<const EmoteMap> &&map);
     void setFfzEmotes(std::shared_ptr<const EmoteMap> &&map);
     void setSeventvEmotes(std::shared_ptr<const EmoteMap> &&map);
+    void setBajTvEmotes(std::shared_ptr<const EmoteMap> &&map);
 
     const QString &seventvUserID() const;
     const QString &seventvEmoteSetID() const;
@@ -393,6 +397,7 @@ protected:
 
     Atomic<std::shared_ptr<const EmoteMap>> bttvEmotes_;
     Atomic<std::shared_ptr<const EmoteMap>> ffzEmotes_;
+    Atomic<std::shared_ptr<const EmoteMap>> bajtvEmotes_;
     Atomic<std::shared_ptr<const EmoteMap>> seventvEmotes_;
     Atomic<std::optional<EmotePtr>> ffzCustomModBadge_;
     Atomic<std::optional<EmotePtr>> ffzCustomVipBadge_;

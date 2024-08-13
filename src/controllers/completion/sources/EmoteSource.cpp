@@ -3,6 +3,7 @@
 #include "Application.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/completion/sources/Helpers.hpp"
+#include "providers/bajtv/BajTvEmotes.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/emoji/Emojis.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
@@ -128,6 +129,10 @@ void EmoteSource::initializeFromChannel(const Channel *channel)
             {
                 addEmotes(emotes, *seventv, "Channel 7TV");
             }
+            if (auto bajtv = tc->bajtvEmotes())
+            {
+                addEmotes(emotes, *bajtv, "Channel BajTV");
+            }
         }
 
         if (auto bttvG = app->getBttvEmotes()->emotes())
@@ -137,6 +142,10 @@ void EmoteSource::initializeFromChannel(const Channel *channel)
         if (auto ffzG = app->getFfzEmotes()->emotes())
         {
             addEmotes(emotes, *ffzG, "Global FrankerFaceZ");
+        }
+        if (auto bajtvG = app->getBajTvEmotes()->emotes())
+        {
+            addEmotes(emotes, *bajtvG, "Global BajTV");
         }
         if (auto seventvG = app->getSeventvEmotes()->globalEmotes())
         {

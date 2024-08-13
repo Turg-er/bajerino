@@ -272,6 +272,8 @@ public:
         "/emotes/removeSpacesBetweenEmotes", false};
 
     BoolSetting enableBTTVGlobalEmotes = {"/emotes/bttv/global", true};
+    BoolSetting enableBajTVGlobalEmotes = {"/emotes/bajtv/global", true};
+    BoolSetting enableBajTVChannelEmotes = {"/emotes/bajtv/channel", true};
     BoolSetting enableBTTVChannelEmotes = {"/emotes/bttv/channel", true};
     BoolSetting enableBTTVLiveUpdates = {"/emotes/bttv/liveupdates", true};
     BoolSetting enableFFZGlobalEmotes = {"/emotes/ffz/global", true};

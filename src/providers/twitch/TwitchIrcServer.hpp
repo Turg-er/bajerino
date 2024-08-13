@@ -70,6 +70,8 @@ public:
     std::shared_ptr<Channel> getChannelOrEmptyByID(
         const QString &channelID) override;
 
+    void reloadBajTvGlobalEmotes();
+    void reloadAllBajTvChannelEmotes();
     void reloadBTTVGlobalEmotes();
     void reloadAllBTTVChannelEmotes();
     void reloadFFZGlobalEmotes();

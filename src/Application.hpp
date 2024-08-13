@@ -52,6 +52,7 @@ class CrashHandler;
 class BttvEmotes;
 class FfzEmotes;
 class SeventvEmotes;
+class BajTvEmotes;
 class ILinkResolver;
 class IStreamerMode;
 class IAbstractIrcServer;
@@ -98,6 +99,7 @@ public:
     virtual Updates &getUpdates() = 0;
     virtual BttvEmotes *getBttvEmotes() = 0;
     virtual FfzEmotes *getFfzEmotes() = 0;
+    virtual BajTvEmotes *getBajTvEmotes() = 0;
     virtual SeventvEmotes *getSeventvEmotes() = 0;
     virtual ILinkResolver *getLinkResolver() = 0;
     virtual IStreamerMode *getStreamerMode() = 0;
@@ -167,6 +169,7 @@ private:
     std::unique_ptr<BttvEmotes> bttvEmotes;
     std::unique_ptr<FfzEmotes> ffzEmotes;
     std::unique_ptr<SeventvEmotes> seventvEmotes;
+    std::unique_ptr<BajTvEmotes> bajtvEmotes;
     const std::unique_ptr<Logging> logging;
     std::unique_ptr<ILinkResolver> linkResolver;
     std::unique_ptr<IStreamerMode> streamerMode;
@@ -220,6 +223,7 @@ public:
     BttvEmotes *getBttvEmotes() override;
     FfzEmotes *getFfzEmotes() override;
     SeventvEmotes *getSeventvEmotes() override;
+    BajTvEmotes *getBajTvEmotes() override;
 
     ILinkResolver *getLinkResolver() override;
     IStreamerMode *getStreamerMode() override;
