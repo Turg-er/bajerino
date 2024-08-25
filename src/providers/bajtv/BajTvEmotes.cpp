@@ -17,15 +17,13 @@ namespace {
 
 using namespace chatterino;
 
+const QString BAJTV_URL = "https://api.bajtv.mom:3000/";
+// const QString BAJTV_URL = "http://localhost:3000/";
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-const auto &LOG = chatterinoFfzemotes;
+const auto &LOG = chatterinoBajTvemotes;
 
 const QString CHANNEL_HAS_NO_EMOTES(
     "This channel has no Baj TV channel emotes.");
-
-// FFZ doesn't provide any data on the size for room badges,
-// so we assume 18x18 (same as a Twitch badge)
-constexpr QSize BASE_BADGE_SIZE(18, 18);
 
 Url getEmoteLink(const QJsonArray &urls, const QString &emoteScale)
 {
@@ -99,9 +97,9 @@ void parseEmoteSetInto(const QJsonObject &emoteSet, const QString &kind,
                         QString("%1<br>%2 Baj TV Emote<br>By: %3")
                             .arg(name.string, kind, author.string),
                         emote);
-        emote.homePage = Url{QString("http://localhost:3000/emoticon/%1-%2")
-                                 .arg(id.string)
-                                 .arg(name.string)};
+        static auto url = BAJTV_URL + "emoticon/%1-%2";
+        emote.homePage =
+            Url{QString(BAJTV_URL).arg(id.string).arg(name.string)};
 
         map[name] = cachedOrMake(std::move(emote), id);
     }
@@ -182,7 +180,7 @@ void BajTvEmotes::loadEmotes()
         return;
     }
 
-    QString url("http://localhost:3000/defaultsets");
+    QString url = BAJTV_URL + "defaultsets";
 
     NetworkRequest(url)
 
@@ -204,8 +202,9 @@ void BajTvEmotes::loadChannel(const std::weak_ptr<Channel> &channel,
                               bool manualRefresh)
 {
     qCDebug(LOG) << "Reload Baj TV Channel Emotes for channel" << channelID;
+    static auto url = BAJTV_URL + "channel-emotes/";
 
-    NetworkRequest("http://localhost:3000/channel-emotes/" + channelID)
+    NetworkRequest(url + channelID)
 
         .timeout(20000)
         .onSuccess([emoteCallback = std::move(emoteCallback), channel,

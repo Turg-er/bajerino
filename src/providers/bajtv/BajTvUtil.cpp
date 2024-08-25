@@ -6,7 +6,7 @@ namespace chatterino {
 Url parseBajTvUrl(const QString &bajtvUrl)
 {
     QUrl asURL(bajtvUrl);
-    asURL.setScheme("http");
+    asURL.setScheme("https");
     return {asURL.toString()};
 }
 

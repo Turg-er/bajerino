@@ -18,6 +18,8 @@ Q_LOGGING_CATEGORY(chatterinoCrashhandler, "chatterino.crashhandler",
 Q_LOGGING_CATEGORY(chatterinoEmoji, "chatterino.emoji", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoEnv, "chatterino.env", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoFfzemotes, "chatterino.ffzemotes", logThreshold);
+Q_LOGGING_CATEGORY(chatterinoBajTvemotes, "chatterino.bajtvemotes",
+                   logThreshold);
 Q_LOGGING_CATEGORY(chatterinoHelper, "chatterino.helper", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoHighlights, "chatterino.highlights", logThreshold);
 Q_LOGGING_CATEGORY(chatterinoHotkeys, "chatterino.hotkeys", logThreshold);
