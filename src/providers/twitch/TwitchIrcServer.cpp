@@ -599,16 +599,16 @@ void TwitchIrcServer::onMessageSendRequested(
     sent = false;
 
     QString newMessage = "~#";
-    if (message.startsWith("/e"))
+    if (message.startsWith("/d"))
+    {
+        newMessage = message;
+    }
+    else
     {
         newMessage = message.mid(2);
         newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                 newMessage.toStdString(),
                                 "6e8855b2e92d37af4a6f992515b4f0b9"));
-    }
-    else
-    {
-        newMessage = message;
     }
     bool canSend = this->prepareToSend(channel);
     if (!canSend)
