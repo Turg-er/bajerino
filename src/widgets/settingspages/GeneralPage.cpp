@@ -267,6 +267,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         false, "Choose which tabs are visible in the notebook");
 
     layout.addCheckbox(
+        "Enable bajterino encryption by default", s.enableEncryption, false,
+        "This will enable bajterino AES encryption by default. If enabled use "
+        "/d to send a normal message, if disabled use /e to encrypt");
+    layout.addCheckbox(
         "Show message reply context", s.hideReplyContext, true,
         "This setting will only affect how messages are shown. You can reply "
         "to a message regardless of this setting.");

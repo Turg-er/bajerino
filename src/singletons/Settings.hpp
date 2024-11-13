@@ -143,6 +143,7 @@ public:
         DEFAULT_FONT_SIZE,
     };
     BoolSetting hideReplyContext = {"/appearance/hideReplyContext", false};
+    BoolSetting enableEncryption = {"/encryption/enabled", false};
     BoolSetting showReplyButton = {"/appearance/showReplyButton", false};
     BoolSetting stripReplyMention = {"/appearance/stripReplyMention", true};
     IntSetting collpseMessagesMinLines = {
