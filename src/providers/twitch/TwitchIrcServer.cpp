@@ -20,6 +20,7 @@
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Settings.hpp"
+#include "util/Crypto.hpp"
 #include "util/Helpers.hpp"
 #include "util/PostToThread.hpp"
 
@@ -591,13 +592,24 @@ bool TwitchIrcServer::prepareToSend(
     lastMessage.push(now);
     return true;
 }
-
 void TwitchIrcServer::onMessageSendRequested(
     const std::shared_ptr<TwitchChannel> &channel, const QString &message,
     bool &sent)
 {
     sent = false;
 
+    QString newMessage = "~#";
+    if (message.startsWith("/e"))
+    {
+        newMessage = message.mid(2);
+        newMessage = "~#" + QString::fromStdString(AES_encrypt(
+                                newMessage.toStdString(),
+                                "6e8855b2e92d37af4a6f992515b4f0b9"));
+    }
+    else
+    {
+        newMessage = message;
+    }
     bool canSend = this->prepareToSend(channel);
     if (!canSend)
     {
@@ -606,16 +618,15 @@ void TwitchIrcServer::onMessageSendRequested(
 
     if (shouldSendHelixChat())
     {
-        sendHelixMessage(channel, message);
+        sendHelixMessage(channel, newMessage);
     }
     else
     {
-        this->sendMessage(channel->getName(), message);
+        this->sendMessage(channel->getName(), newMessage);
     }
 
     sent = true;
 }
-
 void TwitchIrcServer::onReplySendRequested(
     const std::shared_ptr<TwitchChannel> &channel, const QString &message,
     const QString &replyId, bool &sent)
@@ -639,7 +650,6 @@ void TwitchIrcServer::onReplySendRequested(
     }
     sent = true;
 }
-
 std::unique_ptr<BttvLiveUpdates> &TwitchIrcServer::getBTTVLiveUpdates()
 {
     return this->bttvLiveUpdates;

@@ -1269,21 +1269,27 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
     bool zeroWidth = false;
 
     // Emote order:
+    //  - BajTV Channel
+    //  - BajTV Global
     //  - FrankerFaceZ Channel
     //  - BetterTTV Channel
     //  - 7TV Channel
     //  - FrankerFaceZ Global
     //  - BetterTTV Global
     //  - 7TV Global
-    if (this->twitchChannel && (emote = this->twitchChannel->ffzEmote(name)))
-    {
-        flags = MessageElementFlag::FfzEmote;
-    }
-    else if (this->twitchChannel &&
-             (emote = this->twitchChannel->bajtvEmote(name)))
+    if (this->twitchChannel && (emote = this->twitchChannel->bajtvEmote(name)))
     {
         flags = MessageElementFlag::BttvEmote;
         // zeroWidth = emote.value()->zeroWidth;
+    }
+    else if ((emote = globalBajtvEmotes->emote(name)))
+    {
+        flags = MessageElementFlag::BttvEmote;
+    }
+    else if (this->twitchChannel &&
+             (emote = this->twitchChannel->ffzEmote(name)))
+    {
+        flags = MessageElementFlag::FfzEmote;
     }
     else if (this->twitchChannel &&
              (emote = this->twitchChannel->bttvEmote(name)))
@@ -1295,10 +1301,6 @@ Outcome TwitchMessageBuilder::tryAppendEmote(const EmoteName &name)
     {
         flags = MessageElementFlag::SevenTVEmote;
         zeroWidth = emote.value()->zeroWidth;
-    }
-    else if ((emote = globalBajtvEmotes->emote(name)))
-    {
-        flags = MessageElementFlag::BttvEmote;
     }
     else if ((emote = globalFfzEmotes->emote(name)))
     {

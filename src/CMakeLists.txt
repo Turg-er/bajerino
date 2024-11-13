@@ -483,6 +483,8 @@ set(SOURCE_FILES
         singletons/helper/LoggingChannel.cpp
         singletons/helper/LoggingChannel.hpp
 
+        util/Crypto.cpp
+        util/Crypto.hpp
         util/AbandonObject.hpp
         util/AttachToConsole.cpp
         util/AttachToConsole.hpp
@@ -796,6 +798,8 @@ target_link_libraries(${LIBRARY_PROJECT}
 if (CHATTERINO_PLUGINS)
     target_link_libraries(${LIBRARY_PROJECT} PUBLIC lua)
 endif()
+find_package(CryptoPP REQUIRED)
+target_link_libraries(${LIBRARY_PROJECT} PUBLIC CryptoPP::CryptoPP)
 
 if (BUILD_WITH_QTKEYCHAIN)
     target_link_libraries(${LIBRARY_PROJECT}

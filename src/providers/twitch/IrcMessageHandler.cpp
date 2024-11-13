@@ -27,6 +27,7 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/ChannelHelpers.hpp"
+#include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
@@ -1367,7 +1368,17 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
     }
     args.channelPointRewardId = rewardId;
 
-    QString content = originalContent;
+    QString content = "";
+    if (originalContent.startsWith("~#"))
+    {
+        content = QString::fromStdString(
+            AES_decrypt(originalContent.mid(2).toStdString(),
+                        "6e8855b2e92d37af4a6f992515b4f0b9"));
+    }
+    else
+    {
+        content = originalContent;
+    }
     int messageOffset = stripLeadingReplyMention(tags, content);
 
     TwitchMessageBuilder builder(channel, message, args, content, isAction);
