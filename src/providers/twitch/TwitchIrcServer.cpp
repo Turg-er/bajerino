@@ -606,7 +606,7 @@ void TwitchIrcServer::onMessageSendRequested(
     else
     {
         newMessage = "~#" + QString::fromStdString(AES_encrypt(
-                                newMessage.toStdString(),
+                                message.toStdString(),
                                 "6e8855b2e92d37af4a6f992515b4f0b9"));
     }
     bool canSend = this->prepareToSend(channel);
