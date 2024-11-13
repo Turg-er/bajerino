@@ -632,6 +632,17 @@ void TwitchIrcServer::onReplySendRequested(
 {
     sent = false;
 
+    QString newMessage = "~#";
+    if (message.startsWith("/d"))
+    {
+        newMessage = message.mid(2);
+    }
+    else
+    {
+        newMessage = "~#" + QString::fromStdString(AES_encrypt(
+                                message.toStdString(),
+                                "6e8855b2e92d37af4a6f992515b4f0b9"));
+    }
     bool canSend = this->prepareToSend(channel);
     if (!canSend)
     {
@@ -640,12 +651,12 @@ void TwitchIrcServer::onReplySendRequested(
 
     if (shouldSendHelixChat())
     {
-        sendHelixMessage(channel, message, replyId);
+        sendHelixMessage(channel, newMessage, replyId);
     }
     else
     {
         this->sendRawMessage("@reply-parent-msg-id=" + replyId + " PRIVMSG #" +
-                             channel->getName() + " :" + message);
+                             channel->getName() + " :" + newMessage);
     }
     sent = true;
 }

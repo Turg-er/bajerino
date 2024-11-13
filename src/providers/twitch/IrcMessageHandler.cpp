@@ -1368,18 +1368,20 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
     }
     args.channelPointRewardId = rewardId;
 
+    QString originalContentStripped = originalContent;
+    int messageOffset = stripLeadingReplyMention(tags, originalContentStripped);
     QString content = "";
-    if (originalContent.startsWith("~#"))
+    if (originalContentStripped.startsWith("~#"))
     {
         content = QString::fromStdString(
-            AES_decrypt(originalContent.mid(2).toStdString(),
+            AES_decrypt(originalContentStripped.mid(2).toStdString(),
                         "6e8855b2e92d37af4a6f992515b4f0b9"));
     }
+
     else
     {
         content = originalContent;
     }
-    int messageOffset = stripLeadingReplyMention(tags, content);
 
     TwitchMessageBuilder builder(channel, message, args, content, isAction);
     builder.setMessageOffset(messageOffset);
