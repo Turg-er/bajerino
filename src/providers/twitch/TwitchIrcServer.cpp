@@ -601,11 +601,10 @@ void TwitchIrcServer::onMessageSendRequested(
     QString newMessage = "~#";
     if (message.startsWith("/d"))
     {
-        newMessage = message;
+        newMessage = message.mid(2);
     }
     else
     {
-        newMessage = message.mid(2);
         newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                 newMessage.toStdString(),
                                 "6e8855b2e92d37af4a6f992515b4f0b9"));
