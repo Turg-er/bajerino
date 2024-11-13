@@ -21,6 +21,7 @@ class Chatterino(ConanFile):
     generators = "CMakeDeps", "CMakeToolchain"
 
     def requirements(self):
+        self.requires("cryptopp/8.9.0")
         if self.options.get_safe("with_benchmark", False):
             self.requires("benchmark/1.7.1")
 

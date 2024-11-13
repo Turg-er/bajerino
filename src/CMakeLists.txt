@@ -798,8 +798,8 @@ target_link_libraries(${LIBRARY_PROJECT}
 if (CHATTERINO_PLUGINS)
     target_link_libraries(${LIBRARY_PROJECT} PUBLIC lua)
 endif()
-find_package(CryptoPP REQUIRED)
-target_link_libraries(${LIBRARY_PROJECT} PUBLIC CryptoPP::CryptoPP)
+find_package(cryptopp REQUIRED)
+target_link_libraries(${LIBRARY_PROJECT} PUBLIC cryptopp::cryptopp)
 
 if (BUILD_WITH_QTKEYCHAIN)
     target_link_libraries(${LIBRARY_PROJECT}
