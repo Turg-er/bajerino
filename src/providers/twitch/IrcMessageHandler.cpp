@@ -1376,6 +1376,7 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
         content = QString::fromStdString(
             AES_decrypt(originalContentStripped.mid(2).toStdString(),
                         "6e8855b2e92d37af4a6f992515b4f0b9"));
+        content = "🔒 " + content;
     }
 
     else
