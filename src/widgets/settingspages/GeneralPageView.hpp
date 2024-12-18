@@ -13,6 +13,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QVBoxLayout>
+#include <qlineedit.h>
 
 #include <utility>
 
@@ -114,6 +115,9 @@ public:
     ComboBox *addDropdown(const QString &text, const QStringList &items,
                           pajlada::Settings::Setting<QString> &setting,
                           bool editable = false, QString toolTipText = {});
+    QLineEdit *addInput(const QString &text,
+                                     QStringSetting &setting,
+                                     QString toolTipText);
     ColorButton *addColorButton(const QString &text, const QColor &color,
                                 pajlada::Settings::Setting<QString> &setting,
                                 QString toolTipText = {});

@@ -1,6 +1,7 @@
 #include "widgets/settingspages/GeneralPageView.hpp"
 
 #include "Application.hpp"
+#include "common/ChatterinoSetting.hpp"
 #include "util/LayoutHelper.hpp"
 #include "util/RapidJsonSerializeQString.hpp"
 #include "widgets/dialogs/ColorPickerDialog.hpp"
@@ -173,6 +174,34 @@ ComboBox *GeneralPageView::addDropdown(const QString &text,
     this->groups_.back().widgets.push_back({label, {text}});
 
     return combo;
+}
+QLineEdit *GeneralPageView::addInput(const QString &text,
+                                     QStringSetting &setting,
+                                     QString toolTipText)
+{
+    auto *layout = new QHBoxLayout;
+    auto *input = new QLineEdit;
+
+    auto *label = new QLabel(text + ":");
+    layout->addWidget(label);
+    layout->addStretch(1);
+    layout->addWidget(input);
+
+    this->addToolTip(*label, toolTipText);
+    this->addLayout(layout);
+
+    // init the input from setting
+    input->setText(setting);
+    QObject::connect(input, &QLineEdit::textChanged, this,
+                     [&setting](const QString &value) {
+                         setting = value;
+                     });
+
+    // groups
+    this->groups_.back().widgets.push_back({input, {text}});
+    this->groups_.back().widgets.push_back({label, {text}});
+
+    return input;
 }
 
 ComboBox *GeneralPageView::addDropdown(

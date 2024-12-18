@@ -312,6 +312,7 @@ public:
     /// Ignored Phrases
     QStringSetting ignoredPhraseReplace = {"/ignore/ignoredPhraseReplace",
                                            "***"};
+    QStringSetting encryptionKey = {"/bajterino/encryptionKey", "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
 
     /// Blocked Users
     BoolSetting enableTwitchBlockedUsers = {"/ignore/enableTwitchBlockedUsers",

@@ -622,9 +622,10 @@ std::vector<MessagePtr> IrcMessageHandler::parseMessageWithReply(
         // QString content = "";
         if (content.startsWith("~#"))
         {
-            content = QString::fromStdString(
-                AES_decrypt(content.mid(2).toStdString(),
-                            "6e8855b2e92d37af4a6f992515b4f0b9"));
+            content = QString::fromStdString(AES_decrypt(
+                content.mid(2).toStdString(), Settings::instance()
+                                                  .encryptionKey.getValueCopy()
+                                                  .toStdString()));
             content = "🔒 " + content;
         }
         MessageParseArgs args;
@@ -1381,9 +1382,9 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
     QString content = "";
     if (originalContentStripped.startsWith("~#"))
     {
-        content = QString::fromStdString(
-            AES_decrypt(originalContentStripped.mid(2).toStdString(),
-                        "6e8855b2e92d37af4a6f992515b4f0b9"));
+        content = QString::fromStdString(AES_decrypt(
+            originalContentStripped.mid(2).toStdString(),
+            Settings::instance().encryptionKey.getValueCopy().toStdString()));
         content = "🔒 " + content;
     }
 

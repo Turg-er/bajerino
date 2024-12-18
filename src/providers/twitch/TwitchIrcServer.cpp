@@ -609,7 +609,9 @@ void TwitchIrcServer::onMessageSendRequested(
         {
             newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                     message.toStdString(),
-                                    "6e8855b2e92d37af4a6f992515b4f0b9"));
+                                    Settings::instance()
+                                        .encryptionKey.getValueCopy()
+                                        .toStdString()));
         }
     }
     else
@@ -619,7 +621,9 @@ void TwitchIrcServer::onMessageSendRequested(
             newMessage = message.mid(2);
             newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                     newMessage.toStdString(),
-                                    "6e8855b2e92d37af4a6f992515b4f0b9"));
+                                    Settings::instance()
+                                        .encryptionKey.getValueCopy()
+                                        .toStdString()));
         }
         else
         {
@@ -660,7 +664,9 @@ void TwitchIrcServer::onReplySendRequested(
         {
             newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                     message.toStdString(),
-                                    "6e8855b2e92d37af4a6f992515b4f0b9"));
+                                    Settings::instance()
+                                        .encryptionKey.getValueCopy()
+                                        .toStdString()));
         }
     }
     else
@@ -670,7 +676,9 @@ void TwitchIrcServer::onReplySendRequested(
             newMessage = message.mid(2);
             newMessage = "~#" + QString::fromStdString(AES_encrypt(
                                     newMessage.toStdString(),
-                                    "6e8855b2e92d37af4a6f992515b4f0b9"));
+                                    Settings::instance()
+                                        .encryptionKey.getValueCopy()
+                                        .toStdString()));
         }
         else
         {
