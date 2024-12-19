@@ -39,13 +39,17 @@ std::string AES_decrypt(const std::string &ciphertext, const std::string &key)
     std::string decoded = base64Decode(ciphertext);
     if (decoded.size() == 0)
     {
-        return "Failed to decrypt the message, message was empty";
+        throw CryptoPP::Exception(
+            CryptoPP::Exception::ErrorType::INVALID_DATA_FORMAT,
+            "Failed to decrypt the message, message was empty");
     }
     if (decoded.size() % BLOCK_SIZE != 0)
     {
-        return "Failed to decrypt the message, incorrect block size, it "
-               "was " +
-               std::to_string(decoded.size());
+        throw CryptoPP::Exception(
+            CryptoPP::Exception::ErrorType::INVALID_DATA_FORMAT,
+            "Failed to decrypt the message, incorrect block size, it "
+            "was " +
+                std::to_string(decoded.size()));
     }
     ECB_Mode<AES>::Decryption d;
     d.SetKey((const byte *)key.c_str(), key.size());
