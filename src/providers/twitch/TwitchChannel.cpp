@@ -682,6 +682,17 @@ QString TwitchChannel::prepareMessage(const QString &message) const
         return "";
     }
 
+    if (parsedMessage.startsWith("/d ")) {
+        parsedMessage = parsedMessage.remove(0, 3);
+    } else if(getSettings()->alwaysEncrypt) {
+        parsedMessage = encryptMessage(parsedMessage, getSettings()->encryptionKey.getValueCopy());
+    }
+
+    if (parsedMessage.isEmpty())
+    {
+        return "";
+    }
+
     if (!this->hasHighRateLimit())
     {
         if (getSettings()->allowDuplicateMessages)

@@ -119,6 +119,8 @@ public:
                                 QString toolTipText = {});
     QSpinBox *addIntInput(const QString &text, IntSetting &setting, int min,
                           int max, int step, QString toolTipText = {});
+    QLineEdit *addTextInput(const QString &text, QStringSetting &setting,
+                        QString toolTipText);
     void addNavigationSpacing();
 
     template <typename OnClick>

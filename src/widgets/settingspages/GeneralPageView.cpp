@@ -287,6 +287,37 @@ QSpinBox *GeneralPageView::addIntInput(const QString &text, IntSetting &setting,
     return input;
 }
 
+QLineEdit *GeneralPageView::addTextInput(const QString &text,
+                                     QStringSetting &setting,
+                                     QString toolTipText)
+{
+    auto *layout = new QHBoxLayout;
+
+    auto *label = new QLabel(text + ":");
+    this->addToolTip(*label, toolTipText);
+
+    auto *input = new QLineEdit;
+
+    // init the input from setting
+    input->setText(setting);
+    QObject::connect(input, &QLineEdit::textChanged, this,
+                     [&setting](const QString &value) {
+                         setting = value;
+                     });
+
+    layout->addWidget(label);
+    layout->addStretch(1);
+    layout->addWidget(input, 1);
+
+    this->addLayout(layout);
+
+    // groups
+    this->groups_.back().widgets.push_back({input, {text}});
+    this->groups_.back().widgets.push_back({label, {text}});
+
+    return input;
+}
+
 void GeneralPageView::addNavigationSpacing()
 {
     this->navigationLayout_->addSpacing(24);

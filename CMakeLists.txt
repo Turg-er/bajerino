@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.21)
 cmake_policy(SET CMP0087 NEW) # evaluates generator expressions in `install(CODE/SCRIPT)`
 cmake_policy(SET CMP0091 NEW) # select MSVC runtime library through `CMAKE_MSVC_RUNTIME_LIBRARY`
 if (POLICY CMP0167)
@@ -40,7 +40,7 @@ if(BUILD_BENCHMARKS)
     list(APPEND VCPKG_MANIFEST_FEATURES "benchmarks")
 endif()
 
-project(chatterino 
+project(bajerino
     VERSION 2.5.2
     DESCRIPTION "Chat client for twitch.tv"
     HOMEPAGE_URL "https://chatterino.com/"
@@ -172,6 +172,8 @@ if (BUILD_WITH_QTKEYCHAIN)
         endif()
     endif()
 endif()
+
+add_subdirectory(lib/cryptopp)
 
 find_package(RapidJSON REQUIRED)
 

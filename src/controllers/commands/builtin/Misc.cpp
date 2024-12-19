@@ -725,4 +725,51 @@ QString openUsercard(const CommandContext &ctx)
     return "";
 }
 
+QString sendEncrypted(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+
+    if (ctx.words.size() < 2)
+    {
+        ctx.channel->addSystemMessage("Usage: /e <message>");
+        return "";
+    }
+    auto message = ctx.words.mid(1).join(" ");
+    if (getSettings()->alwaysEncrypt)
+    {
+        ctx.channel->addSystemMessage(
+            "Bajerino is set to encrypt automatically so invoking this "
+            "command is unnecessary.");
+        return message;
+    }
+
+    return encryptMessage(message, getSettings()->encryptionKey.getValueCopy());
+}
+
+QString sendUnencrypted(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+
+    if (ctx.words.size() < 2)
+    {
+        ctx.channel->addSystemMessage("Usage: /d <message>");
+        return "";
+    }
+    auto message = ctx.words.join(" ");
+    if (!getSettings()->alwaysEncrypt)
+    {
+        ctx.channel->addSystemMessage(
+            "Bajerino is set to not encrypt automatically so invoking "
+            "this command is unnecessary.");
+    }
+
+    return message;
+}
+
 }  // namespace chatterino::commands
