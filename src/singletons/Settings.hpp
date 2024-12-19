@@ -235,6 +235,11 @@ public:
     };
 
     /// Behaviour
+    // Encryption
+    BoolSetting alwaysEncrypt = {"/encryption/automatic", false};
+    QStringSetting encryptionKey = {"/encryption/encryptionKey", "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
+
+    // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",
                                           true};
     BoolSetting mentionUsersWithAt = {"/behaviour/mentionUsersWithAt", false};

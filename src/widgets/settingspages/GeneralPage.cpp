@@ -470,6 +470,16 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addCheckbox("Hide scrollbar highlights", s.hideScrollbarHighlights,
                        false);
 
+    layout.addSubtitle("Bajerino");
+    layout.addCheckbox(
+        "Automatically encrypt every message", s.alwaysEncrypt, false,
+        "This will enable bajerino AES encryption by default. When "
+        "enabled use /d to send an unencrypted message."
+        "When disabled use /e to send an encrypted message.");
+    layout.addTextInput("Encryption key", s.encryptionKey,
+                    "This key will be used to encrypt and "
+                    "decrypt all bajterino messages");
+
     layout.addTitle("Messages");
     layout.addCheckbox(
         "Separate with lines", s.separateMessages, false,
