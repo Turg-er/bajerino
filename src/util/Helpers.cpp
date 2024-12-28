@@ -321,9 +321,8 @@ bool checkAndDecryptMessage(QString &message, const QString &encryptionKey)
     {
         try
         {
-            message = "🔒 " + QString::fromStdString(
-                                  AES_decrypt(message.mid(2).toStdString(),
-                                              encryptionKey.toStdString()));
+            message = QString::fromStdString(AES_decrypt(
+                message.mid(2).toStdString(), encryptionKey.toStdString()));
             return true;
         }
         catch (const CryptoPP::Exception &e)

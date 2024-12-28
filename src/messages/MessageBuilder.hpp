@@ -90,6 +90,7 @@ struct MessageParseArgs {
     bool isSubscriptionMessage = false;
     bool allowIgnore = true;
     bool isAction = false;
+    bool isDecrypted = false;
     QString channelPointRewardId = "";
 };
 
@@ -327,6 +328,7 @@ private:
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
     void appendSeventvBadges(const QString &userID);
+    void appendDecryptionBadge(const MessageParseArgs &args);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,
                                         const QString &userID,

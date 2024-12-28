@@ -2108,6 +2108,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendSeventvBadges(userID);
 
+    builder.appendDecryptionBadge(args);
+
     builder.appendUsername(tags, args);
 
     TextState textState{.twitchChannel = twitchChannel};
@@ -2990,6 +2992,23 @@ Outcome MessageBuilder::tryAppendCheermote(TextState &state,
     }
 
     return Success;
+}
+
+void MessageBuilder::appendDecryptionBadge(const MessageParseArgs &args)
+{
+    if (args.isDecrypted)
+    {
+        const auto &emojis = getApp()->getEmotes()->getEmojis()->getEmojis();
+        const auto unlock = std::find_if(
+            emojis.begin(), emojis.end(), [](const EmojiPtr &emoji) {
+                const auto &sc = emoji->shortCodes;
+                return std::find(sc.begin(), sc.end(), "unlock") != sc.end();
+            });
+        if (unlock != emojis.end())
+        {
+            this->addEmoji((*unlock)->emote);
+        }
+    }
 }
 
 }  // namespace chatterino
