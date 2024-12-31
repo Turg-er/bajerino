@@ -12,6 +12,7 @@
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Clipboard.hpp"
+#include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/IncognitoBrowser.hpp"
 #include "util/StreamLink.hpp"

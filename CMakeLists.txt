@@ -173,8 +173,6 @@ if (BUILD_WITH_QTKEYCHAIN)
     endif()
 endif()
 
-add_subdirectory(lib/cryptopp)
-
 find_package(RapidJSON REQUIRED)
 
 find_package(Websocketpp REQUIRED)

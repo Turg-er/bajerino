@@ -41,6 +41,7 @@
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/FormatTime.hpp"
+#include "util/Crypto.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
 #include "util/QStringHash.hpp"
@@ -1995,6 +1996,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     assert(ircMessage != nullptr);
     assert(channel != nullptr);
 
+    const auto decrypted = checkAndDecryptMessage(content, getSettings()->encryptionKey.getValueCopy());
+
     auto tags = ircMessage->tags();
     if (args.allowIgnore)
     {
@@ -2108,7 +2111,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendSeventvBadges(userID);
 
-    builder.appendDecryptionBadge(args);
+    builder.appendDecryptionBadge(decrypted);
 
     builder.appendUsername(tags, args);
 
@@ -2994,9 +2997,9 @@ Outcome MessageBuilder::tryAppendCheermote(TextState &state,
     return Success;
 }
 
-void MessageBuilder::appendDecryptionBadge(const MessageParseArgs &args)
+void MessageBuilder::appendDecryptionBadge(const bool &isDecrypted)
 {
-    if (args.isDecrypted)
+    if (isDecrypted)
     {
         const auto &emojis = getApp()->getEmotes()->getEmojis()->getEmojis();
         const auto unlock = std::find_if(

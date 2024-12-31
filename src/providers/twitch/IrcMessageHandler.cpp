@@ -1013,8 +1013,6 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
     QString content = originalContent;
     int messageOffset = stripLeadingReplyMention(tags, content);
 
-    args.isDecrypted = checkAndDecryptMessage(content, getSettings()->encryptionKey.getValueCopy());
-
     ReplyContext replyCtx;
 
     if (const auto it = tags.find("reply-thread-parent-msg-id");

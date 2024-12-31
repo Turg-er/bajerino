@@ -1,13 +1,13 @@
 #include "util/Helpers.hpp"
 
 #include "Application.hpp"
-#include "Crypto.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 
 #include <QDirIterator>
 #include <QLocale>
 #include <QRegularExpression>
 #include <QUuid>
+#include <QByteArray>
 
 namespace {
 
@@ -313,36 +313,6 @@ QLocale getSystemLocale()
 #endif
 
     return QLocale::system();
-}
-
-bool checkAndDecryptMessage(QString &message, const QString &encryptionKey)
-{
-    if (message.startsWith("~#"))
-    {
-        try
-        {
-            message = QString::fromStdString(AES_decrypt(
-                message.mid(2).toStdString(), encryptionKey.toStdString()));
-            return true;
-        }
-        catch (const CryptoPP::Exception &e)
-        {
-        }
-    }
-    return false;
-}
-
-QString encryptMessage(QString &message, const QString &encryptionKey)
-{
-    try
-    {
-        return "~#" + QString::fromStdString(AES_encrypt(
-                          message.toStdString(), encryptionKey.toStdString()));
-    }
-    catch (const CryptoPP::Exception &e)
-    {
-        return "";
-    }
 }
 
 }  // namespace chatterino

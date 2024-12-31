@@ -191,8 +191,4 @@ QString unescapeZeroWidthJoiner(QString escaped);
 
 QLocale getSystemLocale();
 
-bool checkAndDecryptMessage(QString &message, const QString &encryptionKey);
-
-QString encryptMessage(QString &message, const QString &encryptionKey);
-
 }  // namespace chatterino

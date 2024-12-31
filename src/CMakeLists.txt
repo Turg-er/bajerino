@@ -802,7 +802,6 @@ target_link_libraries(${LIBRARY_PROJECT}
         websocketpp::websocketpp
         Threads::Threads
         RapidJSON::RapidJSON
-        cryptopp::cryptopp
         LRUCache
         MagicEnum
         $<$<BOOL:${WIN32}>:Wtsapi32>
