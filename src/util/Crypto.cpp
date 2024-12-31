@@ -127,7 +127,6 @@ QByteArray legacy_aes_decrypt(const QByteArray &ciphertext, const QString &key)
 
 /*
 * end char should be 仿
-* in the future we could use the second half of the alphabet to double the length of our messages
 * https://www.khngai.com/chinese/charmap/tbluni.php?page=0
 */
 static const QChar STARTING_CHAR(L'一');
@@ -161,8 +160,8 @@ QByteArray chineseCharactersToBytes(QStringView characters)
     return bytes;
 }
 
-static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX("~#");
 static const QString ENCRYPTED_MESSAGE_PREFIX("~!");
+static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX("~#");
 
 QString encryptMessage(QString &message, const QString &encryptionPassword)
 {
@@ -175,6 +174,7 @@ QString encryptMessage(QString &message, const QString &encryptionPassword)
         */
         auto encryptionKey = QCryptographicHash::hash(
             encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
+        encryptionKey.resize(16);
         unsigned char iv[16] = {};
         RAND_bytes(iv, 16);
         auto encryptedText = aes_encrypt(message.toUtf8(), encryptionKey, iv)
@@ -198,6 +198,7 @@ bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
             // if wondering why using non secure hash see reasoning in encryptMessage above
             auto encryptionKey = QCryptographicHash::hash(
                 encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
+            encryptionKey.resize(16);
             auto encryptedBytes = chineseCharactersToBytes(message.mid(2));
             if (encryptedBytes.size() < 17)
             {
@@ -218,8 +219,14 @@ bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
         try
         {
             /*
-            * legacy used a 24 byte key
+            * legacy, encryptionPassword is assumed to be a 24 byte key
             */
+            if (encryptionPassword.size() != 24)
+            {
+                throw std::runtime_error(
+                    "Encryption key is not correct length. Encryption key must "
+                    "be 24 bytes long!");
+            }
             auto encryptedBytes =
                 QByteArray::fromBase64(message.mid(2).toUtf8());
             message = QString::fromUtf8(

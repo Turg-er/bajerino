@@ -48,6 +48,3 @@
 [submodule "lib/sol2"]
 	path = lib/sol2
 	url = https://github.com/ThePhD/sol2.git
-[submodule "lib/cryptopp"]
-	path = lib/cryptopp
-	url = https://github.com/abdes/cryptopp-cmake.git
