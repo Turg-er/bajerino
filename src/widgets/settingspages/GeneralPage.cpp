@@ -125,6 +125,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "This will enable bajerino AES encryption by default. When "
         "enabled use /d to send an unencrypted message."
         "When disabled use /e to send an encrypted message.");
+    layout.addCheckbox(
+        "Use legacy message encryption prefix ~!", s.legacyEncryptionPrefix,
+        false,
+        "This will prepend every encrypted message with ~! ."
+        "Useful only if the opposite party is using an older version "
+        "of Bajerino.");
     layout.addTextInput("Encryption Password", s.encryptionKey,
                         "This password will be used to encrypt and "
                         "decrypt all messages.");

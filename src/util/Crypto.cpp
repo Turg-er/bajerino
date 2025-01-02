@@ -1,7 +1,17 @@
+#include "singletons/Settings.hpp"
+
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <QChar>
 #include <QCryptographicHash>
+static const QString ENCRYPTED_MESSAGE_PREFIX_DEPRECATED("~!");
+static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX("~#");
+
+/*
+* end char should be 仿
+* https://www.khngai.com/chinese/charmap/tbluni.php?page=0
+*/
+static const QChar STARTING_CHINESE_CHAR(L'一');
 
 using EVP_CIPHER_CTX_ptr =
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&::EVP_CIPHER_CTX_free)>;
@@ -125,19 +135,13 @@ QByteArray legacy_aes_decrypt(const QByteArray &ciphertext, const QString &key)
     return plaintext;
 }
 
-/*
-* end char should be 仿
-* https://www.khngai.com/chinese/charmap/tbluni.php?page=0
-*/
-static const QChar STARTING_CHAR(L'一');
-
 QString bytesToChineseChararacters(QByteArrayView bytes)
 {
     QString encoded = "";
     for (auto it = bytes.begin(); it != bytes.end(); it++)
     {
-        encoded +=
-            QChar(STARTING_CHAR.unicode() + static_cast<unsigned char>(*it));
+        encoded += QChar(STARTING_CHINESE_CHAR.unicode() +
+                         static_cast<unsigned char>(*it));
     }
     return encoded;
 }
@@ -147,21 +151,19 @@ QByteArray chineseCharactersToBytes(QStringView characters)
     QByteArray bytes(characters.length(), 0);
     for (int i = 0; i < characters.length(); i++)
     {
-        if (characters.at(i) < STARTING_CHAR ||
-            characters.at(i) > QChar(STARTING_CHAR.unicode() + 0xFF))
+        if (characters.at(i) < STARTING_CHINESE_CHAR ||
+            characters.at(i) > QChar(STARTING_CHINESE_CHAR.unicode() + 0xFF))
         {
             throw std::runtime_error("Invalid characters input converting from "
                                      "chinese to bytes. Invalid character at " +
                                      std::to_string(i));
         }
         bytes[i] = static_cast<unsigned char>(
-            (characters.at(i).unicode() - STARTING_CHAR.unicode()) & 0xFF);
+            (characters.at(i).unicode() - STARTING_CHINESE_CHAR.unicode()) &
+            0xFF);
     }
     return bytes;
 }
-
-static const QString ENCRYPTED_MESSAGE_PREFIX("~!");
-static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX("~#");
 
 QString encryptMessage(QString &message, const QString &encryptionPassword)
 {
@@ -180,8 +182,15 @@ QString encryptMessage(QString &message, const QString &encryptionPassword)
         auto encryptedText = aes_encrypt(message.toUtf8(), encryptionKey, iv)
                                  .prepend(QByteArray::fromRawData(
                                      reinterpret_cast<const char *>(iv), 16));
-        return ENCRYPTED_MESSAGE_PREFIX %
-               bytesToChineseChararacters(encryptedText);
+        if (chatterino::getSettings()->legacyEncryptionPrefix)
+        {
+            return ENCRYPTED_MESSAGE_PREFIX_DEPRECATED %
+                   bytesToChineseChararacters(encryptedText);
+        }
+        else
+        {
+            return bytesToChineseChararacters(encryptedText);
+        }
     }
     catch (const std::runtime_error &e)
     {
@@ -189,32 +198,14 @@ QString encryptMessage(QString &message, const QString &encryptionPassword)
     }
 }
 
+bool containsOnlyPrintable(const QString &str)
+{
+    return str.contains(QRegularExpression("^[\\x{0000}-\\x{0600}]*$"));
+}
+
 bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
 {
-    if (message.startsWith(ENCRYPTED_MESSAGE_PREFIX))
-    {
-        try
-        {
-            // if wondering why using non secure hash see reasoning in encryptMessage above
-            auto encryptionKey = QCryptographicHash::hash(
-                encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
-            encryptionKey.resize(16);
-            auto encryptedBytes = chineseCharactersToBytes(message.mid(2));
-            if (encryptedBytes.size() < 17)
-            {
-                throw std::runtime_error("Potential text is too small!");
-            }
-            auto cipherText = encryptedBytes.sliced(16);
-            encryptedBytes.resize(16);  // this is the IV
-            message = QString::fromUtf8(
-                aes_decrypt(cipherText, encryptionKey, encryptedBytes));
-            return true;
-        }
-        catch (const std::runtime_error &e)
-        {
-        }
-    }
-    else if (message.startsWith(LEGACY_ENCRYPTED_MESSAGE_PREFIX))
+    if (message.startsWith(LEGACY_ENCRYPTED_MESSAGE_PREFIX))
     {
         try
         {
@@ -236,6 +227,42 @@ bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
         catch (const std::runtime_error &e)
         {
         }
+    }
+    // in theory we dont need to check for prefixes and just do the decode on
+    // every message and just check if it makes sense.
+    // the biggest downside of that method is performance, question is how much
+    // of a performance decrease it that
+    try
+    {
+        // if wondering why using non secure hash see reasoning in encryptMessage above
+        auto encryptionKey = QCryptographicHash::hash(
+            encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
+        encryptionKey.resize(16);
+
+        if (message.startsWith(ENCRYPTED_MESSAGE_PREFIX_DEPRECATED))
+        {
+            message = message.mid(2);
+        }
+        auto encryptedBytes = chineseCharactersToBytes(message);
+        if (encryptedBytes.size() < 17)
+        {
+            throw std::runtime_error("Potential text is too small!");
+        }
+        auto cipherText = encryptedBytes.sliced(16);
+        encryptedBytes.resize(16);  // this is the IV
+        auto message_decrypted = QString::fromUtf8(
+            aes_decrypt(cipherText, encryptionKey, encryptedBytes));
+
+        // finally check if the decrypted message makes sense for english
+        if (!containsOnlyPrintable(message_decrypted))
+        {
+            return false;
+        }
+        message = message_decrypted;
+        return true;
+    }
+    catch (const std::runtime_error &e)
+    {
     }
     return false;
 }
