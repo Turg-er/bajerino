@@ -237,6 +237,7 @@ public:
     /// Behaviour
     // Encryption
     BoolSetting alwaysEncrypt = {"/encryption/automatic", false};
+    BoolSetting legacyEncryptionPrefix = {"/encryption/legacy_prefix", false};
     QStringSetting encryptionKey = {"/encryption/encryptionKey", "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
 
     // General
