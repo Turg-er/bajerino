@@ -686,7 +686,7 @@ QString TwitchChannel::prepareMessage(const QString &message) const
     if (parsedMessage.startsWith("/d ")) {
         parsedMessage = parsedMessage.remove(0, 3);
     } else if(getSettings()->alwaysEncrypt) {
-        parsedMessage = encryptMessage(parsedMessage, getSettings()->encryptionKey.getValueCopy());
+        parsedMessage = encryptMessage(parsedMessage, getSettings()->encryptionKey);
     }
 
     if (parsedMessage.isEmpty())

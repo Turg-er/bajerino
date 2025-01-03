@@ -54,6 +54,8 @@ enum class MessageFlag : std::int64_t {
     SharedMessage = (1LL << 37),
     /// AutoMod message that showed up due to containing a blocked term in the channel
     AutoModBlockedTerm = (1LL << 38),
+    /// Message was encrypted and successfully decrypted, chose 63 to avoid collision with upstream
+    Decrypted = (1LL << 63)
 };
 using MessageFlags = FlagsEnum<MessageFlag>;
 

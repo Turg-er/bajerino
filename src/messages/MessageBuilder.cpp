@@ -40,8 +40,8 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
-#include "util/FormatTime.hpp"
 #include "util/Crypto.hpp"
+#include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
 #include "util/QStringHash.hpp"
@@ -1996,7 +1996,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     assert(ircMessage != nullptr);
     assert(channel != nullptr);
 
-    const auto decrypted = checkAndDecryptMessage(content, getSettings()->encryptionKey.getValueCopy());
+    const auto decrypted =
+        checkAndDecryptMessage(content, getSettings()->encryptionKey);
 
     auto tags = ircMessage->tags();
     if (args.allowIgnore)
@@ -2015,6 +2016,10 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     MessageBuilder builder;
     builder.parseUsernameColor(tags, userID);
+    if (decrypted)
+    {
+        builder->flags.set(MessageFlag::Decrypted);
+    }
 
     if (args.isAction)
     {
@@ -2504,6 +2509,14 @@ void MessageBuilder::parseThread(const QString &messageContent,
                 MessageColor::System, FontStyle::ChatMediumSmall)
             ->setLink({Link::ViewThread, thread->rootId()});
 
+        if (threadRoot->flags.has(MessageFlag::Decrypted))
+        {
+            this->emplace<TextElement>("🔓", MessageElementFlag::RepliedMessage,
+                                       MessageColor::Text,
+                                       FontStyle::ChatMediumSmall)
+                ->setLink({Link::ViewThread, thread->rootId()});
+        }
+
         this->emplace<TextElement>(
                 "@" + usernameText +
                     (threadRoot->flags.has(MessageFlag::Action) ? "" : ":"),
@@ -2551,6 +2564,15 @@ void MessageBuilder::parseThread(const QString &messageContent,
             {
                 auto name = replyDisplayName->toString();
                 body = parseTagString(replyBody->toString());
+
+                const auto decrypted =
+                    checkAndDecryptMessage(body, getSettings()->encryptionKey);
+                if (decrypted)
+                {
+                    this->emplace<TextElement>(
+                        "🔓", MessageElementFlag::RepliedMessage,
+                        MessageColor::Text, FontStyle::ChatMediumSmall);
+                }
 
                 this->emplace<TextElement>(
                         "@" + name + ":", MessageElementFlag::RepliedMessage,
