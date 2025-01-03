@@ -4,17 +4,24 @@
 #include <openssl/rand.h>
 #include <QChar>
 #include <QCryptographicHash>
-static const QString ENCRYPTED_MESSAGE_PREFIX_DEPRECATED("~!");
-static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX("~#");
+
+namespace {
 
 /*
 * end char should be 仿
-* https://www.khngai.com/chinese/charmap/tbluni.php?page=0
+* https://en.wikibooks.org/wiki/Unicode/Character_reference/4000-4FFF
 */
 static const QChar STARTING_CHINESE_CHAR(L'一');
 
+static const QString ENCRYPTED_MESSAGE_PREFIX_DEPRECATED = QStringLiteral("~!");
+static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX = QStringLiteral("~#");
+
 using EVP_CIPHER_CTX_ptr =
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&::EVP_CIPHER_CTX_free)>;
+
+}  // namespace
+
+namespace chatterino {
 
 const EVP_CIPHER *get_cipher_algorithm()
 {
@@ -137,22 +144,27 @@ QByteArray legacy_aes_decrypt(const QByteArray &ciphertext, const QString &key)
 
 QString bytesToChineseChararacters(QByteArrayView bytes)
 {
-    QString encoded = "";
-    for (auto it = bytes.begin(); it != bytes.end(); it++)
+    QString encoded(bytes.length(), '\0');
+    for (auto i = 0; i < bytes.length(); i++)
     {
-        encoded += QChar(STARTING_CHINESE_CHAR.unicode() +
-                         static_cast<unsigned char>(*it));
+        encoded[i] = QChar(STARTING_CHINESE_CHAR.unicode() +
+                           static_cast<unsigned char>(bytes.at(i)));
     }
     return encoded;
 }
 
+bool isCharOutsideValidEncodeRange(const QChar &c)
+{
+    return c < STARTING_CHINESE_CHAR ||
+           c > QChar(STARTING_CHINESE_CHAR.unicode() + 0xFF);
+}
+
 QByteArray chineseCharactersToBytes(QStringView characters)
 {
-    QByteArray bytes(characters.length(), 0);
-    for (int i = 0; i < characters.length(); i++)
+    QByteArray bytes(characters.length(), '\0');
+    for (auto i = 0; i < characters.length(); i++)
     {
-        if (characters.at(i) < STARTING_CHINESE_CHAR ||
-            characters.at(i) > QChar(STARTING_CHINESE_CHAR.unicode() + 0xFF))
+        if (isCharOutsideValidEncodeRange(characters.at(i)))
         {
             throw std::runtime_error("Invalid characters input converting from "
                                      "chinese to bytes. Invalid character at " +
@@ -179,10 +191,10 @@ QString encryptMessage(QString &message, const QString &encryptionPassword)
         encryptionKey.resize(16);
         unsigned char iv[16] = {};
         RAND_bytes(iv, 16);
-        auto encryptedText = aes_encrypt(message.toUtf8(), encryptionKey, iv)
-                                 .prepend(QByteArray::fromRawData(
-                                     reinterpret_cast<const char *>(iv), 16));
-        if (chatterino::getSettings()->legacyEncryptionPrefix)
+        auto encryptedText =
+            aes_encrypt(message.toUtf8(), encryptionKey, iv)
+                .prepend(reinterpret_cast<const char *>(iv), 16);
+        if (getSettings()->legacyEncryptionPrefix)
         {
             return ENCRYPTED_MESSAGE_PREFIX_DEPRECATED %
                    bytesToChineseChararacters(encryptedText);
@@ -196,11 +208,6 @@ QString encryptMessage(QString &message, const QString &encryptionPassword)
     {
         return "";
     }
-}
-
-bool containsOnlyPrintable(const QString &str)
-{
-    return str.contains(QRegularExpression("^[\\x{0000}-\\x{0600}]*$"));
 }
 
 bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
@@ -228,41 +235,37 @@ bool checkAndDecryptMessage(QString &message, const QString &encryptionPassword)
         {
         }
     }
-    // in theory we dont need to check for prefixes and just do the decode on
-    // every message and just check if it makes sense.
-    // the biggest downside of that method is performance, question is how much
-    // of a performance decrease it that
-    try
+    // would rather do quick check than catching exception from `chineseCharactersToBytes`
+    else if (message.startsWith(ENCRYPTED_MESSAGE_PREFIX_DEPRECATED) ||
+             !(isCharOutsideValidEncodeRange(message.at(0))))
     {
-        // if wondering why using non secure hash see reasoning in encryptMessage above
-        auto encryptionKey = QCryptographicHash::hash(
-            encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
-        encryptionKey.resize(16);
+        try
+        {
+            auto encryptedBytes = chineseCharactersToBytes(
+                message.startsWith(ENCRYPTED_MESSAGE_PREFIX_DEPRECATED)
+                    ? message.mid(2)
+                    : message);
+            if (encryptedBytes.size() < 17)
+            {
+                throw std::runtime_error("Potential text is too small!");
+            }
+            // if wondering why using non secure hash see reasoning in encryptMessage above
+            auto encryptionKey = QCryptographicHash::hash(
+                encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
+            encryptionKey.resize(16);
 
-        if (message.startsWith(ENCRYPTED_MESSAGE_PREFIX_DEPRECATED))
-        {
-            message = message.mid(2);
-        }
-        auto encryptedBytes = chineseCharactersToBytes(message);
-        if (encryptedBytes.size() < 17)
-        {
-            throw std::runtime_error("Potential text is too small!");
-        }
-        auto cipherText = encryptedBytes.sliced(16);
-        encryptedBytes.resize(16);  // this is the IV
-        auto message_decrypted = QString::fromUtf8(
-            aes_decrypt(cipherText, encryptionKey, encryptedBytes));
+            auto cipherText = encryptedBytes.sliced(16);
+            encryptedBytes.resize(16);  // this is the IV
 
-        // finally check if the decrypted message makes sense for english
-        if (!containsOnlyPrintable(message_decrypted))
-        {
-            return false;
+            message = QString::fromUtf8(
+                aes_decrypt(cipherText, encryptionKey, encryptedBytes));
+            return true;
         }
-        message = message_decrypted;
-        return true;
-    }
-    catch (const std::runtime_error &e)
-    {
+        catch (const std::runtime_error &e)
+        {
+        }
     }
     return false;
 }
+
+}  // namespace chatterino
