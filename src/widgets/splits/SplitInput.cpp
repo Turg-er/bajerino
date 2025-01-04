@@ -1208,8 +1208,12 @@ void SplitInput::setReply(MessagePtr target)
         this->ui_.textEdit->setPlainText(replyPrefix + plainText + " ");
         this->ui_.textEdit->moveCursor(QTextCursor::EndOfBlock);
         this->ui_.textEdit->resetCompletion();
-        this->ui_.replyLabel->setText("Replying to @" +
-                                      this->replyTarget_->displayName);
+        QString labelText = "Replying to ";
+        if (this->replyTarget_->flags.has(MessageFlag::Decrypted)) {
+            labelText.append("🔓 ");
+        }
+        labelText.append("@" % this->replyTarget_->displayName);
+        this->ui_.replyLabel->setText(labelText);
     }
 }
 
