@@ -11,10 +11,10 @@ namespace {
 * end char should be 仿
 * https://en.wikibooks.org/wiki/Unicode/Character_reference/4000-4FFF
 */
-static const QChar STARTING_CHINESE_CHAR(L'一');
+const QChar STARTING_CHINESE_CHAR(L'一');
 
-static const QString ENCRYPTED_MESSAGE_PREFIX_DEPRECATED = QStringLiteral("~!");
-static const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX = QStringLiteral("~#");
+const QString ENCRYPTED_MESSAGE_PREFIX_DEPRECATED = QStringLiteral("~!");
+const QString LEGACY_ENCRYPTED_MESSAGE_PREFIX = QStringLiteral("~#");
 
 using EVP_CIPHER_CTX_ptr =
     std::unique_ptr<EVP_CIPHER_CTX, decltype(&::EVP_CIPHER_CTX_free)>;
