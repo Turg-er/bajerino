@@ -7,6 +7,7 @@
 - Bugfix: Opening the avatar of a user from a usercard in the browser now opens the correct URL (c8a096c868864e0a51911640534d3e3283298bda)
 - Bugfix: If a user never set their 7TV avatar, the usercard will no longer show a button to switch between Twitch and 7TV (519a2c3174a96fc19cf59a87005dda07c344b04a)
 - Bugfix: Fixed mentions becoming unclickable when a user updated/announced their personal emotes (7ed952b61073e3081ab1377d1429f554f71b6a07)
+- Dev: Updated kimageformats to v6.11.0, Boost to 1.87.0, and OpenSSL to 3.4.1 (9b5f69f8b15ca63fec8e8ee7406f8dc745ec9dda, d56af0f79d227359111b73c83c9cc657d8ccc811)
 
 ## 7.5.2-beta.1
 
