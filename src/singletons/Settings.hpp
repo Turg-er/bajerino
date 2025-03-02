@@ -193,6 +193,7 @@ public:
     // BoolSetting useCustomWindowFrame = {"/appearance/useCustomWindowFrame",
     // false};
 
+    FloatSetting overlayScaleFactor = {"/appearance/overlay/scaleFactor", 1};
     IntSetting overlayBackgroundOpacity = {
         "/appearance/overlay/backgroundOpacity", 50};
     BoolSetting enableOverlayShadow = {"/appearance/overlay/shadow", true};
@@ -204,6 +205,9 @@ public:
     IntSetting overlayShadowOffsetX = {"/appearance/overlay/shadowOffsetX", 2};
     IntSetting overlayShadowOffsetY = {"/appearance/overlay/shadowOffsetY", 2};
     IntSetting overlayShadowRadius = {"/appearance/overlay/shadowRadius", 8};
+
+    float getClampedOverlayScale() const;
+    void setClampedOverlayScale(float value);
 
     // Badges
     BoolSetting showBadgesGlobalAuthority = {
