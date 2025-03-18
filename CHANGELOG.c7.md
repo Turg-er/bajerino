@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## Unversioned
+
+## 7.5.3-beta.1
 
 - Minor: Added 7TV Discord link to about section and changed the commit link to point to SevenTV/Chatterino7 (#305)
 - Bugfix: Fixed special 7TV emote sets not being applied and not showing in chat (5cc89d3ba9c11b9e0d36be9ac6f14f852b8713dc)
