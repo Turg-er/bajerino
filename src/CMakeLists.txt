@@ -558,6 +558,8 @@ set(SOURCE_FILES
         util/RenameThread.hpp
         util/SampleData.cpp
         util/SampleData.hpp
+        util/SelfCheck.cpp
+        util/SelfCheck.hpp
         util/SharedPtrElementLess.hpp
         util/SignalListener.hpp
         util/StreamLink.cpp
