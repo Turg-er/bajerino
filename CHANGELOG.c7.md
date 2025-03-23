@@ -2,6 +2,10 @@
 
 ## Unversioned
 
+## 7.5.3
+
+- Dev: Downgrades are no longer treated as updates and the `v3` endpoint is now used to check for updates (9a05dc994ae6bba41ccc541156313eac558a15d7)
+
 ## 7.5.3-beta.1
 
 - Minor: Added 7TV Discord link to about section and changed the commit link to point to SevenTV/Chatterino7 (#305)
