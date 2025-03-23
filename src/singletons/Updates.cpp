@@ -388,11 +388,12 @@ void Updates::checkForUpdates()
         this->onlineVersion_ = version.toString();
 
         /// Update available :)
-        if (this->currentVersion_ != this->onlineVersion_)
+        // 7TV: Don't treat downgrades as updates.
+        if (this->currentVersion_ != this->onlineVersion_ &&
+            !Updates::isDowngradeOf(this->onlineVersion_,
+                                    this->currentVersion_))
         {
             this->setStatus_(UpdateAvailable);
-            this->isDowngrade_ = Updates::isDowngradeOf(this->onlineVersion_,
-                                                        this->currentVersion_);
         }
         else
         {
@@ -400,10 +401,9 @@ void Updates::checkForUpdates()
         }
     };
 
-    // We're trying v2, v3, ~~and v4~~ to get updates.
+    // We're trying v3, ~~and v4~~ to get updates.
     // The first successful one will be used
-    // TODO: remove this once v3 has the endpoint
-    auto apiVersion = std::make_shared<uint8_t>(2);
+    auto apiVersion = std::make_shared<uint8_t>(3);
     constexpr auto maxApiVersion =
         3;  // don't try v4 yet (we don't know the API scheme yet)
     auto fmtUrl = [apiVersion]() -> QString {
