@@ -967,12 +967,12 @@ if (BUILD_APP)
                 ARCHIVE DESTINATION lib/static
                 )
 
-        install(FILES ${CMAKE_SOURCE_DIR}/resources/com.chatterino.chatterino.desktop
+        install(FILES ${CMAKE_SOURCE_DIR}/resources/com.bajerino.bajerino.desktop
                 DESTINATION share/applications
                 )
 
         install(FILES ${CMAKE_SOURCE_DIR}/resources/icon.png
-                RENAME com.chatterino.chatterino.png
+                RENAME com.bajerino.bajerino.png
                 DESTINATION share/icons/hicolor/256x256/apps
                 )
     endif ()
@@ -1059,8 +1059,8 @@ if (APPLE AND BUILD_APP)
     set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
     set_target_properties(${EXECUTABLE_PROJECT}
         PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "Chatterino"
-        MACOSX_BUNDLE_GUI_IDENTIFIER "com.chatterino"
+        MACOSX_BUNDLE_BUNDLE_NAME "Bajerino"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.bajerino"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"

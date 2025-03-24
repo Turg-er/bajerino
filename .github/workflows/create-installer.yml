@@ -28,12 +28,12 @@ jobs:
         uses: dawidd6/action-download-artifact@v9
         with:
           workflow: build.yml
-          name: chatterino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
+          name: bajerino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
           commit: ${{ github.sha }}
           path: build/
 
       - name: Unzip
-        run: 7z e -spf chatterino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
+        run: 7z e -spf bajerino-windows-x86-64-Qt-${{ matrix.qt-version }}.zip
         working-directory: build
 
       - name: Install InnoSetup

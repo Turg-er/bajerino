@@ -1,0 +1,56 @@
+stages:
+  - build
+  - release
+
+variables:
+  C2_ENABLE_LTO: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH =~ /^bugfix-release\// || $CI_COMMIT_BRANCH =~ /^release\//
+  CHATTERINO_REQUIRE_CLEAN_GIT: "On"
+  CONAN_VERSION: "2.11.0"
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_DEPTH: 1
+
+include:
+  - local: '.gitlab-ci-ubuntu.yml'
+  - local: '.gitlab-ci-macos.yml'
+  - local: '.gitlab-ci-windows.yml'
+
+create-release:
+  stage: release
+  image: ubuntu:latest
+  needs:
+    - job: build-ubuntu
+    - job: build-macos
+    - job: build-windows
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+      when: on_success
+  before_script:
+    - apt update -yq
+    - apt install -yq git python3 python3-pip zip p7zip-full
+    - pip3 install requests
+  script:
+    - mkdir release-artifacts
+    - cp build-windows/bajerino-windows-x86-64-Qt-6.7.1.zip release-artifacts/
+    - cp build-windows/bin/bajerino-Qt-6.7.1.pdb.7z release-artifacts/
+    - cp build-ubuntu/Bajerino-x86_64-Qt-6.7.2.AppImage release-artifacts/
+    - cp build-ubuntu/Bajerino-ubuntu-22.04-Qt-6.7.2.deb release-artifacts/
+    - cp build-ubuntu/Bajerino-ubuntu-24.04-Qt-6.7.2.deb release-artifacts/
+    - cp .CI/bajerino-nightly.flatpakref release-artifacts/
+    - python3 ./.CI/format-recent-changes.py > changelog.txt
+    - |
+      RELEASE_BODY=$(cat changelog.txt)
+      curl --request "POST" \
+        --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{ \"name\": \"Nightly Release\", \"tag_name\": \"nightly-build\", \"description\": \"${RELEASE_BODY}\", \"ref\": \"master\", \"release_at\": \"$(date +'%Y-%m-%dT%H:%M:%S%Z')\" }" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+    - |
+      for artifact in release-artifacts/*; do
+        echo "Uploading artifact: $artifact"
+        curl --request "POST" \
+          --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+          --form "file=@${artifact}" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/uploads"
+      done
+  tags:
+    - linux

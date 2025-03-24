@@ -5,8 +5,8 @@ set -e
 # Print all commands as they are run
 set -x
 
-if [ ! -f ./bin/chatterino ] || [ ! -x ./bin/chatterino ]; then
-    echo "ERROR: No chatterino binary file found. This script must be run in the build folder, and chatterino must be built first."
+if [ ! -f ./bin/bajerino ] || [ ! -x ./bin/bajerino ]; then
+    echo "ERROR: No bajerino binary file found. This script must be run in the build folder, and bajerino must be built first."
     exit 1
 fi
 
@@ -27,18 +27,18 @@ fi
 
 script_path=$(readlink -f "$0")
 script_dir=$(dirname "$script_path")
-chatterino_dir=$(dirname "$script_dir")
+bajerino_dir=$(dirname "$script_dir")
 
 
-echo "Running LDD on chatterino binary:"
-ldd ./bin/chatterino
+echo "Running LDD on bajerino binary:"
+ldd ./bin/bajerino
 echo ""
 
 echo "Running make install in the appdir"
 make INSTALL_ROOT=appdir -j"$(nproc)" install ; find appdir/
 echo ""
 
-cp "$chatterino_dir"/resources/icon.png ./appdir/chatterino.png
+cp "$bajerino_dir"/resources/icon.png ./appdir/bajerino.png
 
 linuxdeployqt_path="linuxdeployqt-x86_64.AppImage"
 linuxdeployqt_url="https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
@@ -65,7 +65,7 @@ cp /usr/share/doc/libc6/copyright appdir/usr/share/doc/libc6/
 echo "Run LinuxDeployQT"
 ./"$linuxdeployqt_path" \
     --appimage-extract-and-run \
-    appdir/usr/share/applications/com.chatterino.chatterino.desktop \
+    appdir/usr/share/applications/com.bajerino.bajerino.desktop \
     -no-translations \
     -bundle-non-qt-libs \
     -unsupported-allow-new-glibc
@@ -80,7 +80,7 @@ echo '#!/bin/sh
 here="$(dirname "$(readlink -f "${0}")")"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$here/usr/plugins"
 cd "$here/usr"
-exec "$here/usr/bin/chatterino" "$@"' > appdir/AppRun
+exec "$here/usr/bin/bajerino" "$@"' > appdir/AppRun
 chmod a+x appdir/AppRun
 
 ./"$appimagetool_path" \

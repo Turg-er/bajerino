@@ -1,5 +1,5 @@
-if (-not (Test-Path -PathType Container Chatterino2)) {
-    Write-Error "Couldn't find a folder called 'Chatterino2' in the current directory.";
+if (-not (Test-Path -PathType Container Bajerino2)) {
+    Write-Error "Couldn't find a folder called 'Bajerino2' in the current directory.";
     exit 1
 }
 
@@ -15,13 +15,13 @@ if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
     # for example when updating from nightly to stable.
-    Write-Output "" | Out-File Chatterino2/modes -Encoding ASCII;
-    $installerBaseName = "Chatterino.Installer";
+    Write-Output "" | Out-File Bajerino2/modes -Encoding ASCII;
+    $installerBaseName = "Bajerino.Installer";
 }
 else {
-    Write-Output nightly | Out-File Chatterino2/modes -Encoding ASCII;
+    Write-Output nightly | Out-File Bajerino2/modes -Encoding ASCII;
     $defines = "/DIS_NIGHTLY=1";
-    $installerBaseName = "Chatterino.Nightly.Installer";
+    $installerBaseName = "Bajerino.Nightly.Installer";
 }
 
 if ($Env:GITHUB_OUTPUT) {
@@ -46,6 +46,6 @@ ISCC `
     /DSHIPPED_VCRT_VERSION="$($VCRTVersion.FileDescription)" `
     $defines `
     /O. `
-    "$PSScriptRoot\chatterino-installer.iss";
+    "$PSScriptRoot\Bajerino-installer.iss";
 
 Move-Item "$installerBaseName.exe" "$installerBaseName$($Env:VARIANT_SUFFIX).exe"

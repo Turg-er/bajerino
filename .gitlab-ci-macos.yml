@@ -1,0 +1,37 @@
+.macos_build_template: &macos_build_definition
+  stage: build
+  image: macos-14-xcode-15
+  variables:
+    C2_ENABLE_LTO: $FORCE_LTO
+    C2_ENABLE_CRASHPAD: $SKIP_CRASHPAD == "false"
+  before_script:
+    - brew install openssl rapidjson p7zip create-dmg cmake tree boost
+  script:
+    - echo "Building on MacOS..."
+    - mkdir build
+    - cd build
+    - cmake
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15
+        -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl
+        -DUSE_PRECOMPILED_HEADERS=OFF
+        -DCHATTERINO_LTO="$C2_ENABLE_LTO"
+        -DFORCE_JSON_GENERATION=Off
+        ..
+    - make -j"$(sysctl -n hw.logicalcpu)"
+    - export OUTPUT_DMG_PATH=bajerino-macos-Qt-${QT_VERSION}.dmg
+    - ./../.CI/MacDeploy.sh
+    - ./../.CI/CreateDMG.sh
+  artifacts:
+    paths:
+      - "build/bajerino-macos-Qt-${QT_VERSION}.dmg"
+    expire_in: 7 days
+  tags:
+    - saas-macos-large-m2pro
+
+build-macos:
+  extends: .macos_build_template
+  variables:
+    QT_VERSION: "6.7.1"
+    FORCE_LTO: "false"
+    SKIP_CRASHPAD: "false"

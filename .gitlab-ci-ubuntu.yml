@@ -1,0 +1,67 @@
+build-ubuntu:
+  stage: build
+  image: $CONTAINER_IMAGE
+  parallel:
+    matrix:
+      - OS: "ubuntu-22.04"
+        CONTAINER_IMAGE: "ghcr.io/chatterino/chatterino2-build-ubuntu-22.04:latest"
+        QT_VERSION: "6.7.2"
+        FORCE_LTO: "false"
+        SKIP_CRASHPAD: "false"
+        BUILD_APPIMAGE: "true"
+        BUILD_DEB: "true"
+        FORCE_JSON_GENERATION: "Off"
+      - OS: "ubuntu-24.04"
+        CONTAINER_IMAGE: "ghcr.io/chatterino/chatterino2-build-ubuntu-24.04:latest"
+        QT_VERSION: "6.7.2"
+        FORCE_LTO: "false"
+        SKIP_CRASHPAD: "false"
+        BUILD_APPIMAGE: "false"
+        BUILD_DEB: "true"
+        FORCE_JSON_GENERATION: "On"
+  variables:
+    C2_ENABLE_LTO: $FORCE_LTO
+    C2_ENABLE_CRASHPAD: $SKIP_CRASHPAD == "false"
+  before_script:
+    - git config --global --add safe.directory '*'
+    - apt update -yq
+    - DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install -yq python3 python3-venv clang-18 clang-format-18 libclang-18-dev
+    - update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 42
+    - update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 42
+  script:
+    - mkdir build
+    - cd build
+    - CXXFLAGS=-fno-sized-deallocation cmake
+      -DCMAKE_INSTALL_PREFIX=appdir/usr/
+      -DCMAKE_BUILD_TYPE=Release
+      -DPAJLADA_SETTINGS_USE_BOOST_FILESYSTEM=On
+      -DUSE_PRECOMPILED_HEADERS=OFF
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=On
+      -DCHATTERINO_LTO="$C2_ENABLE_LTO"
+      -DCMAKE_PREFIX_PATH="$Qt6_DIR/lib/cmake"
+      -DCHATTERINO_STATIC_QT_BUILD=On
+      -DFORCE_JSON_GENERATION=$FORCE_JSON_GENERATION
+      ..
+    - make -j"$(nproc)"
+    - |
+      if [ "$OS" == "ubuntu-24.04" ]; then
+        git add -N lib/twitch-eventsub-ws/include lib/twitch-eventsub-ws/src
+        git --no-pager diff --exit-code lib/twitch-eventsub-ws/include lib/twitch-eventsub-ws/src
+      fi
+    - |
+      if [ "$BUILD_APPIMAGE" == "true" ]; then
+        sh ./../.CI/CreateAppImage.sh
+        mv build/Bajerino-x86_64.AppImage Bajerino-x86_64-Qt-${QT_VERSION}.AppImage
+      fi
+    - |
+      if [ "$BUILD_DEB" == "true" ]; then
+        sh ./../.CI/CreateUbuntuDeb.sh
+        mv build/Bajerino-${OS}-x86_64.deb Bajerino-${OS}-Qt-${QT_VERSION}.deb
+      fi
+  artifacts:
+    paths:
+      - "build/Bajerino-x86_64-Qt-${QT_VERSION}.AppImage"
+      - "build/Bajerino-${OS}-Qt-${QT_VERSION}.deb"
+    expire_in: 7 days
+  tags:
+    - saas-linux-small-amd64
