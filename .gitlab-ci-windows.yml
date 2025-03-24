@@ -4,16 +4,10 @@
     C2_ENABLE_LTO: $FORCE_LTO
     C2_ENABLE_CRASHPAD: $SKIP_CRASHPAD == "false"
   before_script:
-    - apt update -yq
-    - apt install -yq git cmake
-    - |
-      if [[ "$RUNNER_OS" == "windows" ]]; then
-        echo "Installing Conan..."
-        python3 -c "import site; import sys; print(f'{site.USER_BASE}\\Python{sys.version_info.major}{sys.version_info.minor}\\Scripts')" | Out-File -FilePath "$env:GITHUB_PATH" -Append -Encoding utf8
-        pip3 install --user "conan==${env:CONAN_VERSION}"
-        conan --version
-        conan profile detect -f
-      fi
+    - echo "Installing Conan..."
+    - pip install --upgrade conan
+    - conan --version
+    - conan profile detect -f
   script:
     - echo "Building on Windows..."
     - mkdir build

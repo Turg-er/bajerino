@@ -29,7 +29,6 @@
       - "build/bajerino-macos-Qt-${QT_VERSION}.dmg"
     expire_in: 7 days
   tags:
-    - macos
     - saas-macos-medium-m1
 
 build-macos:

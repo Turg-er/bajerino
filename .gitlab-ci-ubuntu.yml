@@ -1,10 +1,3 @@
-.ubuntu_before_script: &ubuntu_before_script
-  - git config --global --add safe.directory '*'
-  - apt update -yq
-  - apt install -yq python3 python3-venv clang clang-format
-  - update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 42
-  - update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 42
-
 build-ubuntu:
   stage: build
   image: $CONTAINER_IMAGE
@@ -30,7 +23,11 @@ build-ubuntu:
     C2_ENABLE_LTO: $FORCE_LTO
     C2_ENABLE_CRASHPAD: $SKIP_CRASHPAD == "false"
   before_script:
-    - *ubuntu_before_script
+    - git config --global --add safe.directory '*'
+    - apt update -yq
+    - apt install -yq python3 python3-venv clang clang-format
+    - update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 42
+    - update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-18 42
   script:
     - mkdir build
     - cd build
@@ -67,4 +64,4 @@ build-ubuntu:
       - "build/Bajerino-${OS}-Qt-${QT_VERSION}.deb"
     expire_in: 7 days
   tags:
-    - docker
+    - saas-linux-small-amd64
