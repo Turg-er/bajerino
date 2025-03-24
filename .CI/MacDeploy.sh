@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# Bundle relevant qt & system dependencies into the ./chatterino.app folder
+# Bundle relevant qt & system dependencies into the ./bajerino.app folder
 
 set -eo pipefail
 
-if [ -d bin/chatterino.app ] && [ ! -d chatterino.app ]; then
-    >&2 echo "Moving bin/chatterino.app down one directory"
-    mv bin/chatterino.app chatterino.app
+if [ -d bin/bajerino.app ] && [ ! -d bajerino.app ]; then
+    >&2 echo "Moving bin/bajerino.app down one directory"
+    mv bin/bajerino.app bajerino.app
 fi
 
 if [ -n "$Qt5_DIR" ]; then
@@ -31,9 +31,9 @@ if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
     _macdeployqt_args+=("-codesign=$MACOS_CODESIGN_CERTIFICATE")
 fi
 
-macdeployqt chatterino.app "${_macdeployqt_args[@]}"
+macdeployqt bajerino.app "${_macdeployqt_args[@]}"
 
 if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
-    # Validate that chatterino.app was codesigned correctly
-    codesign -v chatterino.app
+    # Validate that bajerino.app was codesigned correctly
+    codesign -v bajerino.app
 fi

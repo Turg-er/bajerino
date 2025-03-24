@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- 2019 Artem Polishchuk <ego.cordatus@gmail.com> -->
 <component type="desktop-application">
-    <id>com.chatterino.chatterino.desktop</id>
-    <launchable type="desktop-id">com.chatterino.chatterino.desktop</launchable>
+    <id>com.bajerino.bajerino.desktop</id>
+    <launchable type="desktop-id">com.bajerino.bajerino.desktop</launchable>
     <metadata_license>CC0-1.0</metadata_license>
     <project_license>MIT</project_license>
     <content_rating type="oars-1.0">
         <content_attribute id="social-chat">intense</content_attribute>
     </content_rating>
-    <name>Chatterino</name>
-    <developer_name>Chatterino Developers</developer_name>
+    <name>Bajerino</name>
+    <developer_name>Bajerino Developers</developer_name>
     <summary>
         Chat client for twitch.tv
     </summary>
     <description>
         <p>
-            Chatterino is a chat client for Twitch.tv.
+            Bajerino is a chat client for Twitch.tv.
         </p>
     </description>
     <screenshots>
@@ -31,7 +31,7 @@
     <url type="bugtracker">https://chatterino.com/link/issues</url>
     <url type="donation">https://chatterino.com/link/tips</url>
     <provides>
-        <binary>chatterino</binary>
+        <binary>bajerino</binary>
     </provides>
     <releases>
         <release version="2.5.3" date="2025-03-23">

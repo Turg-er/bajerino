@@ -1,5 +1,5 @@
 param (
-    [string] $InstallDir = "Chatterino2"
+    [string] $InstallDir = "Bajerino2"
 )
 
 if ($null -eq $Env:VCToolsRedistDir) {
