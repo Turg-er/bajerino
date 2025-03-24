@@ -6,6 +6,8 @@ variables:
   C2_ENABLE_LTO: $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH =~ /^bugfix-release\// || $CI_COMMIT_BRANCH =~ /^release\//
   CHATTERINO_REQUIRE_CLEAN_GIT: "On"
   CONAN_VERSION: "2.11.0"
+  GIT_SUBMODULE_STRATEGY: recursive
+  GIT_SUBMODULE_DEPTH: 1
 
 include:
   - local: '.gitlab-ci-ubuntu.yml'

@@ -5,8 +5,6 @@
     C2_ENABLE_LTO: $FORCE_LTO
     C2_ENABLE_CRASHPAD: $SKIP_CRASHPAD == "false"
   before_script:
-    - apt update -yq
-    - apt install -yq git cmake
     - brew install openssl rapidjson p7zip create-dmg cmake tree boost
   script:
     - echo "Building on MacOS..."
@@ -29,7 +27,7 @@
       - "build/bajerino-macos-Qt-${QT_VERSION}.dmg"
     expire_in: 7 days
   tags:
-    - saas-macos-medium-m1
+    - saas-macos-large-m2pro
 
 build-macos:
   extends: .macos_build_template
