@@ -54,6 +54,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
+#include <QStringBuilder>
 #include <QTimeZone>
 
 #include <algorithm>
@@ -385,8 +386,36 @@ EmotePtr makeAutoModBadge()
         Url{"https://dashboard.twitch.tv/settings/moderation/automod"}});
 }
 
-EmotePtr makeSharedChatBadge(const QString &sourceName)
+EmotePtr makeSharedChatBadge(const QString &sourceName,
+                             const QString &sourceProfileURL,
+                             const QString &sourceLogin)
 {
+    if (!sourceProfileURL.isEmpty())
+    {
+        QString modifiedUrl = sourceProfileURL;
+        modifiedUrl.replace("300x300", "28x28");
+
+        auto badgeLink = [&] {
+            if (sourceLogin.isEmpty())
+            {
+                return Url{"https://link.twitch.tv/SharedChatViewer"};
+            }
+
+            return Url{u"https://twitch.tv/%1"_s.arg(sourceLogin)};
+        }();
+
+        return std::make_shared<Emote>(Emote{
+            .name = EmoteName{},
+            .images = ImageSet{Image::fromUrl(
+                Url{modifiedUrl},
+                18.F / 28.F)},  // get as close to 18x18 as possible
+            .tooltip =
+                Tooltip{"Shared Message" +
+                        (sourceName.isEmpty() ? "" : " from " + sourceName)},
+            .homePage = badgeLink,
+        });
+    }
+
     return std::make_shared<Emote>(Emote{
         .name = EmoteName{},
         .images = ImageSet{Image::fromResourcePixmap(
@@ -526,8 +555,7 @@ MessageBuilder::MessageBuilder(SystemMessageTag, const QString &text,
             continue;
         }
 
-        this->emplace<TextElement>(word, MessageElementFlag::Text,
-                                   MessageColor::System);
+        this->appendOrEmplaceText(word, MessageColor::System);
     }
     this->message().flags.set(MessageFlag::System);
     this->message().flags.set(MessageFlag::DoNotTriggerNotification);
@@ -552,8 +580,7 @@ MessagePtrMut MessageBuilder::makeSystemMessageWithUser(
             continue;
         }
 
-        builder.emplace<TextElement>(word, MessageElementFlag::Text,
-                                     MessageColor::System);
+        builder.appendOrEmplaceText(word, MessageColor::System);
     }
 
     builder->flags.set(MessageFlag::System);
@@ -619,8 +646,7 @@ MessagePtrMut MessageBuilder::makeSubgiftMessage(const QString &text,
             continue;
         }
 
-        builder.emplace<TextElement>(word, MessageElementFlag::Text,
-                                     MessageColor::System);
+        builder.appendOrEmplaceText(word, MessageColor::System);
     }
 
     builder->flags.set(MessageFlag::System);
@@ -633,8 +659,9 @@ MessagePtrMut MessageBuilder::makeSubgiftMessage(const QString &text,
 
 MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &timeoutUser,
                                const QString &sourceUser,
-                               const QString &systemMessageText, int times,
-                               const QTime &time)
+                               const QString &channel,
+                               const QString &systemMessageText, uint32_t times,
+                               const QDateTime &time)
     : MessageBuilder()
 {
     QString usernameText = systemMessageText.split(" ").at(0);
@@ -643,25 +670,43 @@ MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &timeoutUser,
         usernameText == "You" || timeoutUser == usernameText;
     QString messageText;
 
-    this->emplace<TimestampElement>(time);
+    this->emplace<TimestampElement>(time.time());
     this->emplaceSystemTextAndUpdate(usernameText, messageText)
         ->setLink(
             {Link::UserInfo, timeoutUserIsFirst ? timeoutUser : sourceUser});
 
+    auto appendUser = [&](const QString &name) {
+        auto pos = remainder.indexOf(name);
+        if (pos > 0)
+        {
+            QString start = remainder.mid(0, pos - 1);
+            remainder = remainder.mid(pos + name.length());
+
+            this->emplaceSystemTextAndUpdate(start, messageText);
+            auto *el = this->emplaceSystemTextAndUpdate(name, messageText)
+                           ->setLink({Link::UserInfo, name});
+            if (remainder.startsWith(' '))
+            {
+                removeFirstQS(remainder);
+            }
+            else
+            {
+                assert(messageText.endsWith(' '));
+                removeLastQS(messageText);
+                el->setTrailingSpace(false);
+            }
+        }
+    };
+
     if (!sourceUser.isEmpty())
     {
         // the second username in the message
-        const auto &targetUsername =
-            timeoutUserIsFirst ? sourceUser : timeoutUser;
-        int userPos = remainder.indexOf(targetUsername);
+        appendUser(timeoutUserIsFirst ? sourceUser : timeoutUser);
+    }
 
-        QString mid = remainder.mid(0, userPos - 1);
-        QString username = remainder.mid(userPos, targetUsername.length());
-        remainder = remainder.mid(userPos + targetUsername.length() + 1);
-
-        this->emplaceSystemTextAndUpdate(mid, messageText);
-        this->emplaceSystemTextAndUpdate(username, messageText)
-            ->setLink({Link::UserInfo, username});
+    if (!channel.isEmpty())
+    {
+        appendUser(channel);
     }
 
     this->emplaceSystemTextAndUpdate(
@@ -670,17 +715,18 @@ MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &timeoutUser,
 
     this->message().messageText = messageText;
     this->message().searchText = messageText;
+    this->message().serverReceivedTime = time;
 }
 
 MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &username,
                                const QString &durationInSeconds,
-                               bool multipleTimes, const QTime &time)
+                               bool multipleTimes, const QDateTime &time)
     : MessageBuilder()
 {
     QString fullText;
     QString text;
 
-    this->emplace<TimestampElement>(time);
+    this->emplace<TimestampElement>(time.time());
     this->emplaceSystemTextAndUpdate(username, fullText)
         ->setLink({Link::UserInfo, username});
 
@@ -712,15 +758,18 @@ MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &username,
 
     this->message().flags.set(MessageFlag::System);
     this->message().flags.set(MessageFlag::Timeout);
+    this->message().flags.set(MessageFlag::ModerationAction);
     this->message().flags.set(MessageFlag::DoNotTriggerNotification);
     this->message().timeoutUser = username;
 
     this->emplaceSystemTextAndUpdate(text, fullText);
     this->message().messageText = fullText;
     this->message().searchText = fullText;
+    this->message().serverReceivedTime = time;
 }
 
-MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
+MessageBuilder::MessageBuilder(const BanAction &action, const QDateTime &time,
+                               uint32_t count)
     : MessageBuilder()
 {
     auto current = getApp()->getAccounts()->twitch.getCurrent();
@@ -728,6 +777,7 @@ MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
     this->emplace<TimestampElement>();
     this->message().flags.set(MessageFlag::System);
     this->message().flags.set(MessageFlag::Timeout);
+    this->message().flags.set(MessageFlag::ModerationAction);
     this->message().timeoutUser = action.target.login;
     this->message().loginName = action.source.login;
     this->message().count = count;
@@ -741,18 +791,18 @@ MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
         this->emplaceSystemTextAndUpdate("were", text);
         if (action.isBan())
         {
-            this->emplaceSystemTextAndUpdate("banned", text);
+            this->appendOrEmplaceSystemTextAndUpdate("banned", text);
         }
         else
         {
-            this->emplaceSystemTextAndUpdate(
+            this->appendOrEmplaceSystemTextAndUpdate(
                 QString("timed out for %1").arg(formatTime(action.duration)),
                 text);
         }
 
         if (!action.source.login.isEmpty())
         {
-            this->emplaceSystemTextAndUpdate("by", text);
+            this->appendOrEmplaceSystemTextAndUpdate("by", text);
             this->emplaceSystemTextAndUpdate(
                     action.source.login + (action.reason.isEmpty() ? "." : ":"),
                     text)
@@ -761,7 +811,7 @@ MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
 
         if (!action.reason.isEmpty())
         {
-            this->emplaceSystemTextAndUpdate(
+            this->appendOrEmplaceSystemTextAndUpdate(
                 QString("\"%1\".").arg(action.reason), text);
         }
     }
@@ -810,7 +860,7 @@ MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
 
             if (count > 1)
             {
-                this->emplaceSystemTextAndUpdate(
+                this->appendOrEmplaceSystemTextAndUpdate(
                     QString("(%1 times)").arg(count), text);
             }
         }
@@ -818,9 +868,11 @@ MessageBuilder::MessageBuilder(const BanAction &action, uint32_t count)
 
     this->message().messageText = text;
     this->message().searchText = text;
+
+    this->message().serverReceivedTime = time;
 }
 
-MessageBuilder::MessageBuilder(const UnbanAction &action)
+MessageBuilder::MessageBuilder(const UnbanAction &action, const QDateTime &time)
     : MessageBuilder()
 {
     this->emplace<TimestampElement>();
@@ -840,6 +892,8 @@ MessageBuilder::MessageBuilder(const UnbanAction &action)
 
     this->message().messageText = text;
     this->message().searchText = text;
+
+    this->message().serverReceivedTime = time;
 }
 
 MessageBuilder::MessageBuilder(const WarnAction &action)
@@ -1224,6 +1278,42 @@ bool MessageBuilder::isIgnored(const QString &originalMessage,
     });
 }
 
+void MessageBuilder::appendOrEmplaceText(const QString &text,
+                                         MessageColor color)
+{
+    auto fallback = [&] {
+        this->emplace<TextElement>(text, MessageElementFlag::Text, color);
+    };
+    if (this->message_->elements.empty())
+    {
+        fallback();
+        return;
+    }
+
+    auto *back =
+        dynamic_cast<TextElement *>(this->message_->elements.back().get());
+    if (!back ||                                         //
+        dynamic_cast<MentionElement *>(back) ||          //
+        dynamic_cast<LinkElement *>(back) ||             //
+        !back->hasTrailingSpace() ||                     //
+        back->getFlags() != MessageElementFlag::Text ||  //
+        back->color() != color)
+    {
+        fallback();
+        return;
+    }
+
+    back->appendText(text);
+}
+
+void MessageBuilder::appendOrEmplaceSystemTextAndUpdate(const QString &text,
+                                                        QString &toUpdate)
+{
+    toUpdate.append(text);
+    toUpdate.append(' ');
+    this->appendOrEmplaceText(text, MessageColor::System);
+}
+
 void MessageBuilder::triggerHighlights(const Channel *channel,
                                        const HighlightAlert &alert)
 {
@@ -1405,7 +1495,7 @@ MessagePtr MessageBuilder::makeDeletionMessageFromIRC(
     builder.emplace<TimestampElement>();
     builder.message().flags.set(MessageFlag::System);
     builder.message().flags.set(MessageFlag::DoNotTriggerNotification);
-    builder.message().flags.set(MessageFlag::Timeout);
+    builder.message().flags.set(MessageFlag::ModerationAction);
     // TODO(mm2pl): If or when jumping to a single message gets implemented a link,
     // add a link to the originalMessage
     builder.emplace<TextElement>("A message from", MessageElementFlag::Text,
@@ -1444,7 +1534,7 @@ MessagePtr MessageBuilder::makeDeletionMessageFromPubSub(
     builder.emplace<TimestampElement>();
     builder.message().flags.set(MessageFlag::System);
     builder.message().flags.set(MessageFlag::DoNotTriggerNotification);
-    builder.message().flags.set(MessageFlag::Timeout);
+    builder.message().flags.set(MessageFlag::ModerationAction);
 
     builder
         .emplace<TextElement>(action.source.login, MessageElementFlag::Username,
@@ -1651,7 +1741,7 @@ std::pair<MessagePtr, MessagePtr> MessageBuilder::makeAutomodMessage(
     builder.message().loginName = "automod";
     builder.message().channelName = channelName;
     builder.message().flags.set(MessageFlag::PubSub);
-    builder.message().flags.set(MessageFlag::Timeout);
+    builder.message().flags.set(MessageFlag::ModerationAction);
     builder.message().flags.set(MessageFlag::AutoMod);
     builder.message().flags.set(MessageFlag::AutoModOffendingMessageHeader);
 
@@ -1702,7 +1792,7 @@ std::pair<MessagePtr, MessagePtr> MessageBuilder::makeAutomodMessage(
     builder2.emplace<TwitchModerationElement>();
     builder2.message().loginName = action.target.login;
     builder2.message().flags.set(MessageFlag::PubSub);
-    builder2.message().flags.set(MessageFlag::Timeout);
+    builder2.message().flags.set(MessageFlag::ModerationAction);
     builder2.message().flags.set(MessageFlag::AutoMod);
     builder2.message().flags.set(MessageFlag::AutoModOffendingMessage);
 
@@ -1757,22 +1847,19 @@ MessagePtr MessageBuilder::makeAutomodInfoMessage(
             QString info("Hey! Your message is being checked "
                          "by mods and has not been sent.");
             text += info;
-            builder.emplace<TextElement>(info, MessageElementFlag::Text,
-                                         MessageColor::Text);
+            builder.appendOrEmplaceText(info, MessageColor::Text);
         }
         break;
         case AutomodInfoAction::Denied: {
             QString info("Mods have removed your message.");
             text += info;
-            builder.emplace<TextElement>(info, MessageElementFlag::Text,
-                                         MessageColor::Text);
+            builder.appendOrEmplaceText(info, MessageColor::Text);
         }
         break;
         case AutomodInfoAction::Approved: {
             QString info("Mods have accepted your message.");
             text += info;
-            builder.emplace<TextElement>(info, MessageElementFlag::Text,
-                                         MessageColor::Text);
+            builder.appendOrEmplaceText(info, MessageColor::Text);
         }
         break;
     }
@@ -1930,6 +2017,7 @@ MessagePtr MessageBuilder::makeLowTrustUpdateMessage(
                               MessageColor::System, FontStyle::ChatMediumBold)
         ->setLink({Link::UserInfo, action.updatedByUserLogin});
 
+    QString text;
     assert(action.treatment != PubSubLowTrustUsersMessage::Treatment::INVALID);
     switch (action.treatment)
     {
@@ -1945,6 +2033,9 @@ MessagePtr MessageBuilder::makeLowTrustUpdateMessage(
             builder.emplace<TextElement>("from the suspicious user list.",
                                          MessageElementFlag::Text,
                                          MessageColor::System);
+            text = QString("%1 removed %2 from the suspicious user list.")
+                       .arg(action.updatedByUserDisplayName,
+                            action.suspiciousUserDisplayName);
         }
         break;
 
@@ -1960,6 +2051,9 @@ MessagePtr MessageBuilder::makeLowTrustUpdateMessage(
             builder.emplace<TextElement>("as a monitored suspicious chatter.",
                                          MessageElementFlag::Text,
                                          MessageColor::System);
+            text = QString("%1 added %2 as a monitored suspicious chatter.")
+                       .arg(action.updatedByUserDisplayName,
+                            action.suspiciousUserDisplayName);
         }
         break;
 
@@ -1975,6 +2069,9 @@ MessagePtr MessageBuilder::makeLowTrustUpdateMessage(
             builder.emplace<TextElement>("as a restricted suspicious chatter.",
                                          MessageElementFlag::Text,
                                          MessageColor::System);
+            text = QString("%1 added %2 as a restricted suspicious chatter.")
+                       .arg(action.updatedByUserDisplayName,
+                            action.suspiciousUserDisplayName);
         }
         break;
 
@@ -1983,6 +2080,74 @@ MessagePtr MessageBuilder::makeLowTrustUpdateMessage(
                                       << action.treatmentString;
             break;
     }
+
+    builder->messageText = text;
+    builder->searchText = text;
+    return builder.release();
+}
+
+MessagePtrMut MessageBuilder::makeMissingScopesMessage(
+    const QString &missingScopes)
+{
+    QString warnText =
+        u"Your account is missing the following permission(s): " %
+        missingScopes % u". Some features might not work correctly.";
+    auto linkText = u"Consider re-adding your account."_s;
+
+    MessageBuilder builder;
+    QString text = warnText % ' ' % linkText;
+    builder->messageText = text;
+    builder->searchText = text;
+    builder->flags.set(MessageFlag::System,
+                       MessageFlag::DoNotTriggerNotification);
+
+    builder.emplace<TimestampElement>();
+    builder.emplace<TextElement>(warnText, MessageElementFlag::Text,
+                                 MessageColor::System);
+    builder
+        .emplace<TextElement>(linkText, MessageElementFlag::Text,
+                              MessageColor::Link)
+        ->setLink({Link::OpenAccountsPage, {}});
+
+    return builder.release();
+}
+
+MessagePtrMut MessageBuilder::makeClearChatMessage(const QDateTime &now,
+                                                   const QString &actor,
+                                                   uint32_t count)
+{
+    MessageBuilder builder;
+    builder.emplace<TimestampElement>(now.time());
+    builder->count = count;
+    builder->serverReceivedTime = now;
+    builder.message().flags.set(
+        MessageFlag::System, MessageFlag::DoNotTriggerNotification,
+        MessageFlag::ClearChat, MessageFlag::ModerationAction);
+
+    QString messageText;
+    if (actor.isEmpty())
+    {
+        builder.emplaceSystemTextAndUpdate(
+            "Chat has been cleared by a moderator.", messageText);
+    }
+    else
+    {
+        builder.message().flags.set(MessageFlag::PubSub);
+        builder.emplace<MentionElement>(actor, actor, MessageColor::System,
+                                        MessageColor::System);
+        messageText = actor + ' ';
+        builder.emplaceSystemTextAndUpdate("cleared the chat.", messageText);
+        builder->timeoutUser = actor;
+    }
+
+    if (count > 1)
+    {
+        builder.appendOrEmplaceSystemTextAndUpdate(
+            '(' % QString::number(count) % u" times)", messageText);
+    }
+
+    builder->messageText = messageText;
+    builder->searchText = messageText;
 
     return builder.release();
 }
@@ -2016,6 +2181,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     MessageBuilder builder;
     builder.parseUsernameColor(tags, userID);
+    builder->userID = userID;
+
     if (decrypted)
     {
         builder->flags.set(MessageFlag::Decrypted);
@@ -2052,6 +2219,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
             builder.appendChannelPointRewardMessage(*reward, channel->isMod(),
                                                     channel->isBroadcaster());
         }
+        builder->flags.set(MessageFlag::RedeemedChannelPointReward);
     }
 
     builder.appendChannelName(channel);
@@ -2177,23 +2345,26 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
             ColorProvider::instance().color(ColorType::Whisper);
     }
 
-    if (thread)
+    if (!args.isReceivedWhisper && tags.value("msg-id") != "announcement")
     {
-        auto &img = getResources().buttons.replyThreadDark;
-        builder
-            .emplace<CircularImageElement>(Image::fromResourcePixmap(img, 0.15),
-                                           2, Qt::gray,
-                                           MessageElementFlag::ReplyButton)
-            ->setLink({Link::ViewThread, thread->rootId()});
-    }
-    else
-    {
-        auto &img = getResources().buttons.replyDark;
-        builder
-            .emplace<CircularImageElement>(Image::fromResourcePixmap(img, 0.15),
-                                           2, Qt::gray,
-                                           MessageElementFlag::ReplyButton)
-            ->setLink({Link::ReplyToMessage, builder->id});
+        if (thread)
+        {
+            auto &img = getResources().buttons.replyThreadDark;
+            builder
+                .emplace<CircularImageElement>(
+                    Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
+                    MessageElementFlag::ReplyButton)
+                ->setLink({Link::ViewThread, thread->rootId()});
+        }
+        else
+        {
+            auto &img = getResources().buttons.replyDark;
+            builder
+                .emplace<CircularImageElement>(
+                    Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
+                    MessageElementFlag::ReplyButton)
+                ->setLink({Link::ReplyToMessage, builder->id});
+        }
     }
 
     return {builder.release(), highlight};
@@ -2299,7 +2470,7 @@ void MessageBuilder::addTextOrEmote(TextState &state, QString string)
         }
     }
 
-    this->emplace<TextElement>(string, MessageElementFlag::Text, textColor);
+    this->appendOrEmplaceText(string, textColor);
 }
 
 bool MessageBuilder::isEmpty() const
@@ -2870,22 +3041,33 @@ void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
     {
         const QString sourceId = tags["source-room-id"].toString();
         QString sourceName;
+        QString sourceProfilePicture;
+        QString sourceLogin;
+
         if (sourceId.isEmpty())
         {
             sourceName = "";
         }
-        else if (twitchChannel->roomId() == sourceId)
-        {
-            sourceName = twitchChannel->getName();
-        }
         else
         {
-            sourceName =
-                getApp()->getTwitchUsers()->resolveID({sourceId})->displayName;
+            auto twitchUser = getApp()->getTwitchUsers()->resolveID({sourceId});
+            sourceProfilePicture = twitchUser->profilePictureUrl;
+            sourceLogin = twitchUser->name;
+
+            if (twitchChannel->roomId() == sourceId)
+            {
+                // We have the source channel open, but we still need to load the profile picture URL
+                sourceName = twitchChannel->getName();
+            }
+            else
+            {
+                sourceName = twitchUser->displayName;
+            }
         }
 
-        this->emplace<BadgeElement>(makeSharedChatBadge(sourceName),
-                                    MessageElementFlag::BadgeSharedChannel);
+        this->emplace<BadgeElement>(
+            makeSharedChatBadge(sourceName, sourceProfilePicture, sourceLogin),
+            MessageElementFlag::BadgeSharedChannel);
     }
 
     auto badgeInfos = parseBadgeInfoTag(tags);
