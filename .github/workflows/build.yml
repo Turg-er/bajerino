@@ -234,7 +234,7 @@ jobs:
         run: |
           cd build
           set cl=/MP
-          nmake /S /NOLOGO bajerino-crash-handler
+          nmake /S /NOLOGO chatterino-crash-handler
           mkdir Bajerino2/crashpad
           cp bin/crashpad/crashpad-handler.exe Bajerino2/crashpad/crashpad-handler.exe
           7z a bin/bajerino-Qt-${{ matrix.qt-version }}.pdb.7z bin/bajerino.pdb
@@ -245,8 +245,9 @@ jobs:
           cd build
           windeployqt bin/bajerino.exe --release --no-compiler-runtime --no-translations --no-opengl-sw --dir Bajerino2/
           cp bin/bajerino.exe Bajerino2/
+          cp bin/libcrypto-3-x64.dll Bajerino2/
+          cp bin/libssl-3-x64.dll Bajerino2/
           ..\.CI\deploy-crt.ps1 Bajerino2
-          echo nightly > Bajerino2/modes
 
       - name: Package (windows)
         if: startsWith(matrix.os, 'windows')
