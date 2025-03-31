@@ -16,8 +16,9 @@
 #include "controllers/sound/ISoundController.hpp"
 #include "singletons/Toasts.hpp"
 #include "util/RapidJsonSerializeQString.hpp"
-#include "widgets/Notebook.hpp"
 #include "util/serialize/Container.hpp"
+#include "widgets/Notebook.hpp"
+
 #include <pajlada/settings/setting.hpp>
 #include <pajlada/settings/settinglistener.hpp>
 #include <pajlada/signals/signalholder.hpp>
@@ -265,9 +266,10 @@ public:
     // Encryption
     BoolSetting alwaysEncrypt = {"/encryption/automatic", false};
     BoolSetting legacyEncryptionPrefix = {"/encryption/legacy_prefix", false};
-    QStringSetting encryptionKey = {"/encryption/encryptionKey", "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
+    QStringSetting encryptionKey = {"/encryption/encryptionKey",
+                                    "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
     ChatterinoSetting<std::map<std::string, bool>> encryptionChannelStates = {
-      "/encryption/channel_states", {} } ;
+        "/encryption/channel_states", {}};
     // ChatterinoSetting<std::unordered_map<std::string, bool>> encryptionChannelStates = {
     //     "/encryption/channel_states"};
 

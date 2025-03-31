@@ -285,8 +285,8 @@ QSpinBox *GeneralPageView::addIntInput(const QString &text, IntSetting &setting,
 }
 
 QLineEdit *GeneralPageView::addTextInput(const QString &text,
-                                     QStringSetting &setting,
-                                     QString toolTipText)
+                                         QStringSetting &setting,
+                                         QString toolTipText)
 {
     auto *layout = new QHBoxLayout;
 

@@ -1,11 +1,11 @@
 #pragma once
 
+#include "common/Channel.hpp"
+#include "common/ChatterinoSetting.hpp"
 #include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
 #include "widgets/helper/Button.hpp"
-#include "common/Channel.hpp"
 
-#include "common/ChatterinoSetting.hpp"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>

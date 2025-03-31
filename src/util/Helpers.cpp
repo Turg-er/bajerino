@@ -3,13 +3,13 @@
 #include "Application.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QDirIterator>
 #include <QLocale>
 #include <QRegularExpression>
 #include <QTimeZone>
 #include <QUuid>
-#include <QByteArray>
 
 namespace {
 
