@@ -146,6 +146,7 @@ public:
     using pajlada::Settings::Setting<QString>::operator QString;
 };
 
+
 template <typename T>
 struct IsChatterinoSettingT : std::false_type {
 };
@@ -160,3 +161,4 @@ template <typename T>
 concept IsChatterinoSetting = IsChatterinoSettingT<T>::value;
 
 }  // namespace chatterino
+   //

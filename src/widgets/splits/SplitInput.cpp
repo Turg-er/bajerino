@@ -10,8 +10,11 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
+#include "singletons/Emotes.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
+#include "SplitInput.hpp"
+#include "stdio.h"
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
@@ -29,7 +32,10 @@
 #include <QPainter>
 #include <QSignalBlocker>
 
+#include <algorithm>
 #include <functional>
+#include <iostream>
+#include <optional>
 
 namespace chatterino {
 
@@ -155,6 +161,42 @@ void SplitInput::initLayout()
             }
         },
         this->managedConnections_);
+
+    // encryption checkbox
+    hboxLayout.emplace<QCheckBox>().assign(
+        &this->ui_.encryptionEnabledCheckbox);
+    this->ui_.encryptionEnabledCheckbox->setToolTip("Forsen");
+    this->ui_.encryptionEnabledCheckbox->setText("🔒");
+    this->ui_.encryptionEnabledCheckbox->show();
+
+    std::ignore = this->split_->focused.connect([this]() {
+        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+        auto channelName = this->split_->getChannel()->getName().toStdString();
+        if (channelStates.find(channelName) == channelStates.end())
+        {
+            bool alwaysOnEncryptionSetting = false;
+            getSettings()->alwaysEncrypt = false;
+            this->ui_.encryptionEnabledCheckbox->setChecked(
+                alwaysOnEncryptionSetting);
+        }
+        else
+        {
+            this->ui_.encryptionEnabledCheckbox->setChecked(
+                channelStates[channelName]);
+            getSettings()->alwaysEncrypt = channelStates[channelName];
+        }
+    });
+    QObject::connect(
+        this->ui_.encryptionEnabledCheckbox, &QCheckBox::toggled, this,
+        [this](bool value) {
+            auto channelStates =
+                getSettings()->encryptionChannelStates.getValue();
+            auto channelName =
+                this->split_->getChannel()->getName().toStdString();
+            channelStates[channelName] = value;
+            getSettings()->encryptionChannelStates.setValue(channelStates);
+            getSettings()->alwaysEncrypt = value;
+        });
 
     // right box
     auto box = hboxLayout.emplace<QVBoxLayout>().withoutMargin();
@@ -303,10 +345,10 @@ void SplitInput::updateCancelReplyButton()
 {
     float scale = this->scale();
 
-    auto text =
-        QStringLiteral("<img src=':/buttons/%1.svg' width='%2' height='%2' />")
-            .arg(this->theme->isLightTheme() ? "cancelDark" : "cancel")
-            .arg(int(12 * scale));
+    auto text = QStringLiteral("<img src=':/buttons/%1.svg' "
+                               "width='%2' height='%2' />")
+                    .arg(this->theme->isLightTheme() ? "cancelDark" : "cancel")
+                    .arg(int(12 * scale));
 
     this->ui_.cancelReplyButton->getLabel().setText(text);
     this->ui_.cancelReplyButton->setFixedHeight(int(12 * scale));
@@ -440,10 +482,14 @@ void SplitInput::addShortcuts()
              if (arguments.size() != 1)
              {
                  qCWarning(chatterinoHotkeys)
-                     << "Invalid cursorToStart arguments. Argument 0: select "
-                        "(\"withSelection\" or \"withoutSelection\")";
-                 return "Invalid cursorToStart arguments. Argument 0: select "
-                        "(\"withSelection\" or \"withoutSelection\")";
+                     << "Invalid cursorToStart arguments. "
+                        "Argument 0: select "
+                        "(\"withSelection\" or "
+                        "\"withoutSelection\")";
+                 return "Invalid cursorToStart arguments. "
+                        "Argument 0: select "
+                        "(\"withSelection\" or "
+                        "\"withoutSelection\")";
              }
              QTextCursor cursor = this->ui_.textEdit->textCursor();
              auto place = QTextCursor::Start;
@@ -459,9 +505,10 @@ void SplitInput::addShortcuts()
              }
              else
              {
-                 qCWarning(chatterinoHotkeys)
-                     << "Invalid cursorToStart select argument (0)!";
-                 return "Invalid cursorToStart select argument (0)!";
+                 qCWarning(chatterinoHotkeys) << "Invalid cursorToStart select "
+                                                 "argument (0)!";
+                 return "Invalid cursorToStart select "
+                        "argument (0)!";
              }
 
              cursor.movePosition(place,
@@ -475,10 +522,14 @@ void SplitInput::addShortcuts()
              if (arguments.size() != 1)
              {
                  qCWarning(chatterinoHotkeys)
-                     << "Invalid cursorToEnd arguments. Argument 0: select "
-                        "(\"withSelection\" or \"withoutSelection\")";
-                 return "Invalid cursorToEnd arguments. Argument 0: select "
-                        "(\"withSelection\" or \"withoutSelection\")";
+                     << "Invalid cursorToEnd arguments. "
+                        "Argument 0: select "
+                        "(\"withSelection\" or "
+                        "\"withoutSelection\")";
+                 return "Invalid cursorToEnd arguments. "
+                        "Argument 0: select "
+                        "(\"withSelection\" or "
+                        "\"withoutSelection\")";
              }
              QTextCursor cursor = this->ui_.textEdit->textCursor();
              auto place = QTextCursor::End;
@@ -494,9 +545,10 @@ void SplitInput::addShortcuts()
              }
              else
              {
-                 qCWarning(chatterinoHotkeys)
-                     << "Invalid cursorToEnd select argument (0)!";
-                 return "Invalid cursorToEnd select argument (0)!";
+                 qCWarning(chatterinoHotkeys) << "Invalid cursorToEnd select "
+                                                 "argument (0)!";
+                 return "Invalid cursorToEnd select "
+                        "argument (0)!";
              }
 
              cursor.movePosition(place,
@@ -611,12 +663,18 @@ void SplitInput::addShortcuts()
              // XXX: this action is unused at the moment, a qt standard shortcut is used instead
              if (arguments.empty())
              {
-                 return "copy action takes only one argument: the source "
-                        "of the copy \"split\", \"input\" or "
-                        "\"auto\". If the source is \"split\", only text "
-                        "from the chat will be copied. If it is "
-                        "\"splitInput\", text from the input box will be "
-                        "copied. Automatic will pick whichever has a "
+                 return "copy action takes only one "
+                        "argument: the source "
+                        "of the copy \"split\", \"input\" "
+                        "or "
+                        "\"auto\". If the source is "
+                        "\"split\", only text "
+                        "from the chat will be copied. If "
+                        "it is "
+                        "\"splitInput\", text from the "
+                        "input box will be "
+                        "copied. Automatic will pick "
+                        "whichever has a "
                         "selection";
              }
 
@@ -1189,7 +1247,8 @@ void SplitInput::setReply(MessagePtr target)
         this->ui_.textEdit->moveCursor(QTextCursor::EndOfBlock);
         this->ui_.textEdit->resetCompletion();
         QString labelText = "Replying to ";
-        if (this->replyTarget_->flags.has(MessageFlag::Decrypted)) {
+        if (this->replyTarget_->flags.has(MessageFlag::Decrypted))
+        {
             labelText.append("🔓 ");
         }
         labelText.append("@" % this->replyTarget_->displayName);

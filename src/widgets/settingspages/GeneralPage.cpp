@@ -126,11 +126,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     auto &s = *getSettings();
 
     layout.addTitle("Bajerino");
-    layout.addCheckbox(
-        "Automatically encrypt every message", s.alwaysEncrypt, false,
-        "This will enable bajerino AES encryption by default. When "
-        "enabled use /d to send an unencrypted message."
-        "When disabled use /e to send an encrypted message.");
+    // layout.addCheckbox(
+    //     "Automatically encrypt every message", s.alwaysEncrypt, false,
+    //     "This will enable bajerino AES encryption by default. When "
+    //     "enabled use /d to send an unencrypted message."
+    //     "When disabled use /e to send an encrypted message.");
     layout.addCheckbox(
         "Use legacy message encryption prefix ~!", s.legacyEncryptionPrefix,
         false,

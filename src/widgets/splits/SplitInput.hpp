@@ -3,7 +3,9 @@
 #include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
 #include "widgets/helper/Button.hpp"
+#include "common/Channel.hpp"
 
+#include "common/ChatterinoSetting.hpp"
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -152,6 +154,7 @@ protected:
         ResizingTextEdit *textEdit;
         QLabel *textEditLength;
         EffectLabel *sendButton;
+        QCheckBox *encryptionEnabledCheckbox;
         Button *emoteButton;
     } ui_;
 
