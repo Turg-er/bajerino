@@ -29,6 +29,7 @@
 #include "widgets/splits/SplitContainer.hpp"
 
 #include <QCompleter>
+#include <qnamespace.h>
 #include <QPainter>
 #include <QSignalBlocker>
 
@@ -167,6 +168,7 @@ void SplitInput::initLayout()
         &this->ui_.encryptionEnabledCheckbox);
     this->ui_.encryptionEnabledCheckbox->setToolTip("Forsen");
     this->ui_.encryptionEnabledCheckbox->setText("🔒");
+    this->ui_.encryptionEnabledCheckbox->setFocusPolicy(Qt::NoFocus);
     this->ui_.encryptionEnabledCheckbox->show();
 
     std::ignore = this->split_->focused.connect([this]() {
