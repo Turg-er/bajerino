@@ -6,6 +6,7 @@
 #include "widgets/BaseWidget.hpp"
 #include "widgets/helper/Button.hpp"
 
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
