@@ -712,10 +712,16 @@ QString TwitchChannel::prepareMessage(const QString &message) const
     {
         parsedMessage = parsedMessage.remove(0, 3);
     }
-    else if (getSettings()->alwaysEncrypt)
+    else
     {
-        parsedMessage =
-            encryptMessage(parsedMessage, getSettings()->encryptionKey);
+        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+        auto channelName = this->getName().toStdString();
+        auto search = channelStates.find(channelName);
+        if (search != channelStates.end() && search->second)
+        {
+            parsedMessage =
+                encryptMessage(parsedMessage, getSettings()->encryptionKey);
+        }
     }
 
     if (parsedMessage.isEmpty())

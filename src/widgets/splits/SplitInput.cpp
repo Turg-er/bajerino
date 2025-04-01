@@ -169,25 +169,31 @@ void SplitInput::initLayout()
     this->ui_.encryptionEnabledCheckbox->setToolTip("Forsen");
     this->ui_.encryptionEnabledCheckbox->setText("🔒");
     this->ui_.encryptionEnabledCheckbox->setFocusPolicy(Qt::NoFocus);
+    this->ui_.encryptionEnabledCheckbox->setChecked(false);
     this->ui_.encryptionEnabledCheckbox->show();
 
-    std::ignore = this->split_->focused.connect([this]() {
-        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+    this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
         auto channelName = this->split_->getChannel()->getName().toStdString();
-        if (channelStates.find(channelName) == channelStates.end())
+        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+        auto value = channelStates.find(channelName);
+        if (value != channelStates.end())
         {
-            bool alwaysOnEncryptionSetting = false;
-            getSettings()->alwaysEncrypt = false;
-            this->ui_.encryptionEnabledCheckbox->setChecked(
-                alwaysOnEncryptionSetting);
-        }
-        else
-        {
-            this->ui_.encryptionEnabledCheckbox->setChecked(
-                channelStates[channelName]);
-            getSettings()->alwaysEncrypt = channelStates[channelName];
+            this->ui_.encryptionEnabledCheckbox->setChecked(value->second);
         }
     });
+
+    getSettings()->encryptionChannelStates.connect(
+        [this](const std::map<std::string, bool> &channelStates, auto) {
+            auto channelName =
+                this->split_->getChannel()->getName().toStdString();
+            auto value = channelStates.find(channelName);
+            if (value != channelStates.end())
+            {
+                this->ui_.encryptionEnabledCheckbox->setChecked(value->second);
+            }
+        },
+        this->managedConnections_);
+
     QObject::connect(
         this->ui_.encryptionEnabledCheckbox, &QCheckBox::toggled, this,
         [this](bool value) {
@@ -197,7 +203,6 @@ void SplitInput::initLayout()
                 this->split_->getChannel()->getName().toStdString();
             channelStates[channelName] = value;
             getSettings()->encryptionChannelStates.setValue(channelStates);
-            getSettings()->alwaysEncrypt = value;
         });
 
     // right box

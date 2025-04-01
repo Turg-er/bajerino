@@ -264,10 +264,9 @@ public:
 
     /// Behaviour
     // Encryption
-    BoolSetting alwaysEncrypt = {"/encryption/automatic", false};
     BoolSetting legacyEncryptionPrefix = {"/encryption/legacy_prefix", false};
     QStringSetting encryptionKey = {"/encryption/encryptionKey",
-                                    "f4QGphV%8FRjKyEAhaHxbt7HA+#8C?6K"};
+                                    "YOU_SHOULD_CHANGE_THIS"};
     ChatterinoSetting<std::map<std::string, bool>> encryptionChannelStates = {
         "/encryption/channel_states", {}};
     // ChatterinoSetting<std::unordered_map<std::string, bool>> encryptionChannelStates = {
