@@ -8,6 +8,7 @@
 #include <pajlada/signals/scoped-connection.hpp>
 #include <pajlada/signals/signal.hpp>
 #include <QPixmap>
+#include <QPointer>
 
 #include <chrono>
 
@@ -22,6 +23,7 @@ inline static const QString SEVENTV_USER_API =
 class Channel;
 using ChannelPtr = std::shared_ptr<Channel>;
 class Label;
+class EditUserNotesDialog;
 class ChannelView;
 class Split;
 struct HelixUser;
@@ -44,11 +46,13 @@ public:
 protected:
     void themeChangedEvent() override;
     void scaleChangedEvent(float scale) override;
+    void windowDeactivationEvent() override;
 
 private:
     void installEvents();
     void updateUserData();
     void updateLatestMessages();
+    void updateNotes();
 
     void loadAvatar(const HelixUser &user);
 
@@ -80,6 +84,8 @@ private:
     pajlada::Signals::NoArgSignal userStateChanged_;
 
     std::unique_ptr<pajlada::Signals::ScopedConnection> refreshConnection_;
+    std::unique_ptr<pajlada::Signals::ScopedConnection>
+        userDataUpdatedConnection_;
 
     // If we should close the dialog automatically if the user clicks out
     // Set based on the "Automatically close usercard when it loses focus" setting
@@ -101,6 +107,8 @@ private:
 
         QCheckBox *block = nullptr;
         QCheckBox *ignoreHighlights = nullptr;
+        Label *notesPreview = nullptr;
+        EffectLabel2 *notesAdd = nullptr;
 
         Label *noMessagesLabel = nullptr;
         ChannelView *latestMessages = nullptr;
@@ -112,6 +120,7 @@ private:
     QMovie *seventvAvatar_ = nullptr;
     bool isTwitchAvatarShown_ = true;
     QPixmap avatarPixmap_;
+    QPointer<EditUserNotesDialog> editUserNotesDialog_;
 
     class TimeoutWidget : public BaseWidget
     {

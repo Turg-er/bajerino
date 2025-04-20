@@ -330,6 +330,17 @@ void TwitchChannel::refreshBTTVChannelEmotes(bool manualRefresh)
         return;
     }
 
+    bool cacheHit = readProviderEmotesCache(
+        this->roomId(), "betterttv",
+        [this, weak = weakOf<Channel>(this)](auto jsonDoc) {
+            if (auto shared = weak.lock())
+            {
+                auto emoteMap = bttv::detail::parseChannelEmotes(
+                    jsonDoc.object(), this->getLocalizedName());
+                this->setBttvEmotes(std::make_shared<const EmoteMap>(emoteMap));
+            }
+        });
+
     BttvEmotes::loadChannel(
         weakOf<Channel>(this), this->roomId(), this->getLocalizedName(),
         [this, weak = weakOf<Channel>(this)](auto &&emoteMap) {
@@ -338,7 +349,7 @@ void TwitchChannel::refreshBTTVChannelEmotes(bool manualRefresh)
                 this->setBttvEmotes(std::make_shared<const EmoteMap>(emoteMap));
             }
         },
-        manualRefresh);
+        manualRefresh, cacheHit);
 }
 
 void TwitchChannel::refreshFFZChannelEmotes(bool manualRefresh)
@@ -348,6 +359,12 @@ void TwitchChannel::refreshFFZChannelEmotes(bool manualRefresh)
         this->ffzEmotes_.set(EMPTY_EMOTE_MAP);
         return;
     }
+
+    bool cacheHit = readProviderEmotesCache(
+        this->roomId(), "frankerfacez", [this](const auto &jsonDoc) {
+            auto emoteMap = ffz::detail::parseChannelEmotes(jsonDoc.object());
+            this->setFfzEmotes(std::make_shared<const EmoteMap>(emoteMap));
+        });
 
     FfzEmotes::loadChannel(
         weakOf<Channel>(this), this->roomId(),
@@ -379,7 +396,7 @@ void TwitchChannel::refreshFFZChannelEmotes(bool manualRefresh)
                     std::forward<decltype(channelBadges)>(channelBadges);
             }
         },
-        manualRefresh);
+        manualRefresh, cacheHit);
 }
 
 void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
@@ -389,6 +406,16 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
         this->seventvEmotes_.set(EMPTY_EMOTE_MAP);
         return;
     }
+
+    bool cacheHit = readProviderEmotesCache(
+        this->roomId(), "seventv", [this](auto jsonDoc) {
+            const auto json = jsonDoc.object();
+            const auto emoteSet = json["emote_set"].toObject();
+            const auto parsedEmotes = emoteSet["emotes"].toArray();
+            auto emoteMap = seventv::detail::parseEmotes(
+                parsedEmotes, SeventvEmoteSetKind::Channel);
+            this->setSeventvEmotes(std::make_shared<const EmoteMap>(emoteMap));
+        });
 
     SeventvEmotes::loadChannelEmotes(
         weakOf<Channel>(this), this->roomId(),
@@ -404,7 +431,7 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
                     channelInfo.twitchConnectionIndex;
             }
         },
-        manualRefresh);
+        manualRefresh, cacheHit);
 }
 
 void TwitchChannel::setBttvEmotes(std::shared_ptr<const EmoteMap> &&map)
@@ -1487,12 +1514,8 @@ void TwitchChannel::refreshPubSub()
 
     auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
 
-    getApp()->getTwitchPubSub()->listenToChannelModerationActions(roomId);
     if (this->hasModRights())
     {
-        getApp()->getTwitchPubSub()->listenToAutomod(roomId);
-        getApp()->getTwitchPubSub()->listenToLowTrustUsers(roomId);
-
         this->eventSubChannelModerateHandle =
             getApp()->getEventSub()->subscribe(eventsub::SubscriptionRequest{
                 .subscriptionType = "channel.moderate",

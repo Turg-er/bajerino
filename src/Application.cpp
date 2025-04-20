@@ -42,7 +42,6 @@
 #include "providers/seventv/SeventvPaints.hpp"
 #include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
-#include "providers/twitch/PubSubActions.hpp"
 #include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/PubSubMessages.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
