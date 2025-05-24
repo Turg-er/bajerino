@@ -396,8 +396,15 @@ void removeLastQS(QString &str)
 void writeProviderEmotesCache(const QString &id, const QString &provider,
                               const QByteArray &bytes)
 {
-    QThreadPool::globalInstance()->start([bytes, id, provider]() {
-        auto cacheKey = id % "." % provider;
+    auto *threadPool = QThreadPool::globalInstance();
+    if (threadPool == nullptr)
+    {
+        // Must be exiting - do nothing
+        return;
+    }
+
+    threadPool->start([bytes, id, provider]() {
+        QString cacheKey = id % "." % provider;
         QFile responseCache(getApp()->getPaths().cacheFilePath(cacheKey));
 
         if (responseCache.open(QIODevice::WriteOnly))
@@ -412,7 +419,7 @@ void writeProviderEmotesCache(const QString &id, const QString &provider,
 bool readProviderEmotesCache(const QString &id, const QString &provider,
                              const std::function<void(QJsonDocument)> &callback)
 {
-    auto cacheKey = id % "." % provider;
+    QString cacheKey = id % "." % provider;
     QFile responseCache(getApp()->getPaths().cacheFilePath(cacheKey));
 
     if (responseCache.open(QIODevice::ReadOnly))

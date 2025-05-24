@@ -488,6 +488,8 @@ void SeventvEmotes::getEmoteSet(
     getApp()->getSeventvAPI()->getEmoteSet(
         emoteSetId,
         [callback = std::move(successCallback), emoteSetId](const auto &json) {
+            assert(!isAppAboutToQuit());
+
             auto parsedEmotes = json["emotes"].toArray();
 
             auto kind = SeventvEmoteSetKind::Channel;
