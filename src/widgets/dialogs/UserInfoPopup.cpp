@@ -361,8 +361,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                     default:;
                 }
             });
-        auto switchAv = avatarBox.emplace<LabelButton>(nullptr, 2)
-                            .assign(&this->ui_.switchAvatars);
+        auto switchAv =
+            avatarBox.emplace<LabelButton>(QString{}, nullptr, QSize{2, 2})
+                .assign(&this->ui_.switchAvatars);
         switchAv->hide();
         QObject::connect(
             switchAv.getElement(), &LabelButton::leftClicked, [this] {
