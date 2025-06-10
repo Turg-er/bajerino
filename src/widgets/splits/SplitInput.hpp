@@ -4,7 +4,6 @@
 #include "common/ChatterinoSetting.hpp"
 #include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
-#include "widgets/helper/Button.hpp"
 
 #include <QCheckBox>
 #include <QHBoxLayout>
@@ -23,10 +22,11 @@ namespace chatterino {
 class Split;
 class EmotePopup;
 class InputCompletionPopup;
-class EffectLabel;
 class MessageView;
+class LabelButton;
 class ResizingTextEdit;
 class ChannelView;
+class SvgButton;
 enum class CompletionKind;
 
 class SplitInput : public BaseWidget
@@ -147,16 +147,16 @@ protected:
         QHBoxLayout *replyHbox;
         MessageView *replyMessage;
         QLabel *replyLabel;
-        EffectLabel *cancelReplyButton;
+        SvgButton *cancelReplyButton;
 
         // input widgets
         QWidget *inputWrapper;
         QHBoxLayout *inputHbox;
         ResizingTextEdit *textEdit;
         QLabel *textEditLength;
-        EffectLabel *sendButton;
+        LabelButton *sendButton;
         QCheckBox *encryptionEnabledCheckbox;
-        Button *emoteButton;
+        SvgButton *emoteButton;
     } ui_;
 
     MessagePtr replyTarget_ = nullptr;

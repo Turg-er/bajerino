@@ -1,10 +1,10 @@
 #pragma once
 
-#include "common/Channel.hpp"
 #include "common/ChatterinoSetting.hpp"
 #include "common/enums/MessageOverflow.hpp"
 #include "common/Modes.hpp"
 #include "common/SignalVector.hpp"
+#include "common/TimeoutStackStyle.hpp"
 #include "controllers/filters/FilterRecord.hpp"
 #include "controllers/highlights/HighlightBadge.hpp"
 #include "controllers/highlights/HighlightBlacklistUser.hpp"
@@ -15,9 +15,8 @@
 #include "controllers/nicknames/Nickname.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "singletons/Toasts.hpp"
-#include "util/RapidJsonSerializeQString.hpp"
-#include "util/serialize/Container.hpp"
-#include "widgets/Notebook.hpp"
+#include "util/RapidJsonSerializeQString.hpp"  // IWYU pragma: keep
+#include "widgets/NotebookEnums.hpp"
 
 #include <pajlada/settings/setting.hpp>
 #include <pajlada/settings/settinglistener.hpp>
@@ -98,14 +97,14 @@ enum class TabStyle : std::uint8_t {
     Compact,
 };
 
-/// Settings which are availlable for reading and writing on the gui thread.
+/// Settings which are available for reading and writing on the gui thread.
 // These settings are still accessed concurrently in the code but it is bad practice.
 class Settings
 {
     static Settings *instance_;
     Settings *prevInstance_ = nullptr;
 
-    const bool disableSaving;
+    bool disableSaving;
 
 public:
     Settings(const Args &args, const QString &settingsDirectory);
@@ -120,6 +119,8 @@ public:
 
     void saveSnapshot();
     void restoreSnapshot();
+
+    void disableSave();
 
     FloatSetting uiScale = {"/appearance/uiScale2", 1};
     BoolSetting windowTopMost = {"/appearance/windowAlwaysOnTop", false};
@@ -146,6 +147,8 @@ public:
         "/appearance/messages/messageOverflow", MessageOverflow::Highlight};
     BoolSetting separateMessages = {"/appearance/messages/separateMessages",
                                     false};
+    BoolSetting fadeMessageHistory = {"/appearance/messages/fadeMessageHistory",
+                                      true};
     BoolSetting hideModerated = {"/appearance/messages/hideModerated", false};
     BoolSetting hideModerationActions = {
         "/appearance/messages/hideModerationActions", false};
@@ -301,8 +304,6 @@ public:
         "/behaviour/autoSubToParticipatedThreads",
         true,
     };
-    // BoolSetting twitchSeperateWriteConnection =
-    // {"/behaviour/twitchSeperateWriteConnection", false};
 
     // Auto-completion
     BoolSetting onlyFetchChattersForSmallerStreamers = {
@@ -332,6 +333,11 @@ public:
     BoolSetting autorun = {"/behaviour/autorun", false};
     BoolSetting mentionUsersWithComma = {"/behaviour/mentionUsersWithComma",
                                          true};
+
+    BoolSetting disableTabRenamingOnClick = {
+        "/behaviour/disableTabRenamingOnClick",
+        false,
+    };
 
     /// Emotes
     BoolSetting scaleEmotesByLineHeight = {"/emotes/scaleEmotesByLineHeight",
