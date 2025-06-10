@@ -218,7 +218,7 @@ find_package(PajladaSerialize REQUIRED)
 find_package(PajladaSignals REQUIRED)
 find_package(LRUCache REQUIRED)
 find_package(MagicEnum REQUIRED)
-find_package(Doxygen)
+# find_package(Doxygen)
 find_package(BoostCertify REQUIRED)
 
 if (USE_SYSTEM_PAJLADA_SETTINGS)

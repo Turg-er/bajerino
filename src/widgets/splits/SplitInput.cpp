@@ -10,11 +10,8 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
-#include "singletons/Emotes.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
-#include "SplitInput.hpp"
-#include "stdio.h"
 #include "util/Helpers.hpp"
 #include "util/LayoutCreator.hpp"
 #include "widgets/dialogs/EmotePopup.hpp"
@@ -33,10 +30,7 @@
 #include <QPainter>
 #include <QSignalBlocker>
 
-#include <algorithm>
 #include <functional>
-#include <iostream>
-#include <optional>
 
 namespace chatterino {
 
