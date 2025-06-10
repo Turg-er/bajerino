@@ -751,7 +751,7 @@ QString sendEncrypted(const CommandContext &ctx)
         return message;
     }
 
-    return encryptMessage(message, getSettings()->encryptionKey);
+    return encryptMessage(message, getSettings()->encryptionKey.getValue());
 }
 
 QString sendUnencrypted(const CommandContext &ctx)

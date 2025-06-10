@@ -744,8 +744,8 @@ QString TwitchChannel::prepareMessage(const QString &message) const
         auto search = channelStates.find(channelName);
         if (search != channelStates.end() && search->second)
         {
-            parsedMessage =
-                encryptMessage(parsedMessage, getSettings()->encryptionKey);
+            parsedMessage = encryptMessage(
+                parsedMessage, getSettings()->encryptionKey.getValue());
         }
     }
 

@@ -1,10 +1,13 @@
+#pragma once
+
 #include <QByteArray>
+#include <QString>
+#include <QStringView>
 
 namespace chatterino {
 
-QString encryptMessage(QString &message, const QString &encryptionPassword);
+QString encryptMessage(QStringView message, QStringView encryptionPassword);
 
-bool checkAndDecryptMessage(QString &message,
-                            const QString &encryptionPassword);
+bool checkAndDecryptMessage(QString &message, QStringView encryptionPassword);
 
 }  // namespace chatterino

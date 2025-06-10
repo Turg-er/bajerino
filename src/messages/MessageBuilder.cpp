@@ -1517,8 +1517,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     assert(ircMessage != nullptr);
     assert(channel != nullptr);
 
-    const auto decrypted =
-        checkAndDecryptMessage(content, getSettings()->encryptionKey);
+    const auto decrypted = checkAndDecryptMessage(
+        content, getSettings()->encryptionKey.getValue());
 
     auto tags = ircMessage->tags();
     if (args.allowIgnore)
@@ -2092,8 +2092,8 @@ void MessageBuilder::parseThread(const QString &messageContent,
                 auto name = replyDisplayName->toString();
                 body = parseTagString(replyBody->toString());
 
-                const auto decrypted =
-                    checkAndDecryptMessage(body, getSettings()->encryptionKey);
+                const auto decrypted = checkAndDecryptMessage(
+                    body, getSettings()->encryptionKey.getValue());
                 if (decrypted)
                 {
                     this->emplace<TextElement>(

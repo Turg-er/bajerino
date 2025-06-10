@@ -267,7 +267,6 @@ public:
 
     /// Behaviour
     // Encryption
-    BoolSetting legacyEncryptionPrefix = {"/encryption/legacy_prefix", false};
     QStringSetting encryptionKey = {"/encryption/encryptionKey",
                                     "YOU_SHOULD_CHANGE_THIS"};
     ChatterinoSetting<std::map<std::string, bool>> encryptionChannelStates = {
