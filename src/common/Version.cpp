@@ -16,7 +16,7 @@ Version::Version()
     , isModified_(CHATTERINO_GIT_MODIFIED == 1)
     , dateOfBuild_(QStringLiteral(CHATTERINO_CMAKE_GEN_DATE))
 {
-    this->fullVersion_ = "Chatterino ";
+    this->fullVersion_ = "Bajerino ";
     if (Modes::instance().isNightly)
     {
         this->fullVersion_ += "Nightly ";
