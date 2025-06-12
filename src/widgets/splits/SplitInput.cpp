@@ -210,23 +210,22 @@ void SplitInput::initLayout()
 
     // encryption checkbox controls
     this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
-        auto channelName = this->split_->getChannel()->getName().toStdString();
         auto channelStates = getSettings()->encryptionChannelStates.getValue();
-        auto value = channelStates.find(channelName);
-        if (value != channelStates.end())
+        auto value =
+            channelStates.constFind(this->split_->getChannel()->getName());
+        if (value != channelStates.constEnd())
         {
-            this->ui_.encryptionToggleCheckbox->setChecked(value->second);
+            this->ui_.encryptionToggleCheckbox->setChecked(value.value());
         }
     });
 
     getSettings()->encryptionChannelStates.connect(
-        [this](const std::map<std::string, bool> &channelStates, auto) {
-            auto channelName =
-                this->split_->getChannel()->getName().toStdString();
-            auto value = channelStates.find(channelName);
-            if (value != channelStates.end())
+        [this](const QHash<QString, bool> &channelStates, auto) {
+            auto value =
+                channelStates.constFind(this->split_->getChannel()->getName());
+            if (value != channelStates.constEnd())
             {
-                this->ui_.encryptionToggleCheckbox->setChecked(value->second);
+                this->ui_.encryptionToggleCheckbox->setChecked(value.value());
             }
         },
         this->managedConnections_);
@@ -236,9 +235,7 @@ void SplitInput::initLayout()
         [this](bool value) {
             auto channelStates =
                 getSettings()->encryptionChannelStates.getValue();
-            auto channelName =
-                this->split_->getChannel()->getName().toStdString();
-            channelStates[channelName] = value;
+            channelStates[this->split_->getChannel()->getName()] = value;
             getSettings()->encryptionChannelStates.setValue(channelStates);
         });
 

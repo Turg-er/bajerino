@@ -15,6 +15,7 @@
 #include "controllers/nicknames/Nickname.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "singletons/Toasts.hpp"
+#include "util/RapidJsonSerializeQHash.hpp"    // IWYU pragma: keep
 #include "util/RapidJsonSerializeQString.hpp"  // IWYU pragma: keep
 #include "widgets/NotebookEnums.hpp"
 
@@ -269,10 +270,8 @@ public:
     // Encryption
     QStringSetting encryptionKey = {"/encryption/encryptionKey",
                                     "YOU_SHOULD_CHANGE_THIS"};
-    ChatterinoSetting<std::map<std::string, bool>> encryptionChannelStates = {
+    ChatterinoSetting<QHash<QString, bool>> encryptionChannelStates = {
         "/encryption/channel_states", {}};
-    // ChatterinoSetting<std::unordered_map<std::string, bool>> encryptionChannelStates = {
-    //     "/encryption/channel_states"};
 
     // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",

@@ -741,9 +741,8 @@ QString sendEncrypted(const CommandContext &ctx)
     auto message = ctx.words.mid(1).join(" ");
 
     auto channelStates = getSettings()->encryptionChannelStates.getValue();
-    auto channelName = ctx.channel->getName().toStdString();
-    auto search = channelStates.find(channelName);
-    if (search != channelStates.end() && search->second)
+    auto search = channelStates.constFind(ctx.channel->getName());
+    if (search != channelStates.constEnd() && search.value())
     {
         ctx.channel->addSystemMessage(
             "Bajerino is set to encrypt automatically so invoking this "
@@ -769,9 +768,8 @@ QString sendUnencrypted(const CommandContext &ctx)
     auto message = ctx.words.join(" ");
 
     auto channelStates = getSettings()->encryptionChannelStates.getValue();
-    auto channelName = ctx.channel->getName().toStdString();
-    auto search = channelStates.find(channelName);
-    if (search == channelStates.end() || !search->second)
+    auto search = channelStates.constFind(ctx.channel->getName());
+    if (search == channelStates.constEnd() || !search.value())
     {
         ctx.channel->addSystemMessage(
             "Bajerino is set to not encrypt automatically so invoking "
