@@ -4,8 +4,8 @@ from conan.tools.cmake import CMakeToolchain
 from os import path
 
 
-class Chatterino(ConanFile):
-    name = "Chatterino"
+class Bajerino(ConanFile):
+    name = "Bajerino"
     requires = "boost/1.86.0"
     settings = "os", "compiler", "build_type", "arch"
     default_options = {
@@ -57,7 +57,7 @@ class Chatterino(ConanFile):
             copy_bin(dep, "*.dylib", "bin")
             # Windows
             copy_bin(dep, "*.dll", "bin")
-            copy_bin(dep, "*.dll", "Chatterino2")  # used in CI
+            copy_bin(dep, "*.dll", "Bajerino")  # used in CI
             # Linux
             copy(
                 self,

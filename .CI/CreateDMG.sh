@@ -32,7 +32,7 @@ codesign --force --deep -s - bajerino.app
 echo "Done!"
 
 echo "Running dmgbuild.."
-dmgbuild --settings ./../.CI/dmg-settings.py -D app=./bajerino.app Chatterino2 "$OUTPUT_DMG_PATH"
+dmgbuild --settings ./../.CI/dmg-settings.py -D app=./bajerino.app Bajerino "$OUTPUT_DMG_PATH"
 echo "Done!"
 
 if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
