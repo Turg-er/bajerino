@@ -48,7 +48,7 @@ const Config FIREFOX{
 #ifdef Q_OS_WIN
     .fileName = u"native-messaging-manifest-firefox.json"_s,
     .registryKey =
-        u"HKCU\\Software\\Mozilla\\NativeMessagingHosts\\com.chatterino.chatterino"_s,
+        u"HKCU\\Software\\Mozilla\\NativeMessagingHosts\\com.bajerino.bajerino"_s,
 #elif defined(Q_OS_MACOS)
     .browserDirectory = u"~/Library/Application Support/Mozilla"_s,
     .nmDirectory = u"NativeMessagingHosts"_s,
@@ -62,7 +62,7 @@ const Config CHROME{
 #ifdef Q_OS_WIN
     .fileName = u"native-messaging-manifest-chrome.json"_s,
     .registryKey =
-        u"HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.chatterino.chatterino"_s,
+        u"HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.bajerino.bajerino"_s,
 #elif defined(Q_OS_MACOS)
     .browserDirectory = u"~/Library/Application Support/Google/Chrome/"_s,
     .nmDirectory = u"NativeMessagingHosts"_s,
@@ -83,7 +83,7 @@ void registerNmManifest([[maybe_unused]] const Paths &paths,
                       QString(paths.miscDirectory % u'/' % config.fileName));
 #else
     writeManifestTo(config.browserDirectory, config.nmDirectory,
-                    u"com.chatterino.chatterino.json"_s, document);
+                    u"com.bajerino.bajerino.json"_s, document);
 #endif
 }
 
@@ -137,8 +137,8 @@ void registerNmHost(const Paths &paths)
 
     auto getBaseDocument = [] {
         return QJsonObject{
-            {u"name"_s, "com.chatterino.chatterino"_L1},
-            {u"description"_s, "Browser interaction with chatterino."_L1},
+            {u"name"_s, "com.bajerino.bajerino"_L1},
+            {u"description"_s, "Browser interaction with bajerino."_L1},
             {u"path"_s, QCoreApplication::applicationFilePath()},
             {u"type"_s, "stdio"_L1},
         };
@@ -192,7 +192,7 @@ void registerNmHost(const Paths &paths)
 std::string &getNmQueueName(const Paths &paths)
 {
     static std::string name =
-        "chatterino_gui" + paths.applicationFilePathHash.toStdString();
+        "bajerino_gui" + paths.applicationFilePathHash.toStdString();
     return name;
 }
 
@@ -202,7 +202,7 @@ namespace nm::client {
 
 void sendMessage(const QByteArray &array)
 {
-    ipc::sendMessage("chatterino_gui", array);
+    ipc::sendMessage("bajerino_gui", array);
 }
 
 void writeToCout(const QByteArray &array)
@@ -228,7 +228,7 @@ NativeMessagingServer::NativeMessagingServer()
 
 NativeMessagingServer::~NativeMessagingServer()
 {
-    if (!ipc::IpcQueue::remove("chatterino_gui"))
+    if (!ipc::IpcQueue::remove("bajerino_gui"))
     {
         qCWarning(chatterinoNativeMessage) << "Failed to remove message queue";
     }
@@ -261,7 +261,7 @@ NativeMessagingServer::ReceiverThread::ReceiverThread(
 void NativeMessagingServer::ReceiverThread::run()
 {
     auto [messageQueue, error] =
-        ipc::IpcQueue::tryReplaceOrCreate("chatterino_gui", 100, MESSAGE_SIZE);
+        ipc::IpcQueue::tryReplaceOrCreate("bajerino_gui", 100, MESSAGE_SIZE);
 
     if (!error.isEmpty())
     {

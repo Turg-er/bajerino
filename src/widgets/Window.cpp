@@ -762,6 +762,13 @@ void Window::addMenuBar()
         QDesktopServices::openUrl(QUrl(LINK_CHATTERINO_SOURCE.toString()));
     });
 
+    // Help->Chatterino Github
+    QAction *helpBajerinoGithub =
+        helpMenu->addAction(QString("Bajerino GitHub"));
+    connect(helpBajerinoGithub, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl(LINK_BAJERINO_SOURCE.toString()));
+    });
+
     // Help->Chatterino Discord
     QAction *helpDiscord = helpMenu->addAction(QString("Chatterino Discord"));
     connect(helpDiscord, &QAction::triggered, this, []() {

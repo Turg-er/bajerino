@@ -73,7 +73,7 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     layout->addWidget(ui.whispers);
 
     ui.whispersLabel = new QLabel(
-        "Shows the whispers that you receive while Chatterino is running");
+        "Shows the whispers that you receive while Bajerino is running");
     ui.whispersLabel->setVisible(false);
     ui.whispersLabel->setWordWrap(true);
     layout->addWidget(ui.whispersLabel);

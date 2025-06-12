@@ -669,7 +669,7 @@ QString openUsercard(const CommandContext &ctx)
         {
             channel->addSystemMessage(
                 "A usercard can only be displayed for a channel that is "
-                "currently opened in Chatterino.");
+                "currently opened in Bajerino.");
             return "";
         }
 

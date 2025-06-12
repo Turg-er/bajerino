@@ -61,11 +61,13 @@ AboutPage::AboutPage()
         }
 
         // About Chatterino
-        auto aboutChatterino = layout.emplace<QGroupBox>("About Chatterino...");
+        auto aboutChatterino = layout.emplace<QGroupBox>("About Bajerino...");
         {
             auto l = aboutChatterino.emplace<QVBoxLayout>();
 
             // clang-format off
+            l.emplace<QLabel>("Bajerino Repo can be found <a href=\"" % LINK_BAJERINO_SOURCE % "\">here</a>")->setOpenExternalLinks(true);
+
             l.emplace<QLabel>("Chatterino Wiki can be found <a href=\"" % LINK_CHATTERINO_WIKI % "\">here</a>")->setOpenExternalLinks(true);
             l.emplace<QLabel>("All about Chatterino's <a href=\"" % LINK_CHATTERINO_FEATURES % "\">features</a>")->setOpenExternalLinks(true);
             l.emplace<QLabel>("Join the official Chatterino <a href=\"" % LINK_CHATTERINO_DISCORD % "\">Discord</a>")->setOpenExternalLinks(true);

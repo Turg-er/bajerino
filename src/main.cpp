@@ -36,11 +36,11 @@ int main(int argc, char **argv)
 {
     QApplication a(argc, argv);
 
-    QCoreApplication::setApplicationName("chatterino");
+    QCoreApplication::setApplicationName("bajerino");
     QCoreApplication::setApplicationVersion(CHATTERINO_VERSION);
-    QCoreApplication::setOrganizationDomain("chatterino.com");
+    QCoreApplication::setOrganizationDomain("bajerino.com");
 #ifdef Q_OS_WIN
-    SetCurrentProcessExplicitAppUserModelID(L"ChatterinoTeam.Chatterino");
+    SetCurrentProcessExplicitAppUserModelID(L"BajerinoTeam.Bajerino");
 #endif
 
     std::unique_ptr<Paths> paths;
@@ -110,21 +110,20 @@ int main(int argc, char **argv)
         }
 
         qCInfo(chatterinoApp).noquote()
-            << "Chatterino Qt SSL library build version:"
+            << "Bajerino Qt SSL library build version:"
             << QSslSocket::sslLibraryBuildVersionString();
         qCInfo(chatterinoApp).noquote()
-            << "Chatterino Qt SSL library version:"
+            << "Bajerino Qt SSL library version:"
             << QSslSocket::sslLibraryVersionString();
 #if QT_VERSION >= QT_VERSION_CHECK(6, 1, 0)
         qCInfo(chatterinoApp).noquote()
-            << "Chatterino Qt SSL active backend:"
-            << QSslSocket::activeBackend() << "of"
-            << QSslSocket::availableBackends().join(", ");
+            << "Bajerino Qt SSL active backend:" << QSslSocket::activeBackend()
+            << "of" << QSslSocket::availableBackends().join(", ");
 #    if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
-        qCInfo(chatterinoApp) << "Chatterino Qt SSL active backend features:"
+        qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend features:"
                               << QSslSocket::supportedFeatures();
 #    endif
-        qCInfo(chatterinoApp) << "Chatterino Qt SSL active backend protocols:"
+        qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend protocols:"
                               << QSslSocket::supportedProtocols();
 #endif
 

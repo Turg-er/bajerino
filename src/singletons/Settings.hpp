@@ -360,7 +360,7 @@ public:
     BoolSetting enableSevenTVGlobalEmotes = {"/emotes/seventv/global", true};
     BoolSetting enableSevenTVChannelEmotes = {"/emotes/seventv/channel", true};
     BoolSetting enableSevenTVEventAPI = {"/emotes/seventv/eventapi", true};
-    BoolSetting sendSevenTVActivity = {"/emotes/seventv/sendActivity", true};
+    BoolSetting sendSevenTVActivity = {"/emotes/seventv/sendActivity", false};
 
     /// Links
     BoolSetting linksDoubleClickOnly = {"/links/doubleClickToOpen", false};
@@ -614,7 +614,6 @@ public:
         "/external/imageUploader/deletionLink", ""};
 
     /// Misc
-    BoolSetting betaUpdates = {"/misc/beta", false};
 #ifdef Q_OS_LINUX
     BoolSetting useKeyring = {"/misc/useKeyring", true};
 #endif

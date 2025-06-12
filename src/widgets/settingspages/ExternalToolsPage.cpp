@@ -69,7 +69,7 @@ void ExternalToolsPage::initLayout(GeneralPageView &layout)
 
         layout.addDescription(
             QStringLiteral(
-                "Chatterino expects the executable to be called \"%1\".")
+                "Bajerino expects the executable to be called \"%1\".")
                 .arg(STREAMLINK_BINARY_NAME));
 
         layout.addLayout(form);

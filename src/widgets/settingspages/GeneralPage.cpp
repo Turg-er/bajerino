@@ -317,10 +317,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "be closed by right-clicking or pressing " +
             removeTabShortcut + ".");
     layout.addCheckbox("Always on top", s.windowTopMost, false,
-                       "Always keep Chatterino as the top window.");
+                       "Always keep Bajerino as the top window.");
 #ifdef USEWINSDK
     layout.addCheckbox("Start with Windows", s.autorun, false,
-                       "Start Chatterino when your computer starts.");
+                       "Start Bajerino when your computer starts.");
 #endif
     if (!BaseWindow::supportsCustomWindowFrame())
     {
@@ -422,7 +422,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             return static_cast<MessageOverflow>(args.index);
         },
         false,
-        "Specify how Chatterino will handle messages that exceed Twitch "
+        "Specify how Bajerino will handle messages that exceed Twitch "
         "message limits");
     layout.addDropdown<std::underlying_type<UsernameRightClickBehavior>::type>(
         "Username right-click behavior",
@@ -439,7 +439,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             return static_cast<UsernameRightClickBehavior>(args.index);
         },
         false,
-        "Specify how Chatterino will handle right-clicking a username in "
+        "Specify how Bajerino will handle right-clicking a username in "
         "chat when not holding the modifier.");
     layout.addDropdown<std::underlying_type<UsernameRightClickBehavior>::type>(
         "Username right-click with modifier behavior",
@@ -456,7 +456,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             return static_cast<UsernameRightClickBehavior>(args.index);
         },
         false,
-        "Specify how Chatterino will handle right-clicking a username in "
+        "Specify how Bajerino will handle right-clicking a username in "
         "chat when holding down the modifier.");
     layout.addDropdown<std::underlying_type<Qt::KeyboardModifier>::type>(
         "Modifier for alternate right-click action",
@@ -519,7 +519,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::checkbox("Reduce opacity of message history",
                             s.fadeMessageHistory)
         ->setTooltip(
-            "Reduce opacity of messages that were posted before Chatterino "
+            "Reduce opacity of messages that were posted before Bajerino "
             "was started or while re-connection.")
         ->addTo(layout);
 
@@ -561,7 +561,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                        "switching applications.",
                        s.showLastMessageIndicator, false,
                        "Adds an underline below the most recent message "
-                       "sent before you tabbed out of Chatterino.");
+                       "sent before you tabbed out of Bajerino.");
     layout.addDropdown<std::underlying_type<Qt::BrushStyle>::type>(
         "Line style", {"Dotted", "Solid"}, s.lastMessagePattern,
         [](int value) {
@@ -591,7 +591,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addTitle("Emotes");
     layout.addCheckbox("Enable", s.enableEmoteImages);
     layout.addCheckbox("Animate", s.animateEmotes);
-    layout.addCheckbox("Animate only when Chatterino is focused",
+    layout.addCheckbox("Animate only when Bajerino is focused",
                        s.animationsWhenFocused);
     layout.addCheckbox(
         "Enable zero-width emotes", s.enableZeroWidthEmotes, false,
@@ -712,7 +712,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->addKeywords({"seventv"})
         ->addTo(layout);
     SettingWidget::checkbox("Send activity to 7TV", s.sendSevenTVActivity)
-        ->setTooltip("When enabled, Chatterino will signal an activity to 7TV "
+        ->setTooltip("When enabled, Bajerino will signal an activity to 7TV "
                      "when you send a chat message. This is used for badges, "
                      "paints, and personal emotes. When disabled, no activity "
                      "is sent and others won't see your cosmetics.")
@@ -721,7 +721,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
 
     layout.addTitle("Streamer Mode");
     layout.addDescription(
-        "Chatterino can automatically change behavior if it detects that any "
+        "Bajerino can automatically change behavior if it detects that any "
         "streaming software is running.\nSelect which things you want to "
         "change while streaming");
 
@@ -870,26 +870,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         });
 
     layout.addNavigationSpacing();
-    layout.addTitle("Beta");
-    if (Version::instance().isSupportedOS())
-    {
-        layout.addDescription(
-            "You can receive updates earlier by ticking the box below. Report "
-            "issues <a href='https://chatterino.com/link/issues'>here</a>.");
-        layout.addCheckbox("Receive beta updates", s.betaUpdates);
-    }
-    else
-    {
-        layout.addDescription(
-            "Your operating system is not officially supplied with builds. For "
-            "updates, please rebuild Chatterino from sources. Report "
-            "issues <a href='https://chatterino.com/link/issues'>here</a>.");
-    }
 
 #ifdef Q_OS_WIN
     layout.addTitle("Browser Integration");
     layout.addDescription("The browser extension replaces the default "
-                          "Twitch.tv chat with Chatterino.");
+                          "Twitch.tv chat with Bajerino.");
 
     {
         if (auto err = nmIpcError().get())
@@ -981,7 +966,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             auto reply = QMessageBox::question(
                 layout.window(), "Clear cache",
                 "Are you sure that you want to clear your cache? Emotes may "
-                "take longer to load next time Chatterino is started.",
+                "take longer to load next time Bajerino is started.",
                 QMessageBox::Yes | QMessageBox::No);
 
             if (reply == QMessageBox::Yes)
@@ -1176,7 +1161,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         [](bool on) {
             getApp()->getCrashHandler()->saveShouldRecover(on);
         })
-        ->setTooltip("When possible, restart Chatterino if the program crashes")
+        ->setTooltip("When possible, restart Bajerino if the program crashes")
         ->addTo(layout);
 
 #if defined(Q_OS_LINUX) && !defined(NO_QTKEYCHAIN)
@@ -1234,7 +1219,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addCheckbox("Bold @usernames", s.boldUsernames, false,
                        "Bold @mentions to make them more noticeable.");
     layout.addCheckbox("Color @usernames", s.colorUsernames, false,
-                       "If Chatterino has seen a user, highlight @mention's of "
+                       "If Bajerino has seen a user, highlight @mention's of "
                        "them with their Twitch color.");
     layout.addCheckbox("Try to find usernames without @ prefix",
                        s.findAllUsernames, false,

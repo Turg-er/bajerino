@@ -284,9 +284,9 @@ void Toasts::ensureInitialized()
     this->initialized_ = true;
 
     auto *instance = WinToast::instance();
-    instance->setAppName(L"Chatterino");
+    instance->setAppName(L"Bajerino");
     instance->setAppUserModelId(
-        WinToast::configureAUMI(L"ChatterinoTeam", L"Chatterino", L"", L""));
+        WinToast::configureAUMI(L"BajerinoTeam", L"Bajerino", L"", L""));
     if (!getSettings()->createShortcutForToasts)
     {
         instance->setShortcutPolicy(WinToast::SHORTCUT_POLICY_IGNORE);
@@ -347,7 +347,7 @@ void Toasts::ensureInitialized()
     {
         return;
     }
-    auto result = notify_init("chatterino2");
+    auto result = notify_init("bajerino");
 
     if (result == 0)
     {

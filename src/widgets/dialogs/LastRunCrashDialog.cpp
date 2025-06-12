@@ -52,7 +52,7 @@ LastRunCrashDialog::LastRunCrashDialog(const Args &args, const Paths &paths)
         LayoutCreator<LastRunCrashDialog>(this).setLayoutType<QVBoxLayout>();
 
     QString text =
-        u"Chatterino unexpectedly crashed and restarted. "_s
+        u"Bajerino unexpectedly crashed and restarted. "_s
         "<i>You can disable automatic restarts in the settings.</i><br><br>";
 
 #ifdef CHATTERINO_WITH_CRASHPAD
@@ -75,11 +75,7 @@ LastRunCrashDialog::LastRunCrashDialog(const Args &args, const Paths &paths)
     }
 
     text +=
-        "Crash reports are <b>only stored locally</b> and never uploaded.<br>"
-        "<br>Please <a "
-        "href=\"https://github.com/Chatterino/chatterino2/issues/new\">report "
-        "the crash</a> "
-        u"so it can be prevented in the future."_s;
+        "Crash reports are <b>only stored locally</b> and never uploaded.<br>"_s;
 
     if (Modes::instance().isNightly)
     {
