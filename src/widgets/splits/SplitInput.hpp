@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common/Channel.hpp"
-#include "common/ChatterinoSetting.hpp"
 #include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
 
@@ -118,6 +117,8 @@ protected:
 
     void updateCancelReplyButton();
 
+    void updateEncryptToggleButton();
+
     // scaledMaxHeight returns the height in pixels that this widget can grow to
     // This does not take hidden into account, so callers must take hidden into account themselves
     int scaledMaxHeight() const;
@@ -155,7 +156,7 @@ protected:
         ResizingTextEdit *textEdit;
         QLabel *textEditLength;
         LabelButton *sendButton;
-        QCheckBox *encryptionEnabledCheckbox;
+        QCheckBox *encryptionToggleCheckbox;
         SvgButton *emoteButton;
     } ui_;
 

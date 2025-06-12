@@ -163,48 +163,6 @@ void SplitInput::initLayout()
         },
         this->managedConnections_);
 
-    // encryption checkbox
-    hboxLayout.emplace<QCheckBox>().assign(
-        &this->ui_.encryptionEnabledCheckbox);
-    this->ui_.encryptionEnabledCheckbox->setToolTip("Forsen");
-    this->ui_.encryptionEnabledCheckbox->setText("🔒");
-    this->ui_.encryptionEnabledCheckbox->setFocusPolicy(Qt::NoFocus);
-    this->ui_.encryptionEnabledCheckbox->setChecked(false);
-    this->ui_.encryptionEnabledCheckbox->show();
-
-    this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
-        auto channelName = this->split_->getChannel()->getName().toStdString();
-        auto channelStates = getSettings()->encryptionChannelStates.getValue();
-        auto value = channelStates.find(channelName);
-        if (value != channelStates.end())
-        {
-            this->ui_.encryptionEnabledCheckbox->setChecked(value->second);
-        }
-    });
-
-    getSettings()->encryptionChannelStates.connect(
-        [this](const std::map<std::string, bool> &channelStates, auto) {
-            auto channelName =
-                this->split_->getChannel()->getName().toStdString();
-            auto value = channelStates.find(channelName);
-            if (value != channelStates.end())
-            {
-                this->ui_.encryptionEnabledCheckbox->setChecked(value->second);
-            }
-        },
-        this->managedConnections_);
-
-    QObject::connect(
-        this->ui_.encryptionEnabledCheckbox, &QCheckBox::toggled, this,
-        [this](bool value) {
-            auto channelStates =
-                getSettings()->encryptionChannelStates.getValue();
-            auto channelName =
-                this->split_->getChannel()->getName().toStdString();
-            channelStates[channelName] = value;
-            getSettings()->encryptionChannelStates.setValue(channelStates);
-        });
-
     // right box
     auto box = hboxLayout.emplace<QVBoxLayout>().withoutMargin();
     box->setSpacing(0);
@@ -212,8 +170,17 @@ void SplitInput::initLayout()
         auto textEditLength =
             box.emplace<QLabel>().assign(&this->ui_.textEditLength);
         textEditLength->setAlignment(Qt::AlignRight);
-
         box->addStretch(1);
+
+        this->ui_.encryptionToggleCheckbox = new QCheckBox();
+        this->ui_.encryptionToggleCheckbox->setToolTip("Toggle Encryption");
+        this->ui_.encryptionToggleCheckbox->setFocusPolicy(Qt::NoFocus);
+        this->ui_.encryptionToggleCheckbox->setChecked(false);
+        updateEncryptToggleButton();
+
+        box->addWidget(this->ui_.encryptionToggleCheckbox, 0, Qt::AlignRight);
+
+        box->addSpacing(3);
         box.emplace<SvgButton>(
                SvgButton::Src{
                    .dark = ":/buttons/emote.svg",
@@ -239,6 +206,40 @@ void SplitInput::initLayout()
                 app->getFonts()->getFont(FontStyle::ChatMedium, this->scale()));
             this->ui_.replyLabel->setFont(app->getFonts()->getFont(
                 FontStyle::ChatMediumBold, this->scale()));
+        });
+
+    // encryption checkbox controls
+    this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
+        auto channelName = this->split_->getChannel()->getName().toStdString();
+        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+        auto value = channelStates.find(channelName);
+        if (value != channelStates.end())
+        {
+            this->ui_.encryptionToggleCheckbox->setChecked(value->second);
+        }
+    });
+
+    getSettings()->encryptionChannelStates.connect(
+        [this](const std::map<std::string, bool> &channelStates, auto) {
+            auto channelName =
+                this->split_->getChannel()->getName().toStdString();
+            auto value = channelStates.find(channelName);
+            if (value != channelStates.end())
+            {
+                this->ui_.encryptionToggleCheckbox->setChecked(value->second);
+            }
+        },
+        this->managedConnections_);
+
+    QObject::connect(
+        this->ui_.encryptionToggleCheckbox, &QCheckBox::toggled, this,
+        [this](bool value) {
+            auto channelStates =
+                getSettings()->encryptionChannelStates.getValue();
+            auto channelName =
+                this->split_->getChannel()->getName().toStdString();
+            channelStates[channelName] = value;
+            getSettings()->encryptionChannelStates.setValue(channelStates);
         });
 
     // open emote popup
@@ -275,6 +276,7 @@ void SplitInput::scaleChangedEvent(float scale)
     // update the icon size of the buttons
     this->updateEmoteButton();
     this->updateCancelReplyButton();
+    this->updateEncryptToggleButton();
 
     // set maximum height
     if (!this->hidden)
@@ -316,6 +318,8 @@ void SplitInput::themeChangedEvent()
     this->ui_.textEdit->setStyleSheet(this->theme->splits.input.styleSheet);
     this->ui_.textEdit->setPalette(placeholderPalette);
 
+    updateEncryptToggleButton();
+
     if (this->theme->isLightTheme())
     {
         this->ui_.replyLabel->setStyleSheet("color: #333");
@@ -331,6 +335,33 @@ void SplitInput::themeChangedEvent()
     {
         this->ui_.vbox->setSpacing(this->marginForTheme());
     }
+}
+
+void SplitInput::updateEncryptToggleButton()
+{
+    auto scale = this->scale();
+
+    this->ui_.encryptionToggleCheckbox->setFixedSize(
+        static_cast<int>(24 * scale), static_cast<int>(17 * scale));
+    this->ui_.encryptionToggleCheckbox->setStyleSheet(
+        QString("QCheckBox:hover {"
+                "background: rgba(%1, 0.25);"
+                "}"
+                "QCheckBox::indicator {"
+                "width: %3px;"
+                "height: %3px;"
+                "subcontrol-position: center top;"
+                "}"
+                "QCheckBox::indicator:unchecked {"
+                "padding-top: %2px;"
+                "image: url(:/buttons/openlock.svg);"
+                "}"
+                "QCheckBox::indicator:checked {"
+                "image: url(:/buttons/lock.svg);"
+                "}")
+            .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
+            .arg(static_cast<int>(1 * scale))
+            .arg(static_cast<int>(15 * scale)));
 }
 
 void SplitInput::updateEmoteButton()
