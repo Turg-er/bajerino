@@ -1,24 +1,24 @@
 #pragma once
 
-#include <pajlada/serialize.hpp>
-#include "util/RapidJsonSerializeQString.hpp" // IWYU pragma: keep
-#include <QString>
-#include <QHash>
+#include "util/RapidJsonSerializeQString.hpp"  // IWYU pragma: keep
 
+#include <pajlada/serialize.hpp>
+#include <QHash>
+#include <QString>
 
 namespace pajlada {
 
 template <typename ValueType, typename RJValue>
 struct Serialize<QHash<QString, ValueType>, RJValue> {
-    static RJValue
-    get(const QHash<QString, ValueType> &value,
-        typename RJValue::AllocatorType &a)
+    static RJValue get(const QHash<QString, ValueType> &value,
+                       typename RJValue::AllocatorType &a)
     {
         RJValue ret(rapidjson::kObjectType);
 
-        for (auto it = value.constBegin(); it != value.constEnd(); ++it) {
-            detail::AddMember<ValueType, RJValue>(ret, it.key().toUtf8().constData(),
-                                                  it.value(), a);
+        for (auto it = value.constBegin(); it != value.constEnd(); ++it)
+        {
+            detail::AddMember<ValueType, RJValue>(
+                ret, it.key().toUtf8().constData(), it.value(), a);
         }
 
         return ret;
@@ -27,20 +27,22 @@ struct Serialize<QHash<QString, ValueType>, RJValue> {
 
 template <typename ValueType, typename RJValue>
 struct Deserialize<QHash<QString, ValueType>, RJValue> {
-    static QHash<QString, ValueType>
-    get(const RJValue &value, bool *error = nullptr)
+    static QHash<QString, ValueType> get(const RJValue &value,
+                                         bool *error = nullptr)
     {
         QHash<QString, ValueType> ret;
 
-        if (!value.IsObject()) {
+        if (!value.IsObject())
+        {
             PAJLADA_REPORT_ERROR(error)
             return ret;
         }
 
         for (typename RJValue::ConstMemberIterator it = value.MemberBegin();
-             it != value.MemberEnd(); ++it) {
+             it != value.MemberEnd(); ++it)
+        {
             ret.emplace(QString::fromUtf8(it->name.GetString(),
-                                     it->name.GetStringLength()),
+                                          it->name.GetStringLength()),
                         Deserialize<ValueType, RJValue>::get(it->value, error));
         }
 
