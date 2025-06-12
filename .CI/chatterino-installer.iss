@@ -72,7 +72,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked
 Name: "freshinstall"; Description: "Fresh install (delete old settings/logs)"; Flags: unchecked
 
 [Files]
-Source: "{#WORKING_DIR}Bajerino2\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#WORKING_DIR}Bajerino\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#WORKING_DIR}vc_redist.x64.exe"; DestDir: "{tmp}"; Tasks: vcredist;
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
@@ -88,13 +88,13 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [InstallDelete]
 ; Delete cache on install
-Type: filesandordirs; Name: "{userappdata}\Bajerino2\Cache"
-; Delete %appdata%\Bajerino2 on freshinstall
-Type: filesandordirs; Name: "{userappdata}\Bajerino2"; Tasks: freshinstall
+Type: filesandordirs; Name: "{userappdata}\Bajerino\Cache"
+; Delete %appdata%\Bajerino on freshinstall
+Type: filesandordirs; Name: "{userappdata}\Bajerino"; Tasks: freshinstall
 
 [UninstallDelete]
 ; Delete cache on uninstall
-Type: filesandordirs; Name: "{userappdata}\Bajerino2\Cache"
+Type: filesandordirs; Name: "{userappdata}\Bajerino\Cache"
 
 [Code]
 // Get the VCRT version as a string. Null if the version could not be found.

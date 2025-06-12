@@ -75,7 +75,7 @@ LastRunCrashDialog::LastRunCrashDialog(const Args &args, const Paths &paths)
     }
 
     text +=
-        "Crash reports are <b>only stored locally</b> and never uploaded.<br>"_s;
+        u"Crash reports are <b>only stored locally</b> and never uploaded.<br>"_s;
 
     if (Modes::instance().isNightly)
     {

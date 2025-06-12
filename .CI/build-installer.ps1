@@ -1,5 +1,5 @@
-if (-not (Test-Path -PathType Container Bajerino2)) {
-    Write-Error "Couldn't find a folder called 'Bajerino2' in the current directory.";
+if (-not (Test-Path -PathType Container Bajerino)) {
+    Write-Error "Couldn't find a folder called 'Bajerino' in the current directory.";
     exit 1
 }
 
@@ -15,11 +15,11 @@ if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
     # for example when updating from nightly to stable.
-    Write-Output "" | Out-File Bajerino2/modes -Encoding ASCII;
+    Write-Output "" | Out-File Bajerino/modes -Encoding ASCII;
     $installerBaseName = "Bajerino.Installer";
 }
 else {
-    Write-Output nightly | Out-File Bajerino2/modes -Encoding ASCII;
+    Write-Output nightly | Out-File Bajerino/modes -Encoding ASCII;
     $defines = "/DIS_NIGHTLY=1";
     $installerBaseName = "Bajerino.Nightly.Installer";
 }
