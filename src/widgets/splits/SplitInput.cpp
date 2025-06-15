@@ -211,22 +211,14 @@ void SplitInput::initLayout()
     // encryption checkbox controls
     this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
         auto channelStates = getSettings()->encryptionChannelStates.getValue();
-        auto value =
-            channelStates.constFind(this->split_->getChannel()->getName());
-        if (value != channelStates.constEnd())
-        {
-            this->ui_.encryptionToggleCheckbox->setChecked(value.value());
-        }
+        this->ui_.encryptionToggleCheckbox->setChecked(
+            channelStates.value(this->split_->getChannel()->getName(), false));
     });
 
     getSettings()->encryptionChannelStates.connect(
-        [this](const QHash<QString, bool> &channelStates, auto) {
-            auto value =
-                channelStates.constFind(this->split_->getChannel()->getName());
-            if (value != channelStates.constEnd())
-            {
-                this->ui_.encryptionToggleCheckbox->setChecked(value.value());
-            }
+        [this](const QHash<QString, bool> &channelStates, const auto &) {
+            this->ui_.encryptionToggleCheckbox->setChecked(channelStates.value(
+                this->split_->getChannel()->getName(), false));
         },
         this->managedConnections_);
 
