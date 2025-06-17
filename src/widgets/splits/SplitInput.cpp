@@ -28,11 +28,8 @@
 #include "widgets/splits/SplitContainer.hpp"
 
 #include <QCompleter>
-#include <qnamespace.h>
 #include <QPainter>
 #include <QSignalBlocker>
-
-#include <functional>
 
 namespace chatterino {
 
@@ -132,9 +129,10 @@ void SplitInput::initLayout()
     inputWrapper->setContentsMargins(1, 1, 1, 1);
 
     // hbox for input, right box
-    auto hboxLayout =
-        inputWrapper.setLayoutType<QHBoxLayout>().withoutMargin().assign(
-            &this->ui_.inputHbox);
+    auto hboxLayout = inputWrapper.setLayoutType<QHBoxLayout>()
+                          .withoutMargin()
+                          .withoutSpacing()
+                          .assign(&this->ui_.inputHbox);
 
     // input
     auto textEdit =
@@ -172,21 +170,26 @@ void SplitInput::initLayout()
         textEditLength->setAlignment(Qt::AlignRight);
         box->addStretch(1);
 
+        auto inputButtonBox = box.emplace<QBoxLayout>(QBoxLayout::LeftToRight)
+                                  .withoutMargin()
+                                  .withoutSpacing();
+
         this->ui_.encryptionToggleCheckbox = new QCheckBox();
         this->ui_.encryptionToggleCheckbox->setToolTip("Toggle Encryption");
         this->ui_.encryptionToggleCheckbox->setFocusPolicy(Qt::NoFocus);
         this->ui_.encryptionToggleCheckbox->setChecked(false);
         updateEncryptToggleButton();
+        inputButtonBox->addWidget(this->ui_.encryptionToggleCheckbox, 0,
+                                  Qt::AlignBottom);
 
-        box->addWidget(this->ui_.encryptionToggleCheckbox, 0, Qt::AlignRight);
-
-        box->addSpacing(3);
-        box.emplace<SvgButton>(
-               SvgButton::Src{
-                   .dark = ":/buttons/emote.svg",
-                   .light = ":/buttons/emoteDark.svg",
-               },
-               nullptr, QSize{6, 3})
+        inputButtonBox->addSpacing(1);
+        inputButtonBox
+            .emplace<SvgButton>(
+                SvgButton::Src{
+                    .dark = ":/buttons/emote.svg",
+                    .light = ":/buttons/emoteDark.svg",
+                },
+                nullptr, QSize{6, 3})
             .assign(&this->ui_.emoteButton);
     }
 
@@ -331,26 +334,26 @@ void SplitInput::updateEncryptToggleButton()
     auto scale = this->scale();
 
     this->ui_.encryptionToggleCheckbox->setFixedSize(
-        static_cast<int>(24 * scale), static_cast<int>(17 * scale));
+        static_cast<int>(24 * scale), static_cast<int>(18 * scale));
     this->ui_.encryptionToggleCheckbox->setStyleSheet(
         QString("QCheckBox:hover {"
                 "background: rgba(%1, 0.25);"
                 "}"
                 "QCheckBox::indicator {"
-                "width: %3px;"
-                "height: %3px;"
-                "subcontrol-position: center top;"
+                "width: %2px;"
+                "height: %2px;"
+                "subcontrol-position: center center;"
+                "padding-bottom: %3px;"
                 "}"
                 "QCheckBox::indicator:unchecked {"
-                "padding-top: %2px;"
                 "image: url(:/buttons/openlock.svg);"
                 "}"
                 "QCheckBox::indicator:checked {"
                 "image: url(:/buttons/lock.svg);"
                 "}")
             .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
-            .arg(static_cast<int>(1 * scale))
-            .arg(static_cast<int>(15 * scale)));
+            .arg(static_cast<int>(13 * scale))
+            .arg(static_cast<int>(2 * scale)));
 }
 
 void SplitInput::updateEmoteButton()
