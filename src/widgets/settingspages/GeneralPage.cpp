@@ -55,7 +55,7 @@ const QStringList ZOOM_LEVELS = {
 void addKeyboardModifierSetting(GeneralPageView &layout, const QString &title,
                                 EnumSetting<Qt::KeyboardModifier> &setting)
 {
-    layout.addDropdown<std::underlying_type<Qt::KeyboardModifier>::type>(
+    layout.addDropdown<std::underlying_type_t<Qt::KeyboardModifier>>(
         title, {"None", "Shift", "Control", "Alt", META_KEY}, setting,
         [](int index) {
             switch (index)
@@ -226,7 +226,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             return fuzzyToFloat(args.value, 1.f);
         });
     ComboBox *tabDirectionDropdown =
-        layout.addDropdown<std::underlying_type<NotebookTabLocation>::type>(
+        layout.addDropdown<std::underlying_type_t<NotebookTabLocation>>(
             "Tab layout", {"Top", "Left", "Right", "Bottom"}, s.tabDirection,
             [](auto val) {
                 switch (val)
@@ -266,7 +266,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     tabDirectionDropdown->setMinimumWidth(
         tabDirectionDropdown->minimumSizeHint().width());
 
-    layout.addDropdown<std::underlying_type<NotebookTabVisibility>::type>(
+    layout.addDropdown<std::underlying_type_t<NotebookTabVisibility>>(
         "Tab visibility", {"All tabs", "Only live tabs"}, s.tabVisibility,
         [](auto val) {
             switch (val)
@@ -412,7 +412,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addCheckbox(
         "Allow sending duplicate messages", s.allowDuplicateMessages, false,
         "Allow a single message to be repeatedly sent without any changes.");
-    layout.addDropdown<std::underlying_type<MessageOverflow>::type>(
+    layout.addDropdown<std::underlying_type_t<MessageOverflow>>(
         "Message overflow", {"Highlight", "Prevent", "Allow"},
         s.messageOverflow,
         [](auto index) {
@@ -424,7 +424,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         false,
         "Specify how Bajerino will handle messages that exceed Twitch "
         "message limits");
-    layout.addDropdown<std::underlying_type<UsernameRightClickBehavior>::type>(
+    layout.addDropdown<std::underlying_type_t<UsernameRightClickBehavior>>(
         "Username right-click behavior",
         {
             "Reply",
@@ -441,7 +441,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         false,
         "Specify how Bajerino will handle right-clicking a username in "
         "chat when not holding the modifier.");
-    layout.addDropdown<std::underlying_type<UsernameRightClickBehavior>::type>(
+    layout.addDropdown<std::underlying_type_t<UsernameRightClickBehavior>>(
         "Username right-click with modifier behavior",
         {
             "Reply",
@@ -458,7 +458,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         false,
         "Specify how Bajerino will handle right-clicking a username in "
         "chat when holding down the modifier.");
-    layout.addDropdown<std::underlying_type<Qt::KeyboardModifier>::type>(
+    layout.addDropdown<std::underlying_type_t<Qt::KeyboardModifier>>(
         "Modifier for alternate right-click action",
         {"Shift", "Control", "Alt", META_KEY}, s.usernameRightClickModifier,
         [](int index) {
@@ -562,7 +562,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                        s.showLastMessageIndicator, false,
                        "Adds an underline below the most recent message "
                        "sent before you tabbed out of Bajerino.");
-    layout.addDropdown<std::underlying_type<Qt::BrushStyle>::type>(
+    layout.addDropdown<std::underlying_type_t<Qt::BrushStyle>>(
         "Line style", {"Dotted", "Solid"}, s.lastMessagePattern,
         [](int value) {
             switch (value)
@@ -644,7 +644,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                 });
         },
         false);
-    layout.addDropdown<std::underlying_type<ThumbnailPreviewMode>::type>(
+    layout.addDropdown<std::underlying_type_t<ThumbnailPreviewMode>>(
         "Show emote & badge thumbnail on hover",
         {
             "Don't show",
@@ -668,6 +668,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             return args.index;
         },
         false);
+    SettingWidget::dropdown("Emote & badge thumbnail size on hover",
+                            s.emoteTooltipScale)
+        ->addTo(layout);
     layout.addDropdown("Emoji style",
                        {
                            "Twitter",
@@ -726,7 +729,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "change while streaming");
 
     ComboBox *dankDropdown =
-        layout.addDropdown<std::underlying_type<StreamerModeSetting>::type>(
+        layout.addDropdown<std::underlying_type_t<StreamerModeSetting>>(
             "Enable Streamer Mode",
             {"Disabled", "Enabled", "Automatic (Detect streaming software)"},
             s.enableStreamerMode,
@@ -946,7 +949,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         QString newPath = getApp()->getPaths().cacheDirectory();
 
         QString pathShortened = "Cache saved at <a href=\"file:///" + newPath +
-                                "\"><span style=\"color: white;\">" +
+                                R"("><span style="color: white;">)" +
                                 shortenString(newPath, 50) + "</span></a>";
         cachePathLabel->setText(pathShortened);
         cachePathLabel->setToolTip(newPath);
@@ -1235,7 +1238,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                                               "Username and localized name"};
 
     ComboBox *nameDropdown =
-        layout.addDropdown<std::underlying_type<UsernameDisplayMode>::type>(
+        layout.addDropdown<std::underlying_type_t<UsernameDisplayMode>>(
             "Username style", usernameDisplayModes, s.usernameDisplayMode,
             [usernameDisplayModes](auto val) {
                 return usernameDisplayModes.at(val - 1);
