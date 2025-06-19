@@ -279,6 +279,24 @@ qreal highlightEasingFunction(qreal progress)
     return 1.0 + pow((20.0 / 9.0) * (0.5 * progress - 0.5), 3.0);
 }
 
+float getTooltipScale(EmoteTooltipScale emoteTooltipScale)
+{
+    switch (emoteTooltipScale)
+    {
+        case EmoteTooltipScale::Small:
+            return 0.5F;
+        case EmoteTooltipScale::Medium:
+            return 1.0F;
+        case EmoteTooltipScale::Large:
+            return 1.5F;
+        case EmoteTooltipScale::Huge:
+            return 2.0F;
+
+        default:
+            return 1.0F;
+    }
+}
+
 }  // namespace
 
 namespace chatterino {
@@ -764,7 +782,7 @@ void ChannelView::updateScrollbar(
         {
             this->scrollBar_->setPageSize(
                 static_cast<qreal>(messages.size() - i) +
-                (h / std::max(1.0, message->getHeight())));
+                (h / std::max(1, message->getHeight())));
 
             showScrollbar = true;
             break;
@@ -1608,8 +1626,9 @@ void ChannelView::drawMessages(QPainter &painter, const QRect &area)
         .isMentions = this->underlyingChannel_ ==
                       getApp()->getTwitch()->getMentionsChannel(),
 
-        .y = -(messagesSnapshot[start]->getHeight() *
-               (fmod(this->scrollBar_->getRelativeCurrentValue(), 1))),
+        .y = -static_cast<int>(
+            messagesSnapshot[start]->getHeight() *
+            (fmod(this->scrollBar_->getRelativeCurrentValue(), 1))),
         .messageIndex = start,
         .isLastReadMessage = false,
 
@@ -1646,25 +1665,23 @@ void ChannelView::drawMessages(QPainter &painter, const QRect &area)
                 {
                     animationArea = QRect{
                         0,
-                        static_cast<int>(ctx.y),
-                        static_cast<int>(layout->getWidth()),
-                        static_cast<int>(layout->getHeight()),
+                        ctx.y,
+                        layout->getWidth(),
+                        layout->getHeight(),
                     };
                 }
                 else
                 {
-                    animationArea.setBottom(
-                        static_cast<int>(ctx.y + layout->getHeight()));
+                    animationArea.setBottom((ctx.y + layout->getHeight()));
                     animationArea.setWidth(
-                        std::max(static_cast<int>(layout->getWidth()),
-                                 animationArea.width()));
+                        std::max(layout->getWidth(), animationArea.width()));
                 }
             }
 
             if (this->highlightedMessage_ == layout)
             {
                 painter.fillRect(
-                    QRectF{
+                    QRect{
                         0,
                         ctx.y,
                         layout->getWidth(),
@@ -2038,12 +2055,12 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
 
             if (emoteElement)
             {
-                this->tooltipWidget_->setOne({
+                auto scale = getSettings()->emoteTooltipScale.getEnum();
+                this->tooltipWidget_->setOne(TooltipEntry::scaled(
                     showThumbnail
                         ? emoteElement->getEmote()->images.getImage(3.0)
                         : nullptr,
-                    element->getTooltip(),
-                });
+                    element->getTooltip(), getTooltipScale(scale)));
             }
             else if (layeredEmoteElement)
             {
@@ -2074,18 +2091,22 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
                         if (i == 0)
                         {
                             // First entry gets a large image and full description
-                            entries.push_back({showThumbnail
-                                                   ? emote->images.getImage(3.0)
-                                                   : nullptr,
-                                               emoteTooltips[i]});
+                            auto scale =
+                                getSettings()->emoteTooltipScale.getEnum();
+                            entries.push_back(TooltipEntry::scaled(
+                                showThumbnail ? emote->images.getImage(3.0)
+                                              : nullptr,
+                                emoteTooltips[i], getTooltipScale(scale)));
                         }
                         else
                         {
                             // Every other entry gets a small image and just the emote name
-                            entries.push_back({showThumbnail
-                                                   ? emote->images.getImage(1.0)
-                                                   : nullptr,
-                                               emote->name.string});
+                            auto scale =
+                                getSettings()->emoteTooltipScale.getEnum();
+                            entries.push_back(TooltipEntry::scaled(
+                                showThumbnail ? emote->images.getImage(1.0)
+                                              : nullptr,
+                                emote->name.string, getTooltipScale(scale)));
                         }
                     }
 
@@ -2102,12 +2123,12 @@ void ChannelView::mouseMoveEvent(QMouseEvent *event)
             }
             else if (badgeElement)
             {
-                this->tooltipWidget_->setOne({
+                auto scale = getSettings()->emoteTooltipScale.getEnum();
+                this->tooltipWidget_->setOne(TooltipEntry::scaled(
                     showThumbnail
                         ? badgeElement->getEmote()->images.getImage(3.0)
                         : nullptr,
-                    element->getTooltip(),
-                });
+                    element->getTooltip(), getTooltipScale(scale)));
             }
         }
         else
@@ -2594,19 +2615,72 @@ void ChannelView::addMessageContextMenuItems(QMenu *menu,
     });
 
     // Only display reply option where it makes sense
-    if (this->canReplyToMessages() && layout->isReplyable())
+    if (this->canReplyToMessages())
     {
         const auto &messagePtr = layout->getMessagePtr();
-        menu->addAction("&Reply to message", [this, &messagePtr] {
-            this->setInputReply(messagePtr);
-        });
-
-        if (messagePtr->replyThread != nullptr)
+        switch (messagePtr->isReplyable())
         {
-            menu->addAction("Reply to &original thread", [this, &messagePtr] {
-                this->setInputReply(messagePtr->replyThread->root());
-            });
+            case Message::ReplyStatus::Replyable: {
+                menu->addAction("&Reply to message", [this, &messagePtr] {
+                    this->setInputReply(messagePtr);
+                });
+                break;
+            }
 
+            case Message::ReplyStatus::NotReplyable: {
+                const auto &replyAction =
+                    menu->addAction("&Reply to message", [this, &messagePtr] {
+                        this->setInputReply(messagePtr);
+                    });
+                replyAction->setEnabled(false);
+                break;
+            }
+
+            case Message::ReplyStatus::ReplyableWithThread: {
+                menu->addAction("&Reply to message", [this, &messagePtr] {
+                    this->setInputReply(messagePtr);
+                });
+                menu->addAction(
+                    "Reply to &original thread", [this, &messagePtr] {
+                        this->setInputReply(messagePtr->replyThread->root());
+                    });
+                break;
+            }
+
+            case Message::ReplyStatus::NotReplyableWithThread: {
+                const auto &replyAction =
+                    menu->addAction("&Reply to message", [this, &messagePtr] {
+                        this->setInputReply(messagePtr);
+                    });
+                replyAction->setEnabled(false);
+
+                menu->addAction(
+                    "Reply to &original thread", [this, &messagePtr] {
+                        this->setInputReply(messagePtr->replyThread->root());
+                    });
+                break;
+            }
+
+            case Message::ReplyStatus::NotReplyableDueToThread: {
+                const auto &replyAction =
+                    menu->addAction("&Reply to message", [this, &messagePtr] {
+                        this->setInputReply(messagePtr);
+                    });
+                replyAction->setEnabled(false);
+
+                const auto &replyThreadAction = menu->addAction(
+                    "Reply to &original thread", [this, &messagePtr] {
+                        this->setInputReply(messagePtr->replyThread->root());
+                    });
+
+                replyThreadAction->setEnabled(false);
+                break;
+            }
+        }
+
+        if (const auto &messagePtr = layout->getMessagePtr();
+            messagePtr->replyThread != nullptr)
+        {
             menu->addAction("View &thread", [this, &messagePtr] {
                 this->showReplyThreadPopup(messagePtr);
             });
@@ -3036,7 +3110,11 @@ void ChannelView::handleLinkClick(QMouseEvent *event, const Link &link,
         }
         break;
         case Link::ReplyToMessage: {
-            this->setInputReply(layout->getMessagePtr());
+            if (layout->getMessagePtr()->isReplyable() !=
+                Message::ReplyStatus::NotReplyable)
+            {
+                this->setInputReply(layout->getMessagePtr());
+            }
         }
         break;
         case Link::ViewThread: {
