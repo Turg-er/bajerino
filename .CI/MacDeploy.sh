@@ -46,7 +46,7 @@ fi
 mkdir -p chatterino.app/Contents/Frameworks
 mkdir -p chatterino.app/Contents/PlugIns/imageformats
 cp kimg/libKF6Archive.6.dylib chatterino.app/Contents/Frameworks/
-cp kimg/kimg_avif.so chatterino.app/Contents/PlugIns/imageformats/
+cp kimg/kimg_avif.dylib chatterino.app/Contents/PlugIns/imageformats/
 
 macdeployqt chatterino.app "${_macdeployqt_args[@]}" -verbose=1
 
