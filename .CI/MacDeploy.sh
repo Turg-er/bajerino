@@ -40,7 +40,7 @@ if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
     echo "Codesigning libKF6Archive"
     codesign -s "$MACOS_CODESIGN_CERTIFICATE" --force kimg/libKF6Archive.6.dylib
     echo "Codesigning kimg_avif"
-    codesign -s "$MACOS_CODESIGN_CERTIFICATE" --force kimg/kimg_avif.so
+    codesign -s "$MACOS_CODESIGN_CERTIFICATE" --force kimg/kimg_avif.dylib
 fi
 
 mkdir -p chatterino.app/Contents/Frameworks
