@@ -294,8 +294,7 @@ public:
 
     /// Behaviour
     // Encryption
-    QStringSetting encryptionKey = {"/encryption/encryptionKey",
-                                    "YOU_SHOULD_CHANGE_THIS"};
+    QStringSetting encryptionKey = {"/encryption/encryptionKey", ""};
     ChatterinoSetting<QHash<QString, bool>> encryptionChannelStates = {
         "/encryption/channel_states", {}};
 

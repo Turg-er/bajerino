@@ -61,7 +61,8 @@ public:
                                       QStringSetting &setting);
     static SettingWidget *lineEdit(const QString &label,
                                    QStringSetting &setting,
-                                   const QString &placeholderText = {});
+                                   const QString &placeholderText = {},
+                                   bool trim = false);
 
     SettingWidget *setTooltip(QString tooltip);
     SettingWidget *setDescription(const QString &text);

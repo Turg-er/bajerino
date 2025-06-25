@@ -127,14 +127,15 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     auto &s = *getSettings();
 
     layout.addTitle("Bajerino");
-    // layout.addCheckbox(
-    //     "Automatically encrypt every message", s.alwaysEncrypt, false,
-    //     "This will enable bajerino AES encryption by default. When "
-    //     "enabled use /d to send an unencrypted message."
-    //     "When disabled use /e to send an encrypted message.");
-    layout.addTextInput("Encryption Password", s.encryptionKey,
-                        "This password will be used to encrypt and "
-                        "decrypt all messages.");
+
+    auto *encryptForm = new QFormLayout();
+    layout.addLayout(encryptForm);
+    SettingWidget::lineEdit("Encryption Password", s.encryptionKey,
+                            "You should not leave this blank!", true)
+        ->addTo(layout, encryptForm);
+    layout.addDescription(
+        "This password will be used to encrypt and decrypt all messages. "
+        "Whitespace will be trimmed from the start and end of the password.");
 
     layout.addTitle("Interface");
 
