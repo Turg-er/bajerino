@@ -2061,9 +2061,11 @@ void MessageBuilder::parseThread(const QString &messageContent,
 
         if (threadRoot->flags.has(MessageFlag::Decrypted))
         {
-            this->emplace<DecryptedBadge>(makeDecryptBadge(),
-                                          MessageElementFlag::BadgeDecrypted)
-                ->setScale(0.75)
+            this->emplace<DecryptedBadge>(
+                    makeDecryptBadge(),
+                    MessageElementFlags({MessageElementFlag::BadgeDecrypted,
+                                         MessageElementFlag::RepliedMessage}))
+                ->setScale(0.7)
                 ->setLink({Link::ViewThread, thread->rootId()});
         }
 
@@ -2121,8 +2123,10 @@ void MessageBuilder::parseThread(const QString &messageContent,
                     {
                         this->emplace<DecryptedBadge>(
                                 makeDecryptBadge(),
-                                MessageElementFlag::BadgeDecrypted)
-                            ->setScale(0.75)
+                                MessageElementFlags(
+                                    {MessageElementFlag::BadgeDecrypted,
+                                     MessageElementFlag::RepliedMessage}))
+                            ->setScale(0.7)
                             ->setLink({Link::ViewThread, thread->rootId()});
                     }
                 }
