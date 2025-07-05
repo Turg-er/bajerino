@@ -62,6 +62,10 @@ MessageFlagsPredicate::MessageFlagsPredicate(const QString &flags, bool negate)
         {
             this->flags_.set(MessageFlag::SharedMessage);
         }
+        else if (flag == "encrypted" || flag == "decrypted")
+        {
+            this->flags_.set(MessageFlag::Decrypted);
+        }
     }
 }
 

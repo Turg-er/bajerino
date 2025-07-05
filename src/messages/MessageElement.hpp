@@ -121,9 +121,12 @@ enum class MessageElementFlag : int64_t {
     // - FFZ donator badge
     BadgeFfz = (1LL << 19),
 
+    // Bajerino Decrypted
+    BadgeDecrypted = (1LL << 63),
+
     Badges = BadgeGlobalAuthority | BadgePredictions | BadgeChannelAuthority |
              BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
-             BadgeFfz | BadgeSharedChannel,
+             BadgeFfz | BadgeSharedChannel | BadgeDecrypted,
 
     ChannelName = (1LL << 20),
 
@@ -501,6 +504,22 @@ protected:
     MessageLayoutElement *makeImageLayoutElement(const ImagePtr &image,
                                                  QSizeF size) override;
     const QColor color;
+};
+
+class DecryptedBadge : public BadgeElement
+{
+public:
+    DecryptedBadge(const EmotePtr &data, MessageElementFlags flags_);
+
+    QJsonObject toJson() const override;
+
+    void addToContainer(MessageLayoutContainer &container,
+                        const MessageLayoutContext &ctx) override;
+
+    DecryptedBadge *setScale(const float &scale);
+
+private:
+    float scale = 1.0F;
 };
 
 // contains a text, formated depending on the preferences

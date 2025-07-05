@@ -512,6 +512,16 @@ std::tuple<std::optional<EmotePtr>, MessageElementFlags, bool> parseEmote(
     };
 }
 
+EmotePtr makeDecryptBadge()
+{
+    return std::make_shared<Emote>(Emote{
+        .name = EmoteName{},
+        .images = ImageSet{Image::fromResourcePixmap(
+            getResources().twitch.lockBadge, 0.25)},
+        .tooltip = Tooltip{u"Encrypted"_s},
+    });
+}
+
 }  // namespace
 
 namespace chatterino {
@@ -1517,8 +1527,13 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     assert(ircMessage != nullptr);
     assert(channel != nullptr);
 
-    const auto decrypted = checkAndDecryptMessage(
-        content, getSettings()->encryptionKey.getValue());
+    const auto maybeEncrypted = isMaybeEncrypted(content);
+    auto decrypted = false;
+    if (maybeEncrypted)
+    {
+        decrypted =
+            decryptMessage(content, getSettings()->encryptionKey.getValue());
+    }
 
     auto tags = ircMessage->tags();
     if (args.allowIgnore)
@@ -1542,6 +1557,10 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (decrypted)
     {
         builder->flags.set(MessageFlag::Decrypted);
+    }
+    else if (maybeEncrypted)
+    {
+        builder->flags.set(MessageFlag::MaybeEncrypted);
     }
 
     if (args.isAction)
@@ -1640,7 +1659,11 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendSeventvBadges(userID);
 
-    builder.appendDecryptionBadge(decrypted);
+    if (decrypted)
+    {
+        builder.emplace<DecryptedBadge>(makeDecryptBadge(),
+                                        MessageElementFlag::BadgeDecrypted);
+    }
 
     builder.appendUsername(tags, args);
 
@@ -2038,9 +2061,9 @@ void MessageBuilder::parseThread(const QString &messageContent,
 
         if (threadRoot->flags.has(MessageFlag::Decrypted))
         {
-            this->emplace<TextElement>("🔓", MessageElementFlag::RepliedMessage,
-                                       MessageColor::Text,
-                                       FontStyle::ChatMediumSmall)
+            this->emplace<DecryptedBadge>(makeDecryptBadge(),
+                                          MessageElementFlag::BadgeDecrypted)
+                ->setScale(0.75)
                 ->setLink({Link::ViewThread, thread->rootId()});
         }
 
@@ -2091,14 +2114,17 @@ void MessageBuilder::parseThread(const QString &messageContent,
             {
                 auto name = replyDisplayName->toString();
                 body = parseTagString(replyBody->toString());
-
-                const auto decrypted = checkAndDecryptMessage(
-                    body, getSettings()->encryptionKey.getValue());
-                if (decrypted)
+                if (isMaybeEncrypted(body))
                 {
-                    this->emplace<TextElement>(
-                        "🔓", MessageElementFlag::RepliedMessage,
-                        MessageColor::Text, FontStyle::ChatMediumSmall);
+                    if (decryptMessage(body,
+                                       getSettings()->encryptionKey.getValue()))
+                    {
+                        this->emplace<DecryptedBadge>(
+                                makeDecryptBadge(),
+                                MessageElementFlag::BadgeDecrypted)
+                            ->setScale(0.75)
+                            ->setLink({Link::ViewThread, thread->rootId()});
+                    }
                 }
 
                 this->emplace<TextElement>(
@@ -2555,23 +2581,6 @@ Outcome MessageBuilder::tryAppendCheermote(TextState &state,
     }
 
     return Success;
-}
-
-void MessageBuilder::appendDecryptionBadge(const bool &isDecrypted)
-{
-    if (isDecrypted)
-    {
-        const auto &emojis = getApp()->getEmotes()->getEmojis()->getEmojis();
-        const auto unlock = std::find_if(
-            emojis.begin(), emojis.end(), [](const EmojiPtr &emoji) {
-                const auto &sc = emoji->shortCodes;
-                return std::find(sc.begin(), sc.end(), "unlock") != sc.end();
-            });
-        if (unlock != emojis.end())
-        {
-            this->addEmoji((*unlock)->emote);
-        }
-    }
 }
 
 }  // namespace chatterino

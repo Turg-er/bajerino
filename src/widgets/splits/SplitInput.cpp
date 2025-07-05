@@ -1269,7 +1269,7 @@ void SplitInput::setReply(MessagePtr target)
             this->ui_.replyLabel->setText(
                 QString("Replying to %1@%2")
                     .arg(this->replyTarget_->flags.has(MessageFlag::Decrypted)
-                             ? "🔓 "
+                             ? "🔒 "
                              : "",
                          this->replyTarget_->displayName));
         }

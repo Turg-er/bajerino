@@ -6,6 +6,7 @@
 - Minor: Change placement of crypto toggle button and change checkbox styling to use unlock and lock svg instead. (653c95ffc95fd959ebbed22a0cca780e6d495a67) (6442faf8ac6e8b7286cbde1030a12f773b305762)
 - Minor: Replace `chatterino` with `bajerino` in GUI. (6cff983e72338e741a24fa2842d8c4b749f447a9) (a9312d45fe3e719abafa5dd36f587751dccdfd87) (677a93bb56c13d8cb3174dc0b26e56c0e78a80c2)
 - Minor: Replace icon with custom Bajerino Icon. (59365670f1c6c0ccb3d28d2be5c6acb31525c02b)
+- Minor: Change from 🔓 to a lock png based on svg and make it a proper badge.
 - Dev: Disabled Doxygen in CMAKE because it was annoying me. (3ff20a840bd8e6741ded6b4202bbd17ddab0828b)
 - Dev: Merge upstream (from 20b92ea0ca186f4a543ea85d5b8153a7c92bb2d0). (5a51771ebbcdfc99767105cf7007d856c76d27fc)
 - Dev: Change channel states map from using `std::map` and `std::string` with `QHash` and `QString` respectively. Implement rapidjson serializer and deserializer for types. (e0f721b453f6864fa2b03981cadb3bf705f841df) (3cd199ead134a31655504795fafa69601a2e353c)

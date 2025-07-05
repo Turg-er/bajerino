@@ -168,38 +168,41 @@ QString encryptMessage(QStringView message, QStringView encryptionPassword)
     }
 }
 
-bool checkAndDecryptMessage(QString &message, QStringView encryptionPassword)
+bool isMaybeEncrypted(QStringView message)
 {
-    // would rather do quick check than catching exception from `chineseCharactersToBytes`
-    if (!isCharOutsideValidEncodeRange(message.at(0)))
+    return message.length() >= 32 &&
+           std::ranges::none_of(message.cbegin(), message.cend(), [](auto c) {
+               return isCharOutsideValidEncodeRange(c);
+           });
+}
+
+bool decryptMessage(QString &message, QStringView encryptionPassword)
+{
+    try
     {
-        try
+        auto encryptedBytes = chineseCharactersToBytes(message);
+        if (encryptedBytes.size() < 32)
         {
-            auto encryptedBytes = chineseCharactersToBytes(message);
-            if (encryptedBytes.size() < 17)
-            {
-                throw std::runtime_error("Potential text is too small!");
-            }
-            // if wondering why using non secure hash see reasoning in encryptMessage above
-            auto encryptionKey = QCryptographicHash::hash(
-                encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
-            encryptionKey.resize(16);
-
-            auto cipherText = encryptedBytes.sliced(16);
-            // this is just the iv now
-            encryptedBytes.resize(16);
-
-            message = QString::fromUtf8(
-                aesDecrypt(cipherText,
-                           reinterpret_cast<const unsigned char *>(
-                               encryptionKey.constData()),
-                           reinterpret_cast<const unsigned char *>(
-                               encryptedBytes.constData())));
-            return true;
+            throw std::runtime_error("Potential text is too small!");
         }
-        catch (const std::runtime_error &e)
-        {
-        }
+        // if wondering why using non secure hash see reasoning in encryptMessage above
+        auto encryptionKey = QCryptographicHash::hash(
+            encryptionPassword.toUtf8(), QCryptographicHash::Blake2b_256);
+        encryptionKey.resize(16);
+
+        auto cipherText = encryptedBytes.sliced(16);
+        // this is just the iv now
+        encryptedBytes.resize(16);
+
+        message = QString::fromUtf8(aesDecrypt(
+            cipherText,
+            reinterpret_cast<const unsigned char *>(encryptionKey.constData()),
+            reinterpret_cast<const unsigned char *>(
+                encryptedBytes.constData())));
+        return true;
+    }
+    catch (const std::runtime_error &e)
+    {
     }
     return false;
 }

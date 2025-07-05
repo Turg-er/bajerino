@@ -315,7 +315,6 @@ private:
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
     void appendSeventvBadges(const QString &userID);
-    void appendDecryptionBadge(const bool &isDecrypted);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,
                                         const QString &userID,

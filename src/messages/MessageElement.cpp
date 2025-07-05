@@ -558,6 +558,40 @@ QJsonObject FfzBadgeElement::toJson() const
     return base;
 }
 
+// Decrypted Badge
+DecryptedBadge::DecryptedBadge(const EmotePtr &data, MessageElementFlags flags_)
+    : BadgeElement(data, flags_)
+{
+}
+
+QJsonObject DecryptedBadge::toJson() const
+{
+    auto base = BadgeElement::toJson();
+    base["type"_L1] = u"DecryptedBadgeElement"_s;
+
+    return base;
+}
+
+void DecryptedBadge::addToContainer(MessageLayoutContainer &container,
+                                    const MessageLayoutContext & /*ctx*/)
+{
+    auto image = this->getEmote()->images.getImageOrLoaded(
+        container.getImageScale() * this->scale);
+    if (image->isEmpty())
+    {
+        return;
+    }
+
+    container.addElement(this->makeImageLayoutElement(
+        image, image->size() * container.getScale() * this->scale));
+}
+
+DecryptedBadge *DecryptedBadge::setScale(const float &scale)
+{
+    this->scale = scale;
+    return this;
+}
+
 // TEXT
 TextElement::TextElement(const QString &text, MessageElementFlags flags,
                          const MessageColor &color, FontStyle style)
