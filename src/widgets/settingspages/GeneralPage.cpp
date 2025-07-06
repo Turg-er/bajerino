@@ -1137,7 +1137,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                             s.useCustomFfzVipBadges)
         ->addKeywords({"ffz"})
         ->addTo(layout);
-    layout.addCheckbox("Animate 7TV badges", s.animateSevenTVBadges);
+
+    SettingWidget::checkbox("Animate 7TV badges", s.animateSevenTVBadges)
+        ->addTo(layout);
 
     layout.addSubtitle("Overlay");
     layout.addDropdown<float>(
@@ -1250,12 +1252,15 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     }
 #endif
 
-    layout.addCheckbox("Show 7TV Animated Profile Picture",
-                       s.displaySevenTVAnimatedProfile);
-    layout.addCheckbox(
-        "Load AVIF images", s.allowAvifImages, false,
-        "When enabled and an AVIF decoder is found, AVIF images will be "
-        "preferred over WEBP on 7TV. This saves bandwidth.");
+    SettingWidget::checkbox("Show 7TV Animated Profile Picture",
+                            s.displaySevenTVAnimatedProfile)
+        ->addTo(layout);
+    SettingWidget::checkbox("Load AVIF images", s.allowAvifImages)
+        ->setTooltip(
+            "When enabled and an AVIF decoder is found, AVIF images will be "
+            "preferred over WEBP on 7TV. This saves bandwidth.")
+        ->addTo(layout);
+
     SettingWidget::inverseCheckbox("Show moderation messages",
                                    s.hideModerationActions)
         ->setTooltip(
