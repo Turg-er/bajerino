@@ -72,7 +72,7 @@ Version::Version()
 
 #ifdef Q_OS_WIN
     // keep in sync with .CI/chatterino-installer.iss
-    this->appUserModelID_ = L"ChatterinoTeam.Chatterino";
+    this->appUserModelID_ = L"SevenTV.Chatterino7";
 #endif
 }
 
