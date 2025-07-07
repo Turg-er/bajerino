@@ -1,6 +1,8 @@
 #include "widgets/settingspages/SettingWidget.hpp"
 
-#include "singletons/Settings.hpp"
+#include "common/QLogging.hpp"
+#include "singletons/Settings.hpp"  // IWYU pragma: keep
+#include "util/QMagicEnumTagged.hpp"
 #include "util/RapidJsonSerializeQString.hpp"  // IWYU pragma: keep
 #include "widgets/dialogs/ColorPickerDialog.hpp"
 #include "widgets/helper/color/ColorButton.hpp"
@@ -8,6 +10,7 @@
 
 #include <QBoxLayout>
 #include <QCheckBox>
+#include <QFontDialog>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -133,6 +136,10 @@ SettingWidget *SettingWidget::intInput(const QString &label,
     {
         input->setSingleStep(params.singleStep.value());
     }
+    if (params.suffix.has_value())
+    {
+        input->setSuffix(params.suffix.value());
+    }
 
     widget->hLayout->addWidget(lbl);
     widget->hLayout->addStretch(1);
@@ -227,6 +234,85 @@ template SettingWidget *SettingWidget::dropdown<TabStyle>(
     const QString &label, EnumStringSetting<TabStyle> &setting);
 template SettingWidget *SettingWidget::dropdown<ShowModerationState>(
     const QString &label, EnumStringSetting<ShowModerationState> &setting);
+template SettingWidget *SettingWidget::dropdown<EmojiStyle>(
+    const QString &label, EnumStringSetting<EmojiStyle> &setting);
+
+template <typename T>
+SettingWidget *SettingWidget::dropdown(const QString &label,
+                                       EnumSetting<T> &setting)
+{
+    auto *widget = new SettingWidget(label);
+
+    auto *lbl = new QLabel(label % ":");
+    auto *combo = new ComboBox;
+    combo->setFocusPolicy(Qt::StrongFocus);
+
+    for (const auto value : magic_enum::enum_values<T>())
+    {
+        combo->addItem(qmagicenum::enumDisplayNameString(value),
+                       QVariant(static_cast<std::underlying_type_t<T>>(value)));
+    }
+
+    // TODO: this can probably use some other size hint/size strategy
+    combo->setMinimumWidth(combo->minimumSizeHint().width());
+
+    widget->actionWidget = combo;
+    widget->label = lbl;
+
+    widget->hLayout->addWidget(lbl);
+    widget->hLayout->addStretch(1);
+    widget->hLayout->addWidget(combo);
+
+    setting.connect(
+        [combo, label](const auto &value) {
+            std::optional<int> foundRow;
+
+            for (auto row = 0; row < combo->model()->rowCount(); ++row)
+            {
+                auto index = combo->model()->index(row, 0);
+                auto rowEnumValue = index.data(Qt::UserRole);
+                if (rowEnumValue == value)
+                {
+                    foundRow = row;
+                    break;
+                }
+            }
+
+            if (foundRow)
+            {
+                combo->setCurrentIndex(*foundRow);
+            }
+            else
+            {
+                qCWarning(chatterinoWidget)
+                    << "Did not find a correct combo box row for" << label
+                    << " with value" << value;
+            }
+        },
+        widget->managedConnections);
+
+    QObject::connect(combo, &QComboBox::currentTextChanged,
+                     [label, combo, &setting](const auto &newText) {
+                         bool ok = true;
+                         auto enumValue = combo->currentData().toInt(&ok);
+                         if (!ok)
+                         {
+                             qCWarning(chatterinoWidget)
+                                 << "Combo" << label << " with value" << newText
+                                 << "did not contain an intable UserRole data";
+                             return;
+                         }
+
+                         setting.setValue(enumValue);
+                     });
+
+    return widget;
+}
+
+template SettingWidget *SettingWidget::dropdown<LastMessageLineStyle>(
+    const QString &label, EnumSetting<LastMessageLineStyle> &setting);
+template SettingWidget *SettingWidget::dropdown<ThumbnailPreviewMode>(
+    const QString &label, EnumSetting<ThumbnailPreviewMode> &setting);
 
 SettingWidget *SettingWidget::colorButton(const QString &label,
                                           QStringSetting &setting)
@@ -315,6 +401,45 @@ SettingWidget *SettingWidget::lineEdit(const QString &label,
         widget->managedConnections, false);
 
     widget->actionWidget = edit;
+    widget->label = lbl;
+
+    return widget;
+}
+
+SettingWidget *SettingWidget::fontButton(const QString &label,
+                                         QStringSetting &familySetting,
+                                         std::function<QFont()> currentFont,
+                                         std::function<void(QFont)> onChange)
+{
+    auto *widget = new SettingWidget(label);
+
+    auto *lbl = new QLabel(label + ":");
+
+    auto *button = new QPushButton(currentFont().family());
+
+    widget->hLayout->addWidget(lbl);
+    widget->hLayout->addStretch(1);
+    widget->hLayout->addWidget(button);
+
+    familySetting.connect(
+        [button, currentFont](const auto &) {
+            button->setText(currentFont().family());
+        },
+        widget->managedConnections);
+
+    QObject::connect(button, &QPushButton::clicked,
+                     [widget, currentFont{std::move(currentFont)},
+                      onChange{std::move(onChange)}]() {
+                         bool ok = false;
+                         auto font =
+                             QFontDialog::getFont(&ok, currentFont(), widget);
+                         if (ok)
+                         {
+                             onChange(font);
+                         }
+                     });
+
+    widget->actionWidget = button;
     widget->label = lbl;
 
     return widget;

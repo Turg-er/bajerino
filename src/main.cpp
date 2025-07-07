@@ -40,7 +40,8 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationVersion(CHATTERINO_VERSION);
     QCoreApplication::setOrganizationDomain("bajerino.com");
 #ifdef Q_OS_WIN
-    SetCurrentProcessExplicitAppUserModelID(L"BajerinoTeam.Bajerino");
+    SetCurrentProcessExplicitAppUserModelID(
+        Version::instance().appUserModelID().c_str());
 #endif
 
     std::unique_ptr<Paths> paths;
