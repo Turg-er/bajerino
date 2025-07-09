@@ -129,7 +129,7 @@ jobs:
         include:
           # macOS
           - os: macos-14
-            build-target: 13.0
+            build-target: '13.0'
             qt-version: 6.7.1
             force-lto: false
             skip-artifact: false
@@ -303,7 +303,7 @@ jobs:
       - name: Package (MacOS)
         if: startsWith(matrix.os, 'macos')
         env:
-          OUTPUT_DMG_PATH: bajerino-macos-Qt-${{ matrix.qt-version}}-macOS-${{ matrix.build-target }}-universal.dmg
+          OUTPUT_DMG_PATH: bajerino-macos-${{ matrix.build-target }}-Qt-${{ matrix.qt-version}}-universal.dmg
         run: |
           ls -la
           pwd
@@ -349,8 +349,8 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
-          name: bajerino-macos-Qt-${{ matrix.qt-version}}-macOS-${{ matrix.build-target }}-universal.dmg
-          path: build/bajerino-macos-Qt-${{ matrix.qt-version}}-macOS-${{ matrix.build-target }}-universal.dmg
+          name: bajerino-macos-${{ matrix.build-target }}-Qt-${{ matrix.qt-version}}-universal.dmg
+          path: build/bajerino-macos-${{ matrix.build-target }}-Qt-${{ matrix.qt-version}}-universal.dmg
 
   create-release:
     needs: [build-ubuntu-docker, build]
@@ -381,7 +381,7 @@ jobs:
       - uses: actions/download-artifact@v4
         name: MacOS Qt6.7.1 Universal
         with:
-          name: bajerino-macos-Qt-6.7.1-macOS-13.0-universal.dmg
+          name: bajerino-macos-13.0-Qt-6.7.1-universal.dmg
           path: release-artifacts/
 
       # Linux
