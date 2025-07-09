@@ -47,5 +47,3 @@ ISCC `
     $defines `
     /O. `
     "$PSScriptRoot\Bajerino-installer.iss";
-
-Move-Item "$installerBaseName.exe" "$installerBaseName$($Env:VARIANT_SUFFIX).exe"
