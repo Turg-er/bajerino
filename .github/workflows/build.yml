@@ -129,7 +129,7 @@ jobs:
         include:
           # macOS
           - os: macos-14
-            build-target: '13.0'
+            build-target: "13.0"
             qt-version: 6.7.1
             force-lto: false
             skip-artifact: false
