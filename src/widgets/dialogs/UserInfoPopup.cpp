@@ -60,7 +60,6 @@ constexpr QStringView TEXT_UNAVAILABLE = u"(not available)";
 constexpr QStringView TEXT_PRONOUNS = u"Pronouns: %1";
 constexpr QStringView TEXT_UNSPECIFIED = u"(unspecified)";
 constexpr QStringView TEXT_LOADING = u"(loading...)";
-constexpr qsizetype NOTES_PREVIEW_LENGTH = 80;
 
 using namespace chatterino;
 
@@ -533,6 +532,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
 
     auto notesPreview = layout.emplace<Label>().assign(&ui_.notesPreview);
     notesPreview->setVisible(false);
+    notesPreview->setShouldElide(true);
 
     auto lineMod = layout.emplace<Line>(false);
 
@@ -1337,10 +1337,6 @@ void UserInfoPopup::updateNotes()
     static QRegularExpression spaceRegex{"\\s+"};
 
     auto previewText = "Notes: " + userData->notes.replace(spaceRegex, " ");
-    if (previewText.length() > NOTES_PREVIEW_LENGTH)
-    {
-        previewText = previewText.left(NOTES_PREVIEW_LENGTH - 3) + "...";
-    }
 
     this->ui_.notesPreview->setText(previewText);
     this->ui_.notesPreview->setVisible(true);
@@ -1367,7 +1363,7 @@ UserInfoPopup::TimeoutWidget::TimeoutWidget()
         title->addStretch(1);
         auto label = title.emplace<Label>(text);
         label->setStyleSheet("color: #BBB");
-        label->setHasOffset(false);
+        label->setHasPadding(false);
         title->addStretch(1);
 
         auto hbox = vbox.emplace<QHBoxLayout>().withoutMargin();
