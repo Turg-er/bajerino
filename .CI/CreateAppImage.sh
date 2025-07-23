@@ -50,7 +50,7 @@ if [ ! -f "$linuxdeployqt_path" ]; then
 fi
 
 appimagetool_path="appimagetool-x86_64.AppImage"
-appimagetool_url="https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+appimagetool_url="https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
 
 if [ ! -f "$appimagetool_path" ]; then
     echo "Downloading AppImageTool from $appimagetool_url to $appimagetool_path"
