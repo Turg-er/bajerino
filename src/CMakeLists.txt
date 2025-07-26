@@ -615,6 +615,8 @@ set(SOURCE_FILES
         widgets/buttons/Button.hpp
         widgets/buttons/DimButton.cpp
         widgets/buttons/DimButton.hpp
+        widgets/buttons/DrawnButton.cpp
+        widgets/buttons/DrawnButton.hpp
         widgets/buttons/InitUpdateButton.cpp
         widgets/buttons/InitUpdateButton.hpp
         widgets/buttons/LabelButton.cpp
