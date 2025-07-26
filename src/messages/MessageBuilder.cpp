@@ -2146,8 +2146,7 @@ void MessageBuilder::parseThread(const QString &messageContent,
                                 MessageElementFlags(
                                     {MessageElementFlag::BadgeDecrypted,
                                      MessageElementFlag::RepliedMessage}))
-                            ->setScale(0.7)
-                            ->setLink({Link::ViewThread, thread->rootId()});
+                            ->setScale(0.7);
                     }
                 }
 
