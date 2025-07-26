@@ -582,7 +582,10 @@ public:
         "/logging/separatelyStoreStreamLogs",
         false,
     };
-
+    QStringSetting logTimestampFormat = {
+        "/logging/logTimestampFormat",
+        "hh:mm:ss",
+    };
     QStringSetting logPath = {"/logging/path", ""};
 
     QStringSetting pathHighlightSound = {"/highlighting/highlightSoundPath",
