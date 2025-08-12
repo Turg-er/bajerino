@@ -664,6 +664,8 @@ void Application::aboutToQuit()
 
     this->hotkeys->save();
     this->windows->save();
+
+    this->windows->closeAll();
 }
 
 void Application::stop()
