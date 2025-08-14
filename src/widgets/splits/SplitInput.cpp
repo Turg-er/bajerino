@@ -165,11 +165,12 @@ void SplitInput::initLayout()
     auto box = hboxLayout.emplace<QVBoxLayout>().withoutMargin();
     box->setSpacing(0);
     {
-        auto textEditLength =
-            box.emplace<QLabel>().assign(&this->ui_.textEditLength);
-        textEditLength->setAlignment(Qt::AlignRight);
-        box->addStretch(1);
+        this->ui_.textEditLength = new QLabel();
+        // Right-align the labels contents
+        this->ui_.textEditLength->setAlignment(Qt::AlignRight);
+        box->addWidget(this->ui_.textEditLength);
 
+        box->addStretch(1);
         auto inputButtonBox = box.emplace<QBoxLayout>(QBoxLayout::LeftToRight)
                                   .withoutMargin()
                                   .withoutSpacing();
@@ -181,16 +182,15 @@ void SplitInput::initLayout()
         updateEncryptToggleButton();
         inputButtonBox->addWidget(this->ui_.encryptionToggleCheckbox, 0,
                                   Qt::AlignBottom);
-
         inputButtonBox->addSpacing(1);
-        inputButtonBox
-            .emplace<SvgButton>(
-                SvgButton::Src{
-                    .dark = ":/buttons/emote.svg",
-                    .light = ":/buttons/emoteDark.svg",
-                },
-                nullptr, QSize{6, 3})
-            .assign(&this->ui_.emoteButton);
+
+        this->ui_.emoteButton = new SvgButton(
+            {
+                .dark = ":/buttons/emote.svg",
+                .light = ":/buttons/emoteDark.svg",
+            },
+            nullptr, QSize{6, 3});
+        inputButtonBox->addWidget(this->ui_.emoteButton, 0, Qt::AlignRight);
     }
 
     // ---- misc
@@ -279,6 +279,7 @@ void SplitInput::scaleChangedEvent(float scale)
             this->ui_.vbox->setSpacing(this->marginForTheme());
         }
     }
+    // TODO: This font does _not_ get updated when you change your chat font
     this->ui_.textEdit->setFont(
         app->getFonts()->getFont(FontStyle::ChatMedium, scale));
 
@@ -289,8 +290,12 @@ void SplitInput::scaleChangedEvent(float scale)
 
     this->ui_.textEdit->setStyleSheet(this->theme->splits.input.styleSheet);
     this->ui_.textEdit->setPalette(placeholderPalette);
+    // TODO: This font does _not_ get updated when you change your chat font
+    // NOTE: We're using TimestampMedium here to get a font that uses the tnum font feature,
+    // meaning numbers get equal width & don't bounce around while the user is typing.
     this->ui_.textEditLength->setFont(
-        app->getFonts()->getFont(FontStyle::ChatMedium, scale));
+        app->getFonts()->getFont(FontStyle::TimestampMedium, scale));
+    // TODO: This font does _not_ get updated when you change your chat font
     this->ui_.replyLabel->setFont(
         app->getFonts()->getFont(FontStyle::ChatMediumBold, scale));
 }
