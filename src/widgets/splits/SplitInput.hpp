@@ -91,6 +91,8 @@ protected:
 
     virtual void giveFocus(Qt::FocusReason reason);
 
+    void handleToggleEncryption();
+
     QString handleSendMessage(const std::vector<QString> &arguments);
     void postMessageSend(const QString &message,
                          const std::vector<QString> &arguments);

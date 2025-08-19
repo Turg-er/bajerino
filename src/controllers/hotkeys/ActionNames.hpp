@@ -268,6 +268,8 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .argumentsPrompt = "Behavior:",
           }},
          {"undo", ActionDefinition{"Undo"}},
+         {"toggleEncryption",
+          ActionDefinition{.displayName = "Toggle encryption"}},
 
      }},
     {HotkeyCategory::Window,

@@ -412,6 +412,19 @@ void SplitInput::openEmotePopup()
     this->emotePopup_->activateWindow();
 }
 
+void SplitInput::handleToggleEncryption()
+{
+    auto c = this->split_->getChannel();
+    if (c == nullptr)
+    {
+        return;
+    }
+    auto channelStates = getSettings()->encryptionChannelStates.getValue();
+
+    this->ui_.encryptionToggleCheckbox->setChecked(
+        !channelStates.value(c->getName(), true));
+}
+
 QString SplitInput::handleSendMessage(const std::vector<QString> &arguments)
 {
     auto c = this->split_->getChannel();
@@ -756,6 +769,12 @@ void SplitInput::addShortcuts()
              auto cursor = this->ui_.textEdit->textCursor();
              cursor.select(QTextCursor::WordUnderCursor);
              this->ui_.textEdit->setTextCursor(cursor);
+             return "";
+         }},
+        {"toggleEncryption",
+         [this](const std::vector<QString> &arguments) -> QString {
+             (void)arguments;
+             handleToggleEncryption();
              return "";
          }},
     };
