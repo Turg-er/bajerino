@@ -286,6 +286,11 @@ public:
         false,
     };
 
+    BoolSetting pulseTextInputOnSelfMessage = {
+        "/appearance/pulseTextInputOnSelfMessage",
+        false,
+    };
+
     /// Behaviour
     // Encryption
     QStringSetting encryptionKey = {"/encryption/encryptionKey", ""};
