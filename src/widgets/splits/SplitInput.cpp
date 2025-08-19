@@ -452,7 +452,7 @@ void SplitInput::handleToggleEncryption()
     auto channelStates = getSettings()->encryptionChannelStates.getValue();
 
     this->ui_.encryptionToggleCheckbox->setChecked(
-        !channelStates.value(c->getName(), true));
+        !channelStates.value(c->getName(), false));
 }
 
 QString SplitInput::handleSendMessage(const std::vector<QString> &arguments)
