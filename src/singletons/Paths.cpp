@@ -108,7 +108,7 @@ void Paths::initRootDirectory()
 // create directory Chatterino2 instead of Chatterino on windows because the
 // ladder one is takes by Chatterino 1 already
 #ifdef Q_OS_WIN
-        path.replace("chatterino", "Chatterino");
+        path.replace("bajerino", "Bajerino");
 
         path += "2";
 #endif
