@@ -513,6 +513,16 @@ std::tuple<std::optional<EmotePtr>, MessageElementFlags, bool> parseEmote(
     };
 }
 
+EmotePtr makeTomasBadge()
+{
+    return std::make_shared<Emote>(Emote{
+        .name = EmoteName{},
+        .images = ImageSet{Image::fromResourcePixmap(
+            getResources().twitch.tomasBadge, 0.25)},
+        .tooltip = Tooltip{u"Tomas Badge"_s},
+    });
+}
+
 EmotePtr makeDecryptBadge()
 {
     return std::make_shared<Emote>(Emote{
@@ -1675,6 +1685,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     builder.appendTwitchBadges(tags, twitchChannel);
 
+    builder.appendTomasBadge(userID);
+
     builder.appendChatterinoBadges(userID);
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendSeventvBadges(userID);
@@ -2478,6 +2490,15 @@ void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
     auto badgeInfos = parseBadgeInfoTag(tags);
     auto badges = parseBadgeTag(tags);
     appendBadges(this, badges, badgeInfos, twitchChannel);
+}
+
+void MessageBuilder::appendTomasBadge(const QString &userID)
+{
+    if (userID == "1008829938")
+    {
+        this->emplace<BadgeElement>(makeTomasBadge(),
+                                    MessageElementFlag::Badges);
+    }
 }
 
 void MessageBuilder::appendChatterinoBadges(const QString &userID)
