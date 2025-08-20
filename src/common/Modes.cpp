@@ -28,6 +28,10 @@ Modes::Modes()
         {
             this->isExternallyPackaged = true;
         }
+        else if (line == "chatterino")
+        {
+            this->useChatterinoDirectory = true;
+        }
     }
 }
 

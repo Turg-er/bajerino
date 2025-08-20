@@ -9,6 +9,7 @@
 - Minor: Replace icon with custom Bajerino Icon. (59365670f1c6c0ccb3d28d2be5c6acb31525c02b)
 - Minor: Change from 🔓 to a lock png based on svg and make it a proper badge. (73f305b36c088589b11a4a6c8d1266fef575c886) (5468c3e4958f0e6bb01ebf0ded985ff0e5a29baf)
 - Minor: Add hotkey for encryption. (8264e58adabe3eeecd265926f573f043070ff195)
+- Minor: Add mode to use Chatterino directory for settings.
 - Dev: Disabled Doxygen in CMAKE because it was annoying me. (3ff20a840bd8e6741ded6b4202bbd17ddab0828b)
 - Dev: Merge upstream (from 20b92ea0ca186f4a543ea85d5b8153a7c92bb2d0). (5a51771ebbcdfc99767105cf7007d856c76d27fc)
 - Dev: Change channel states map from using `std::map` and `std::string` with `QHash` and `QString` respectively. Implement rapidjson serializer and deserializer for types. (e0f721b453f6864fa2b03981cadb3bf705f841df) (3cd199ead134a31655504795fafa69601a2e353c)
