@@ -88,13 +88,13 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [InstallDelete]
 ; Delete cache on install
-Type: filesandordirs; Name: "{userappdata}\Bajerino\Cache"
+Type: filesandordirs; Name: "{userappdata}\Bajerino2\Cache"
 ; Delete %appdata%\Bajerino on freshinstall
-Type: filesandordirs; Name: "{userappdata}\Bajerino"; Tasks: freshinstall
+Type: filesandordirs; Name: "{userappdata}\Bajerino2"; Tasks: freshinstall
 
 [UninstallDelete]
 ; Delete cache on uninstall
-Type: filesandordirs; Name: "{userappdata}\Bajerino\Cache"
+Type: filesandordirs; Name: "{userappdata}\Bajerino2\Cache"
 
 [Code]
 // Get the VCRT version as a string. Null if the version could not be found.

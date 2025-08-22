@@ -46,4 +46,4 @@ ISCC `
     /DSHIPPED_VCRT_VERSION="$($VCRTVersion.FileDescription)" `
     $defines `
     /O. `
-    "$PSScriptRoot\Bajerino-installer.iss";
+    "$PSScriptRoot\bajerino-installer.iss";
