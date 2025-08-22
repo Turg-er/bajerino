@@ -292,10 +292,12 @@ public:
     };
 
     /// Behaviour
-    // Encryption
+    // Bajerino
     QStringSetting encryptionKey = {"/encryption/encryptionKey", ""};
     ChatterinoSetting<QHash<QString, bool>> encryptionChannelStates = {
         "/encryption/channel_states", {}};
+    BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
+                                        true};
 
     // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",

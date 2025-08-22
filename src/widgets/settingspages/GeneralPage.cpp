@@ -128,10 +128,16 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addLayout(encryptForm);
     SettingWidget::lineEdit("Encryption Password", s.encryptionKey,
                             "You should not leave this blank!", true)
+        ->addKeywords({"bajerino"})
         ->addTo(layout, encryptForm);
     layout.addDescription(
         "This password will be used to encrypt and decrypt all messages. "
         "Whitespace will be trimmed from the start and end of the password.");
+
+    SettingWidget::checkbox("Use lock icon for encryption toggle",
+                            s.useLockIconForToggle)
+        ->addKeywords({"bajerino", "encryption icon"})
+        ->addTo(layout);
 
     layout.addTitle("Interface");
 

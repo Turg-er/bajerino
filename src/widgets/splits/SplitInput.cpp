@@ -250,6 +250,12 @@ void SplitInput::initLayout()
         },
         this->managedConnections_);
 
+    getSettings()->useLockIconForToggle.connect(
+        [this](bool, const auto &) {
+            updateEncryptToggleButton();
+        },
+        this->managedConnections_);
+
     QObject::connect(
         this->ui_.encryptionToggleCheckbox, &QCheckBox::toggled, this,
         [this](bool value) {
@@ -370,25 +376,43 @@ void SplitInput::updateEncryptToggleButton()
 
     this->ui_.encryptionToggleCheckbox->setFixedSize(
         static_cast<int>(24 * scale), static_cast<int>(18 * scale));
-    this->ui_.encryptionToggleCheckbox->setStyleSheet(
-        QString("QCheckBox:hover {"
-                "background: rgba(%1, 0.25);"
-                "}"
-                "QCheckBox::indicator {"
-                "width: %2px;"
-                "height: %2px;"
-                "subcontrol-position: center center;"
-                "padding-bottom: %3px;"
-                "}"
-                "QCheckBox::indicator:unchecked {"
-                "image: url(:/buttons/openlock.svg);"
-                "}"
-                "QCheckBox::indicator:checked {"
-                "image: url(:/buttons/lock.svg);"
-                "}")
-            .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
-            .arg(static_cast<int>(13 * scale))
-            .arg(static_cast<int>(2 * scale)));
+
+    if (!getSettings()->useLockIconForToggle)
+    {
+        this->ui_.encryptionToggleCheckbox->setStyleSheet(
+            QString("QCheckBox:hover {"
+                    "background: rgba(%1, 0.25);"
+                    "}"
+                    "QCheckBox::indicator {"
+                    "width: %2px;"
+                    "height: %2px;"
+                    "subcontrol-position: center center;"
+                    "}")
+                .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
+                .arg(static_cast<int>(14 * scale)));
+    }
+    else
+    {
+        this->ui_.encryptionToggleCheckbox->setStyleSheet(
+            QString("QCheckBox:hover {"
+                    "background: rgba(%1, 0.25);"
+                    "}"
+                    "QCheckBox::indicator {"
+                    "width: %2px;"
+                    "height: %2px;"
+                    "subcontrol-position: center center;"
+                    "padding-bottom: %3px;"
+                    "}"
+                    "QCheckBox::indicator:unchecked {"
+                    "image: url(:/buttons/openlock.svg);"
+                    "}"
+                    "QCheckBox::indicator:checked {"
+                    "image: url(:/buttons/lock.svg);"
+                    "}")
+                .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
+                .arg(static_cast<int>(13 * scale))
+                .arg(static_cast<int>(2 * scale)));
+    }
 }
 
 void SplitInput::updateEmoteButton()
