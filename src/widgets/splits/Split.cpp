@@ -151,6 +151,8 @@ Split::Split(QWidget *parent)
                 case FromTwitchLinkOpenChannelIn::Streamlink:
                     this->openChannelInStreamlink(twitchChannel);
                     break;
+                case FromTwitchLinkOpenChannelIn::CustomPlayer:
+                    this->openChannelInCustomPlayer(twitchChannel);
                 default:
                     qCWarning(chatterinoWidget)
                         << "Unhandled \"FromTwitchLinkOpenChannelIn\" enum "
@@ -804,6 +806,11 @@ void Split::openChannelInStreamlink(const QString channelName)
     }
 }
 
+void Split::openChannelInCustomPlayer(const QString channelName)
+{
+    openInCustomPlayer(channelName);
+}
+
 IndirectChannel Split::getIndirectChannel()
 {
     return this->channel_;
@@ -1101,7 +1108,7 @@ void Split::openInBrowser()
 
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
-        QDesktopServices::openUrl("https://twitch.tv/" +
+        QDesktopServices::openUrl("https://www.twitch.tv/" +
                                   twitchChannel->getName());
     }
 }
@@ -1109,8 +1116,8 @@ void Split::openInBrowser()
 void Split::openWhispersInBrowser()
 {
     auto userName = getApp()->getAccounts()->twitch.getCurrent()->getUserName();
-    QDesktopServices::openUrl("https://twitch.tv/popout/moderator/" + userName +
-                              "/whispers");
+    QDesktopServices::openUrl("https://www.twitch.tv/popout/moderator/" +
+                              userName + "/whispers");
 }
 
 void Split::openBrowserPlayer()
@@ -1124,7 +1131,7 @@ void Split::openModViewInBrowser()
 
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
-        QDesktopServices::openUrl("https://twitch.tv/moderator/" +
+        QDesktopServices::openUrl("https://www.twitch.tv/moderator/" +
                                   twitchChannel->getName());
     }
 }
@@ -1137,10 +1144,9 @@ void Split::openInStreamlink()
 void Split::openWithCustomScheme()
 {
     auto *const channel = this->getChannel().get();
-
     if (auto *const twitchChannel = dynamic_cast<TwitchChannel *>(channel))
     {
-        openInCustomPlayer(twitchChannel->getName());
+        this->openChannelInCustomPlayer(twitchChannel->getName());
     }
 }
 
