@@ -100,4 +100,3 @@ jobs:
           plugins: gcov
           fail_ci_if_error: true
           verbose: true
-        if: false
