@@ -2,6 +2,9 @@
 
 ## Unversioned
 
+## 7.5.4-beta.1
+
+- Bugfix: Fixed paints not appearing as with the browser extension (1d945c3d2bb86c662cd001908549c4e852baa6cb)
 - Dev: Bumped Qt to 6.9.1 on Windows and macOS (f1c50e43b60dcb0d6af44ddc16f23d1c54e4b639).
 
 ## 7.5.3
