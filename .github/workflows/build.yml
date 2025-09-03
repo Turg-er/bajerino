@@ -280,7 +280,7 @@ jobs:
           # binary dependencies
           ./.CI/SetupHomebrewDeps.sh boost openssl
           # build and header-only dependencies
-          brew install rapidjson p7zip create-dmg cmake tree
+          brew install rapidjson p7zip create-dmg tree
         shell: bash
 
       - name: Build (MacOS)

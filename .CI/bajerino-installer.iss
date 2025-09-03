@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "Bajerino"
-#define MyAppVersion "2.5.3"
+#define MyAppVersion "2.5.4"
 #define MyAppPublisher "Bajerino Team"
 #define MyAppURL "https://www.chatterino.com"
 #define MyAppExeName "bajerino.exe"
