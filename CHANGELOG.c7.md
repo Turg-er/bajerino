@@ -2,6 +2,8 @@
 
 ## Unversioned
 
+- Bugfix: Fixed certain paints such as the new "Coder Socks" one not displaying correctly in Chatterino (b306149e0a8d55f99dc9641e47c521b2f1c404a2)
+
 ## 7.5.4-beta.1
 
 - Bugfix: Fixed paints not appearing as with the browser extension (1d945c3d2bb86c662cd001908549c4e852baa6cb)
