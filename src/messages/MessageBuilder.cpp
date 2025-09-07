@@ -79,11 +79,6 @@ const QRegularExpression allUsernamesMentionRegex("^" + regexHelpString);
 
 const QRegularExpression SPACE_REGEX("\\s");
 
-const QSet<QString> zeroWidthEmotes{
-    "SoSnowy",  "IceCold",   "SantaHat", "TopHat",
-    "ReinDeer", "CandyCane", "cvMask",   "cvHazmat",
-};
-
 struct HypeChatPaidLevel {
     std::chrono::seconds duration;
     uint8_t numeric;
@@ -422,7 +417,7 @@ EmotePtr makeSharedChatBadge(const QString &sourceName,
     });
 }
 
-std::tuple<std::optional<EmotePtr>, MessageElementFlags, bool> parseEmote(
+std::tuple<std::optional<EmotePtr>, MessageElementFlags> parseEmote(
     TwitchChannel *twitchChannel, const QString &userID, const EmoteName &name)
 {
     // Emote order:
@@ -447,41 +442,25 @@ std::tuple<std::optional<EmotePtr>, MessageElementFlags, bool> parseEmote(
             getApp()->getSeventvPersonalEmotes()->getEmoteForUser(userID, name);
         if (emote)
         {
-            return {
-                emote,
-                MessageElementFlag::SevenTVEmote,
-                emote.value()->zeroWidth,
-            };
+            return {emote, MessageElementFlag::SevenTVEmote};
         }
 
         emote = twitchChannel->ffzEmote(name);
         if (emote)
         {
-            return {
-                emote,
-                MessageElementFlag::FfzEmote,
-                false,
-            };
+            return {emote, MessageElementFlag::FfzEmote};
         }
 
         emote = twitchChannel->bttvEmote(name);
         if (emote)
         {
-            return {
-                emote,
-                MessageElementFlag::BttvEmote,
-                false,
-            };
+            return {emote, MessageElementFlag::BttvEmote};
         }
 
         emote = twitchChannel->seventvEmote(name);
         if (emote)
         {
-            return {
-                emote,
-                MessageElementFlag::SevenTVEmote,
-                emote.value()->zeroWidth,
-            };
+            return {emote, MessageElementFlag::SevenTVEmote};
         }
     }
 
@@ -490,38 +469,22 @@ std::tuple<std::optional<EmotePtr>, MessageElementFlags, bool> parseEmote(
     emote = globalFfzEmotes->emote(name);
     if (emote)
     {
-        return {
-            emote,
-            MessageElementFlag::FfzEmote,
-            false,
-        };
+        return {emote, MessageElementFlag::FfzEmote};
     }
 
     emote = globalBttvEmotes->emote(name);
     if (emote)
     {
-        return {
-            emote,
-            MessageElementFlag::BttvEmote,
-            zeroWidthEmotes.contains(name.string),
-        };
+        return {emote, MessageElementFlag::BttvEmote};
     }
 
     emote = globalSeventvEmotes->globalEmote(name);
     if (emote)
     {
-        return {
-            emote,
-            MessageElementFlag::SevenTVEmote,
-            emote.value()->zeroWidth,
-        };
+        return {emote, MessageElementFlag::SevenTVEmote};
     }
 
-    return {
-        {},
-        {},
-        false,
-    };
+    return {{}, {}};
 }
 
 }  // namespace
@@ -2253,14 +2216,15 @@ Outcome MessageBuilder::tryAppendEmote(TwitchChannel *twitchChannel,
                                        const QString &userID,
                                        const EmoteName &name)
 {
-    auto [emote, flags, zeroWidth] = parseEmote(twitchChannel, userID, name);
+    auto [emote, flags] = parseEmote(twitchChannel, userID, name);
 
     if (!emote)
     {
         return Failure;
     }
 
-    if (zeroWidth && getSettings()->enableZeroWidthEmotes && !this->isEmpty())
+    if ((*emote)->zeroWidth && getSettings()->enableZeroWidthEmotes &&
+        !this->isEmpty())
     {
         // Attempt to merge current zero-width emote into any previous emotes
         auto *asEmote = dynamic_cast<EmoteElement *>(&this->back());

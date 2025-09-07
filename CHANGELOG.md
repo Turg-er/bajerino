@@ -2,6 +2,11 @@
 
 ## Unversioned
 
+- Bugfix: Fixed crashes that could occur when Lua functions errored with values other than strings. (#6441)
+- Bugfix: Fixed zero-width global BTTV emotes not showing in the `:~` completions. (#6440)
+- Bugfix: Fixed an issue where the update button would be unclickable on macOS and Linux. (#6447, #6453)
+- Bugfix: Fixed flickering tooltips on Wayland when the mouse cursor is over them. (#6451)
+
 ## 2.5.4-beta.1
 
 - Minor: Added `Open in custom player` to `twitch.tv/<channel>` link context menus. (#6403)
