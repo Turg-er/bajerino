@@ -3,6 +3,7 @@
 ## Unversioned
 
 - Bugfix: Fixed certain paints such as the new "Coder Socks" one not displaying correctly in Chatterino (b306149e0a8d55f99dc9641e47c521b2f1c404a2)
+- Dev: Bumped OpenSSL on Windows to 3.5.2 (d9bb47a3e009457120e650138e170a3ef7d1cc56)
 
 ## 7.5.4-beta.1
 
