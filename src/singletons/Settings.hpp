@@ -760,6 +760,8 @@ public:
 
     QStringSetting additionalExtensionIDs{"/misc/additionalExtensionIDs", ""};
 
+    BoolSetting xChatterino7NoHttp2{"/x-chatterino7/no-http2", false};
+
 private:
     ChatterinoSetting<std::vector<HighlightPhrase>> highlightedMessagesSetting =
         {"/highlighting/highlights"};

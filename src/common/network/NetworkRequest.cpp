@@ -3,6 +3,7 @@
 #include "common/network/NetworkPrivate.hpp"
 #include "common/QLogging.hpp"
 #include "common/Version.hpp"
+#include "singletons/Settings.hpp"
 
 #include <QApplication>
 #include <QDebug>
@@ -19,6 +20,12 @@ NetworkRequest::NetworkRequest(const std::string &url,
 {
     this->data->request.setUrl(QUrl(QString::fromStdString(url)));
     this->data->requestType = requestType;
+
+    if (getSettings()->xChatterino7NoHttp2)
+    {
+        this->data->request.setAttribute(QNetworkRequest::Http2AllowedAttribute,
+                                         false);
+    }
 
     this->initializeDefaultValues();
 }
