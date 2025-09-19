@@ -22,22 +22,52 @@ TEST(Emojis, ShortcodeParsing)
 
     const std::vector<TestCase> tests{
         {
-            // input
-            "foo :penguin: bar",
-            // expected output
-            "foo 🐧 bar",
+            .input = "foo :penguin: bar",
+            .expectedOutput = "foo 🐧 bar",
         },
         {
-            // input
-            "foo :nonexistantcode: bar",
-            // expected output
-            "foo :nonexistantcode: bar",
+            .input = "foo :nonexistantcode: bar",
+            .expectedOutput = "foo :nonexistantcode: bar",
         },
         {
-            // input
-            ":male-doctor:",
-            // expected output
-            "👨‍⚕️",
+            .input = ":male-doctor:",
+            .expectedOutput = "👨‍⚕️",
+        },
+        {
+            .input = "foo:penguin:bar",
+            .expectedOutput = "foo:penguin:bar",
+        },
+        {
+            .input = "foo :penguin:bar",
+            .expectedOutput = "foo :penguin:bar",
+        },
+        {
+            .input = "foo:penguin: bar",
+            .expectedOutput = "foo:penguin: bar",
+        },
+        {
+            .input = "foo:penguin:",
+            .expectedOutput = "foo:penguin:",
+        },
+        {
+            .input = ":penguin:bar",
+            .expectedOutput = ":penguin:bar",
+        },
+        {
+            .input = ":penguin::penguin:",
+            .expectedOutput = "🐧🐧",
+        },
+        {
+            .input = "-:penguin::penguin:-",
+            .expectedOutput = "-🐧🐧-",
+        },
+        {
+            .input = "::penguin::penguin::",
+            .expectedOutput = ":🐧🐧:",
+        },
+        {
+            .input = "🐧:penguin:",
+            .expectedOutput = "🐧🐧",
         },
     };
 
