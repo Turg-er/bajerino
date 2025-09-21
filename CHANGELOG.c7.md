@@ -2,6 +2,8 @@
 
 ## Unversioned
 
+## 7.5.4
+
 - Bugfix: Fixed certain paints such as the new "Coder Socks" one not displaying correctly in Chatterino (b306149e0a8d55f99dc9641e47c521b2f1c404a2)
 - Bugfix: Fixed emojis being inserted from shortcodes between words without spaces (some 7TV emotes couldn't be sent, see Chatterino/chatterino2#6356). (341af2f1e66fcc7572d6def4d4232c4cd7905d23)
 - Dev: Bumped OpenSSL on Windows to 3.5.2 (d9bb47a3e009457120e650138e170a3ef7d1cc56)
