@@ -2,6 +2,10 @@
 
 ## Unversioned Bajerino
 
+## Unversioned
+
+## 2.5.4 Bajerino
+
 - Major: Refactor crypto and remove legacy crypto code. (484a8826cfbb2b9ab5cbcfc424975f881504e361)
 - Major: Add custom badge for tomas. (a4cf35e4f3622725ab13e524a8723d5c77c1b1b1)
 - Minor: Change placement of crypto toggle button and change checkbox styling to use unlock and lock svg instead. (653c95ffc95fd959ebbed22a0cca780e6d495a67) (6442faf8ac6e8b7286cbde1030a12f773b305762)
@@ -19,8 +23,6 @@
 - Dev: Merge upstream (from 33918261460041fdda2ee0c80b4a1a754b75842b). (0e50b16941099902a3a5695526748dfabb62d202)
 - Dev: Merge upstream (from ae3089b35cedefcb4b2e31f070fedc9a996a9a68). (4959a07e6b2bccad8edb7d703e054ba603abac56)
 - Dev: Replace custom line edit widget with upstream implementation. Modify to allow auto-trimming as people keep unintentionally entering passwords with whitespace. (551710748e51f7ac48f931777b9276240aa38c4f)
-
-## Unversioned
 
 ## 2.5.4
 
