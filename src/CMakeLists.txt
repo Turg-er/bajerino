@@ -158,6 +158,9 @@ set(SOURCE_FILES
         controllers/completion/TabCompletionModel.cpp
         controllers/completion/TabCompletionModel.hpp
 
+        controllers/emotes/EmoteController.cpp
+        controllers/emotes/EmoteController.hpp
+
         controllers/filters/FilterModel.cpp
         controllers/filters/FilterModel.hpp
         controllers/filters/FilterRecord.cpp
@@ -492,8 +495,6 @@ set(SOURCE_FILES
 
         singletons/CrashHandler.cpp
         singletons/CrashHandler.hpp
-        singletons/Emotes.cpp
-        singletons/Emotes.hpp
         singletons/Fonts.cpp
         singletons/Fonts.hpp
         singletons/ImageUploader.cpp
@@ -947,10 +948,8 @@ if (BUILD_APP)
         target_compile_definitions(${EXECUTABLE_PROJECT} PRIVATE CHATTERINO_WITH_AVIF_PLUGIN)
     endif()
 
-    if(COMMAND add_sanitizers)
+    if(CHATTERINO_SANITIZER_SUPPORT)
         add_sanitizers(${EXECUTABLE_PROJECT})
-    else()
-        message(WARNING "Sanitizers support is disabled")
     endif()
 
     if (CHATTERINO_STATIC_QT_BUILD)

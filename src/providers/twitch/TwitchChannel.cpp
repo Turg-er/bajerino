@@ -8,6 +8,7 @@
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/emotes/EmoteController.hpp"
 #include "controllers/notifications/NotificationController.hpp"
 #include "controllers/twitch/LiveController.hpp"
 #include "debug/AssertInGuiThread.hpp"
@@ -21,6 +22,7 @@
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/bttv/BttvLiveUpdates.hpp"
 #include "providers/bttv/liveupdates/BttvLiveUpdateMessages.hpp"
+#include "providers/emoji/Emojis.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/recentmessages/Api.hpp"
@@ -37,7 +39,6 @@
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "providers/twitch/TwitchUsers.hpp"
-#include "singletons/Emotes.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Toasts.hpp"
@@ -1559,6 +1560,20 @@ void TwitchChannel::refreshPubSub()
 
     auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
 
+    getApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
+
+    if (currentAccount->isAnon())
+    {
+        this->eventSubChannelModerateHandle.reset();
+        this->eventSubAutomodMessageHoldHandle.reset();
+        this->eventSubAutomodMessageUpdateHandle.reset();
+        this->eventSubSuspiciousUserMessageHandle.reset();
+        this->eventSubSuspiciousUserUpdateHandle.reset();
+        this->eventSubChannelChatUserMessageHoldHandle.reset();
+        this->eventSubChannelChatUserMessageUpdateHandle.reset();
+        return;
+    }
+
     const auto &currentTwitchUserID = currentAccount->getUserId();
 
     if (this->hasModRights())
@@ -1696,8 +1711,6 @@ void TwitchChannel::refreshPubSub()
                     },
             });
     }
-
-    getApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
 }
 
 void TwitchChannel::refreshChatters()

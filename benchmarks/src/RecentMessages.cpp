@@ -4,7 +4,7 @@
 #include "messages/Emote.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "mocks/DisabledStreamerMode.hpp"
-#include "mocks/Emotes.hpp"
+#include "mocks/EmoteController.hpp"
 #include "mocks/LinkResolver.hpp"
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
@@ -42,7 +42,7 @@ public:
     {
     }
 
-    IEmotes *getEmotes() override
+    EmoteController *getEmotes() override
     {
         return &this->emotes;
     }
@@ -124,7 +124,7 @@ public:
 
     mock::EmptyLogging logging;
     AccountController accounts;
-    mock::Emotes emotes;
+    mock::EmoteController emotes;
     mock::UserDataController userData;
     mock::MockTwitchIrcServer twitch;
     mock::EmptyLinkResolver linkResolver;
