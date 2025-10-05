@@ -472,8 +472,7 @@ void EmotePopup::reloadEmotes()
              getApp()->getSeventvPersonalEmotes()->getEmoteSetsForUser(
                  getApp()->getAccounts()->twitch.getCurrent()->getUserId()))
         {
-            addEmotes(*subChannel, *map, "7TV",
-                      MessageElementFlag::SevenTVEmote);
+            addEmotes(*subChannel, *map, "7TV");
         }
     }
     // global
@@ -599,7 +598,7 @@ void EmotePopup::filterTwitchEmotes(std::shared_ptr<Channel> searchChannel,
         if (!seventvPersonalEmotes.empty())
         {
             addEmotes(*searchChannel, seventvPersonalEmotes,
-                      "SevenTV (Personal)", MessageElementFlag::SevenTVEmote);
+                      "SevenTV (Personal)");
         }
     }
 }

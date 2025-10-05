@@ -2399,12 +2399,11 @@ void TwitchChannel::upsertPersonalSeventvEmotes(
 
                 std::vector<LayeredEmoteElement::Emote> layers{
                     {.ptr = baseEmote, .flags = baseEmoteElement->getFlags()},
-                    {.ptr = emote, .flags = MessageElementFlag::SevenTVEmote},
+                    {.ptr = emote, .flags = MessageElementFlag::Emote},
                 };
                 elements.emplace_back(std::make_unique<LayeredEmoteElement>(
                     std::move(layers),
-                    baseEmoteElement->getFlags() |
-                        MessageElementFlag::SevenTVEmote,
+                    baseEmoteElement->getFlags() | MessageElementFlag::Emote,
                     textElement->color()));
                 return true;
             }
@@ -2414,8 +2413,8 @@ void TwitchChannel::upsertPersonalSeventvEmotes(
             if (asLayered)
             {
                 asLayered->addEmoteLayer(
-                    {.ptr = emote, .flags = MessageElementFlag::SevenTVEmote});
-                asLayered->addFlags(MessageElementFlag::SevenTVEmote);
+                    {.ptr = emote, .flags = MessageElementFlag::Emote});
+                asLayered->addFlags(MessageElementFlag::Emote);
                 return true;
             }
             return false;
@@ -2443,7 +2442,7 @@ void TwitchChannel::upsertPersonalSeventvEmotes(
             flush();
 
             elements.emplace_back(std::make_unique<EmoteElement>(
-                emoteIt->second, MessageElementFlag::SevenTVEmote));
+                emoteIt->second, MessageElementFlag::Emote));
         }
 
         if (anyChange)
