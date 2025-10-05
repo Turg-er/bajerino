@@ -2,6 +2,8 @@
 
 ## Unversioned
 
+- Dev: Bumped Qt to 6.9.3 on Windows and macOS due to CVE-2025-10728 and CVE-2025-10729 (74077350da2d4cfff2ede0ce0ebb11654253b440)
+
 ## 7.5.4
 
 - Bugfix: Fixed certain paints such as the new "Coder Socks" one not displaying correctly in Chatterino (b306149e0a8d55f99dc9641e47c521b2f1c404a2)
