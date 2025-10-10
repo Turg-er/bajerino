@@ -145,7 +145,12 @@ find_package(Qt${MAJOR_QT_VERSION} REQUIRED
     Svg
     Concurrent
 )
+
 find_package(Qt${MAJOR_QT_VERSION} COMPONENTS WidgetsPrivate)
+if(CHATTERINO_ALLOW_PRIVATE_QT_API)
+    # Only exists since 6.10 and prints a warning regarding private headers
+    find_package(Qt${MAJOR_QT_VERSION} COMPONENTS GuiPrivate)
+endif()
 
 message(STATUS "Qt version: ${Qt${MAJOR_QT_VERSION}_VERSION}")
 
