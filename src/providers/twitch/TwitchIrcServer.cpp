@@ -12,6 +12,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/bttv/BttvLiveUpdates.hpp"
+#include "providers/bttv/liveupdates/BttvLiveUpdateMessages.hpp"  // IWYU pragma: keep
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/irc/IrcConnection2.hpp"
 #include "providers/seventv/eventapi/Dispatch.hpp"  // IWYU pragma: keep
@@ -881,8 +882,6 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                     },
                     this);
             });
-
-        bttvLiveUpdates->start();
     }
     else
     {
@@ -962,21 +961,16 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.personalEmoteSetAdded,
             [&](const auto &data) {
-                postToThread(
-                    [this, data]() {
-                        this->forEachChannelAndSpecialChannels([=](auto chan) {
-                            if (auto *twitchChannel =
-                                    dynamic_cast<TwitchChannel *>(chan.get()))
-                            {
-                                twitchChannel->upsertPersonalSeventvEmotes(
-                                    data.first, data.second);
-                            }
-                        });
-                    },
-                    this);
+                assertInGuiThread();
+                this->forEachChannelAndSpecialChannels([=](auto chan) {
+                    if (auto *twitchChannel =
+                            dynamic_cast<TwitchChannel *>(chan.get()))
+                    {
+                        twitchChannel->upsertPersonalSeventvEmotes(data.first,
+                                                                   data.second);
+                    }
+                });
             });
-
-        seventvEventAPI->start();
     }
     else
     {
