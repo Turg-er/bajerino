@@ -6,6 +6,8 @@
 #include "providers/seventv/eventapi/Subscription.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvEventAPI.hpp"
+#include "providers/seventv/SeventvPaints.hpp"
+#include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "util/QMagicEnum.hpp"
 
 #include <QJsonArray>
@@ -99,6 +101,10 @@ void Client::handleDispatch(const Dispatch &dispatch)
 {
     switch (dispatch.type)
     {
+        case SubscriptionType::CreateEmoteSet: {
+            this->onEmoteSetCreate(dispatch);
+        }
+        break;
         case SubscriptionType::UpdateEmoteSet: {
             this->onEmoteSetUpdate(dispatch);
         }
@@ -146,13 +152,8 @@ void Client::handleDispatch(const Dispatch &dispatch)
             }
         }
         break;
-        // NOLINTNEXTLINE(bugprone-branch-clone)
         case SubscriptionType::ResetEntitlement: {
             // unhandled (not clear what we'd do here yet)
-        }
-        break;
-        case SubscriptionType::CreateEmoteSet: {
-            // unhandled (c2 does not support custom emote sets)
         }
         break;
         default: {
@@ -172,7 +173,16 @@ void Client::onEmoteSetUpdate(const Dispatch &dispatch)
     //   pulled:  Array<{ key,        old_value }>,
     //   updated: Array<{ key, value, old_value }>,
     // }
-    for (const auto pushedRef : dispatch.body["pushed"].toArray())
+    auto pushedArray = dispatch.body["pushed"].toArray();
+    auto pulledArray = dispatch.body["pulled"].toArray();
+    auto updatedArray = dispatch.body["updated"].toArray();
+    qCDebug(chatterinoSeventvEventAPI).nospace()
+        << "Update emote set " << dispatch.id
+        << " added: " << pushedArray.count()
+        << ", removed: " << pulledArray.count()
+        << ", updated: " << updatedArray.count();
+
+    for (const auto pushedRef : pushedArray)
     {
         auto pushed = pushedRef.toObject();
         if (pushed["key"].toString() != "emotes")
@@ -192,7 +202,7 @@ void Client::onEmoteSetUpdate(const Dispatch &dispatch)
                 << "Invalid dispatch" << dispatch.body;
         }
     }
-    for (const auto updatedRef : dispatch.body["updated"].toArray())
+    for (const auto updatedRef : updatedArray)
     {
         auto updated = updatedRef.toObject();
         if (updated["key"].toString() != "emotes")
@@ -214,7 +224,7 @@ void Client::onEmoteSetUpdate(const Dispatch &dispatch)
                 << "Invalid dispatch" << dispatch.body;
         }
     }
-    for (const auto pulledRef : dispatch.body["pulled"].toArray())
+    for (const auto pulledRef : pulledArray)
     {
         auto pulled = pulledRef.toObject();
         if (pulled["key"].toString() != "emotes")
@@ -235,6 +245,31 @@ void Client::onEmoteSetUpdate(const Dispatch &dispatch)
                 << "Invalid dispatch" << dispatch.body;
         }
     }
+
+    if (!this->lastPersonalEmoteAssignment_)
+    {
+        return;
+    }
+
+    if (this->lastPersonalEmoteAssignment_->emoteSetID == dispatch.id)
+    {
+        auto *app = tryGetApp();
+        if (!app)
+        {
+            return;
+        }
+        auto emoteSet =
+            app->getSeventvPersonalEmotes()->getEmoteSetByID(dispatch.id);
+        if (emoteSet)
+        {
+            qCDebug(chatterinoSeventvEventAPI) << "Flushed last emote set";
+            this->manager_.signals_.personalEmoteSetAdded.invoke({
+                this->lastPersonalEmoteAssignment_->userName,
+                *emoteSet,
+            });
+        }
+    }
+    this->lastPersonalEmoteAssignment_ = std::nullopt;
 }
 
 void Client::onUserUpdate(const Dispatch &dispatch)
@@ -274,7 +309,6 @@ void Client::onUserUpdate(const Dispatch &dispatch)
 }
 
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
-
 void Client::onCosmeticCreate(const CosmeticCreateDispatch &cosmetic)
 {
     auto *app = tryGetApp();
@@ -288,6 +322,10 @@ void Client::onCosmeticCreate(const CosmeticCreateDispatch &cosmetic)
     {
         case CosmeticKind::Badge: {
             badges->registerBadge(cosmetic.data);
+        }
+        break;
+        case CosmeticKind::Paint: {
+            app->getSeventvPaints()->addPaint(cosmetic.data);
         }
         break;
         default:
@@ -312,6 +350,39 @@ void Client::onEntitlementCreate(
                                       UserId{entitlement.userID});
         }
         break;
+        case CosmeticKind::Paint: {
+            app->getSeventvPaints()->assignPaintToUser(
+                entitlement.refID, UserName{entitlement.userName});
+        }
+        break;
+        case CosmeticKind::EmoteSet: {
+            qCDebug(chatterinoSeventvEventAPI)
+                << "Assign user" << entitlement.userID << "to emote set"
+                << entitlement.refID;
+            if (auto set =
+                    app->getSeventvPersonalEmotes()->assignUserToEmoteSet(
+                        entitlement.refID, entitlement.userID))
+            {
+                if ((*set)->empty())
+                {
+                    qCDebug(chatterinoSeventvEventAPI)
+                        << "Saving emote set as it's empty to wait for further "
+                           "updates";
+                    this->lastPersonalEmoteAssignment_ =
+                        LastPersonalEmoteAssignment{
+                            .userName = entitlement.userName,
+                            .emoteSetID = entitlement.refID,
+                        };
+                }
+                else
+                {
+                    this->lastPersonalEmoteAssignment_ = std::nullopt;
+                    this->manager_.signals_.personalEmoteSetAdded.invoke(
+                        {entitlement.userName, *set});
+                }
+            }
+        }
+        break;
         default:
             break;
     }
@@ -334,8 +405,45 @@ void Client::onEntitlementDelete(
                                        UserId{entitlement.userID});
         }
         break;
+        case CosmeticKind::Paint: {
+            app->getSeventvPaints()->clearPaintFromUser(
+                entitlement.refID, UserName{entitlement.userName});
+        }
+        break;
         default:
             break;
+    }
+}
+
+void Client::onEmoteSetCreate(const Dispatch &dispatch)
+{
+    EmoteSetCreateDispatch createDispatch(dispatch.body["object"].toObject());
+    if (!createDispatch.validate())
+    {
+        qCDebug(chatterinoSeventvEventAPI)
+            << "Invalid dispatch" << dispatch.body;
+        return;
+    }
+
+    auto *app = tryGetApp();
+    if (!app)
+    {
+        return;  // shutting down
+    }
+
+    // other flags are "immutable" and "privileged"
+    if (createDispatch.isPersonalOrCommercial)
+    {
+        qCDebug(chatterinoSeventvEventAPI)
+            << "Create emote set" << createDispatch.emoteSetID;
+        app->getSeventvPersonalEmotes()->createEmoteSet(
+            createDispatch.emoteSetID);
+    }
+    else
+    {
+        qCDebug(chatterinoSeventvEventAPI)
+            << "Ignoring emote set" << createDispatch.emoteSetID
+            << "because it doesn't have the expected flags";
     }
 }
 // NOLINTEND(readability-convert-member-functions-to-static)

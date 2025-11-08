@@ -9,7 +9,7 @@
 
 namespace chatterino {
 class SeventvEventAPI;
-
+class EmoteMap;
 }  // namespace chatterino
 
 namespace chatterino::seventv::eventapi {
@@ -34,6 +34,7 @@ public:
 private:
     void handleDispatch(const Dispatch &dispatch);
 
+    void onEmoteSetCreate(const Dispatch &dispatch);
     void onEmoteSetUpdate(const Dispatch &dispatch);
     void onUserUpdate(const Dispatch &dispatch);
     void onCosmeticCreate(const CosmeticCreateDispatch &cosmetic);
@@ -46,6 +47,17 @@ private:
         lastHeartbeat_;
     std::atomic<std::chrono::milliseconds> heartbeatInterval_;
     SeventvEventAPI &manager_;
+
+    struct LastPersonalEmoteAssignment {
+        QString userName;
+        QString emoteSetID;
+        std::shared_ptr<const EmoteMap> emoteSet;
+    };
+
+    /// This is a workaround for 7TV sending `CreateEntitlement` before
+    /// `UpdateEmoteSet`. We only upsert emotes when a user gets assigned a
+    /// new emote set, but in this case, we're upserting after updating as well.
+    std::optional<LastPersonalEmoteAssignment> lastPersonalEmoteAssignment_;
 };
 
 }  // namespace chatterino::seventv::eventapi

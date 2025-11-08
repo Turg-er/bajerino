@@ -961,15 +961,18 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.personalEmoteSetAdded,
             [&](const auto &data) {
-                assertInGuiThread();
-                this->forEachChannelAndSpecialChannels([=](auto chan) {
-                    if (auto *twitchChannel =
-                            dynamic_cast<TwitchChannel *>(chan.get()))
-                    {
-                        twitchChannel->upsertPersonalSeventvEmotes(data.first,
-                                                                   data.second);
-                    }
-                });
+                postToThread(
+                    [this, data]() {
+                        this->forEachChannelAndSpecialChannels([=](auto chan) {
+                            if (auto *twitchChannel =
+                                    dynamic_cast<TwitchChannel *>(chan.get()))
+                            {
+                                twitchChannel->upsertPersonalSeventvEmotes(
+                                    data.first, data.second);
+                            }
+                        });
+                    },
+                    this);
             });
     }
     else
