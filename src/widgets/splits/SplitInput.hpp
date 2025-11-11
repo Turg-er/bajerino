@@ -195,6 +195,8 @@ protected:
 
     QPropertyAnimation backgroundColorAnimation;
 
+    void updateFonts();
+
 private Q_SLOTS:
     void editTextChanged();
 
