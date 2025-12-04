@@ -493,7 +493,7 @@ EmotePtr makeTomasBadge()
         .name = EmoteName{},
         .images = ImageSet{Image::fromResourcePixmap(
             getResources().twitch.tomasBadge, 0.25)},
-        .tooltip = Tooltip{u"Tomas Badge"_s},
+        .tooltip = Tooltip{u"Big T"_s},
     });
 }
 
