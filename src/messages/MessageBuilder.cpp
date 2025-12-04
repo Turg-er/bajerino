@@ -41,6 +41,7 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/BajerinoHelpers.hpp"
 #include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
@@ -231,6 +232,11 @@ QString stylizeUsername(const QString &username, const Message &message)
     if (auto nicknameText = getSettings()->matchNickname(usernameText))
     {
         usernameText = *nicknameText;
+    }
+
+    if (isBig3(message.userID))
+    {
+        return noticeBig3(usernameText);
     }
 
     return usernameText;

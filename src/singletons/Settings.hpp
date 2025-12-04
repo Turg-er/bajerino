@@ -299,6 +299,8 @@ public:
     BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
                                         true};
 
+    BoolSetting big3Noticer = {"/encryption/big3Noticer", true};
+
     // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",
                                           true};
