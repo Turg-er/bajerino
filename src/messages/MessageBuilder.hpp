@@ -176,6 +176,7 @@ public:
     /// Make a "CHANNEL_NAME has gone live!" message
     static MessagePtr makeLiveMessage(const QString &channelName,
                                       const QString &channelID,
+                                      const QString &title,
                                       MessageFlags extraFlags = {});
 
     // Messages in normal chat for channel stuff
