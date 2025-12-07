@@ -16,6 +16,7 @@
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
 #include "mocks/UserData.hpp"
+#include "providers/bttv/BttvBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPersonalEmotes.hpp"
@@ -103,6 +104,11 @@ public:
         return &this->ffzBadges;
     }
 
+    BttvBadges *getBttvBadges() override
+    {
+        return &this->bttvBadges;
+    }
+
     SeventvBadges *getSeventvBadges() override
     {
         return &this->seventvBadges;
@@ -160,6 +166,7 @@ public:
     mock::MockTwitchIrcServer twitch;
     mock::ChatterinoBadges chatterinoBadges;
     FfzBadges ffzBadges;
+    BttvBadges bttvBadges;
     SeventvBadges seventvBadges;
     HighlightController highlights;
     SeventvPersonalEmotes personalEmotes;

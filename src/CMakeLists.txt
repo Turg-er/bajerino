@@ -99,6 +99,10 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/GetModerators.hpp
         controllers/commands/builtin/twitch/GetVIPs.cpp
         controllers/commands/builtin/twitch/GetVIPs.hpp
+        controllers/commands/builtin/twitch/Poll.cpp
+        controllers/commands/builtin/twitch/Poll.hpp
+        controllers/commands/builtin/twitch/Prediction.cpp
+        controllers/commands/builtin/twitch/Prediction.hpp
         controllers/commands/builtin/twitch/Raid.cpp
         controllers/commands/builtin/twitch/Raid.hpp
         controllers/commands/builtin/twitch/RemoveModerator.cpp
@@ -193,12 +197,15 @@ set(SOURCE_FILES
         controllers/highlights/HighlightBadge.hpp
         controllers/highlights/HighlightBlacklistModel.cpp
         controllers/highlights/HighlightBlacklistModel.hpp
+        controllers/highlights/HighlightCheck.hpp
         controllers/highlights/HighlightController.cpp
         controllers/highlights/HighlightController.hpp
         controllers/highlights/HighlightModel.cpp
         controllers/highlights/HighlightModel.hpp
         controllers/highlights/HighlightPhrase.cpp
         controllers/highlights/HighlightPhrase.hpp
+        controllers/highlights/HighlightResult.cpp
+        controllers/highlights/HighlightResult.hpp
         controllers/highlights/UserHighlightModel.cpp
         controllers/highlights/UserHighlightModel.hpp
 
@@ -243,6 +250,8 @@ set(SOURCE_FILES
         controllers/pings/MutedChannelModel.hpp
 
 
+        controllers/plugins/api/Accounts.cpp
+        controllers/plugins/api/Accounts.hpp
         controllers/plugins/api/ChannelRef.cpp
         controllers/plugins/api/ChannelRef.hpp
         controllers/plugins/api/EventType.hpp
@@ -344,23 +353,8 @@ set(SOURCE_FILES
         providers/NetworkConfigurationProvider.cpp
         providers/NetworkConfigurationProvider.hpp
 
-        providers/seventv/SeventvBadges.cpp
-        providers/seventv/SeventvBadges.hpp
-        providers/seventv/SeventvPaints.cpp
-        providers/seventv/SeventvPaints.hpp
-        providers/seventv/SeventvEmotes.cpp
-        providers/seventv/SeventvEmotes.hpp
-        providers/seventv/paints/Paint.hpp
-        providers/seventv/paints/Paint.cpp
-        providers/seventv/paints/PaintDropShadow.hpp
-        providers/seventv/paints/PaintDropShadow.cpp
-        providers/seventv/paints/LinearGradientPaint.hpp
-        providers/seventv/paints/LinearGradientPaint.cpp
-        providers/seventv/paints/RadialGradientPaint.hpp
-        providers/seventv/paints/RadialGradientPaint.cpp
-        providers/seventv/paints/UrlPaint.hpp
-        providers/seventv/paints/UrlPaint.cpp
-
+        providers/bttv/BttvBadges.cpp
+        providers/bttv/BttvBadges.hpp
         providers/bttv/BttvEmotes.cpp
         providers/bttv/BttvEmotes.hpp
         providers/bttv/BttvLiveUpdates.cpp
@@ -423,8 +417,21 @@ set(SOURCE_FILES
         providers/seventv/SeventvEmotes.hpp
         providers/seventv/SeventvEventAPI.cpp
         providers/seventv/SeventvEventAPI.hpp
+        providers/seventv/SeventvPaints.cpp
+        providers/seventv/SeventvPaints.hpp
         providers/seventv/SeventvPersonalEmotes.cpp
         providers/seventv/SeventvPersonalEmotes.hpp
+
+        providers/seventv/paints/Paint.hpp
+        providers/seventv/paints/Paint.cpp
+        providers/seventv/paints/PaintDropShadow.hpp
+        providers/seventv/paints/PaintDropShadow.cpp
+        providers/seventv/paints/LinearGradientPaint.hpp
+        providers/seventv/paints/LinearGradientPaint.cpp
+        providers/seventv/paints/RadialGradientPaint.hpp
+        providers/seventv/paints/RadialGradientPaint.cpp
+        providers/seventv/paints/UrlPaint.hpp
+        providers/seventv/paints/UrlPaint.cpp
 
         providers/seventv/eventapi/Client.cpp
         providers/seventv/eventapi/Client.hpp
@@ -535,6 +542,8 @@ set(SOURCE_FILES
         util/AbandonObject.hpp
         util/AttachToConsole.cpp
         util/AttachToConsole.hpp
+        util/BadgeRegistry.cpp
+        util/BadgeRegistry.hpp
         util/CancellationToken.hpp
         util/ChannelHelpers.hpp
         util/Clipboard.cpp
