@@ -16,7 +16,7 @@ namespace chatterino::seventv::eventapi {
 
 Client::Client(SeventvEventAPI &manager,
                std::chrono::milliseconds heartbeatInterval)
-    : BasicPubSubClient<Subscription>(100)
+    : BasicPubSubClient(100)
     , lastHeartbeat_(std::chrono::steady_clock::now())
     , heartbeatInterval_(heartbeatInterval)
     , manager_(manager)
@@ -25,7 +25,7 @@ Client::Client(SeventvEventAPI &manager,
 
 void Client::onOpen()
 {
-    BasicPubSubClient<Subscription>::onOpen();
+    BasicPubSubClient::onOpen();
     this->lastHeartbeat_.store(std::chrono::steady_clock::now(),
                                std::memory_order::relaxed);
 }
