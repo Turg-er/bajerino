@@ -317,6 +317,7 @@ private:
     void appendTomasBadge(const QString &userID);
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
+    void appendBttvBadges(const QString &userID);
     void appendSeventvBadges(const QString &userID);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,

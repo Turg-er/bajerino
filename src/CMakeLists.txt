@@ -250,6 +250,8 @@ set(SOURCE_FILES
         controllers/pings/MutedChannelModel.hpp
 
 
+        controllers/plugins/api/Accounts.cpp
+        controllers/plugins/api/Accounts.hpp
         controllers/plugins/api/ChannelRef.cpp
         controllers/plugins/api/ChannelRef.hpp
         controllers/plugins/api/EventType.hpp
@@ -351,6 +353,8 @@ set(SOURCE_FILES
         providers/NetworkConfigurationProvider.cpp
         providers/NetworkConfigurationProvider.hpp
 
+        providers/bttv/BttvBadges.cpp
+        providers/bttv/BttvBadges.hpp
         providers/bttv/BttvEmotes.cpp
         providers/bttv/BttvEmotes.hpp
         providers/bttv/BttvLiveUpdates.cpp
@@ -429,12 +433,9 @@ set(SOURCE_FILES
         providers/twitch/IrcMessageHandler.hpp
         providers/twitch/PubSubClient.cpp
         providers/twitch/PubSubClient.hpp
-        providers/twitch/PubSubClientOptions.hpp
-        providers/twitch/PubSubHelpers.hpp
         providers/twitch/PubSubManager.cpp
         providers/twitch/PubSubManager.hpp
         providers/twitch/PubSubMessages.hpp
-        providers/twitch/PubSubWebsocket.hpp
         providers/twitch/TwitchAccount.cpp
         providers/twitch/TwitchAccount.hpp
         providers/twitch/TwitchAccountManager.cpp
@@ -523,6 +524,8 @@ set(SOURCE_FILES
         util/AbandonObject.hpp
         util/AttachToConsole.cpp
         util/AttachToConsole.hpp
+        util/BadgeRegistry.cpp
+        util/BadgeRegistry.hpp
         util/BajerinoHelpers.cpp
         util/BajerinoHelpers.hpp
         util/CancellationToken.hpp
@@ -884,7 +887,6 @@ if (CHATTERINO_GENERATE_COVERAGE)
         EXCLUDE "lib/settings/*"
         EXCLUDE "lib/signals/*"
         EXCLUDE "lib/sol2/*"
-        EXCLUDE "lib/websocketpp/*"
         EXCLUDE "lib/WinToast/*"
 
         EXCLUDE "*/ui_*.h"
@@ -916,7 +918,6 @@ target_link_libraries(${LIBRARY_PROJECT}
         Pajlada::Serialize
         Pajlada::Settings
         Pajlada::Signals
-        websocketpp::websocketpp
         Threads::Threads
         LRUCache
         MagicEnum
@@ -930,7 +931,7 @@ endif()
 
 if (CHATTERINO_ALLOW_PRIVATE_QT_API)
     target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt${MAJOR_QT_VERSION}::GuiPrivate)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC 
+    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
         CHATTERINO_WITH_PRIVATE_QT_API)
 endif()
 
