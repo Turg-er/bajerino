@@ -1960,7 +1960,8 @@ void TwitchChannel::setCheerEmoteSets(
     *this->cheerEmoteSets_.access() = std::move(emoteSets);
 }
 
-void TwitchChannel::createClip()
+void TwitchChannel::createClip(const QString &title,
+                               const std::optional<int> duration)
 {
     if (!this->isLive())
     {
@@ -1984,7 +1985,7 @@ void TwitchChannel::createClip()
     this->isClipCreationInProgress = true;
 
     getHelix()->createClip(
-        this->roomId(),
+        this->roomId(), title, duration,
         // successCallback
         [this](const HelixClip &clip) {
             MessageBuilder builder;
