@@ -669,7 +669,7 @@ void UserInfoPopup::themeChangedEvent()
 
 void UserInfoPopup::scaleChangedEvent(float /*scale*/)
 {
-    themeChangedEvent();
+    this->themeChangedEvent();
 
     QTimer::singleShot(20, this, [this] {
         auto geo = this->geometry();
@@ -858,7 +858,7 @@ void UserInfoPopup::setData(const QString &name,
     if (isId)
     {
         this->userId_ = name.mid(idPrefix.size());
-        updateNotes();
+        this->updateNotes();
         this->userName_ = "";
     }
     else
