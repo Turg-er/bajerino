@@ -12,6 +12,7 @@ class Chatterino(ConanFile):
         "with_openssl3": True,
         "openssl*:shared": True,
         "boost*:header_only": True,
+        "hunspell*:shared": False,
     }
     options = {
         "with_benchmark": [True, False],
@@ -31,6 +32,7 @@ class Chatterino(ConanFile):
             self.requires("benchmark/1.9.0")
 
         self.requires("openssl/3.6.0")
+        self.requires("hunspell/1.7.2")
 
     def generate(self):
         tc = CMakeToolchain(self)
