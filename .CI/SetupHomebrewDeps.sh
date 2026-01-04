@@ -82,3 +82,7 @@ echo "Relinking OpenSSL 3 libcrypto"
 c2-make-universal-dylib lib/libcrypto.dylib
 echo "Relinking OpenSSL 3 libssl"
 c2-make-universal-dylib lib/libssl.dylib
+
+echo "Relinking Hunspell"
+c2-make-universal-dylib lib/libhunspell-1.7.dylib
+c2-make-universal-dylib lib/libhunspell-1.7.0.dylib
