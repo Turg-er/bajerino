@@ -115,8 +115,9 @@ std::shared_ptr<Message> Message::clone() const
     cloned->channelName = this->channelName;
     cloned->usernameColor = this->usernameColor;
     cloned->serverReceivedTime = this->serverReceivedTime;
-    cloned->badges = this->badges;
-    cloned->badgeInfos = this->badgeInfos;
+    cloned->twitchBadges = this->twitchBadges;
+    cloned->twitchBadgeInfos = this->twitchBadgeInfos;
+    cloned->externalBadges = this->externalBadges;
     cloned->highlightColor = this->highlightColor;
     cloned->replyThread = this->replyThread;
     cloned->count = this->count;
