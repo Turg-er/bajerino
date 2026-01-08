@@ -39,6 +39,7 @@ struct HelixVip;
 using HelixModerator = HelixVip;
 struct ChannelPointReward;
 struct TwitchEmoteOccurrence;
+class ChannelChatters;
 
 namespace linkparser {
 struct Parsed;
@@ -166,6 +167,13 @@ public:
     // Returns the TextElement that was emplaced.
     TextElement *emplaceSystemTextAndUpdate(const QString &text,
                                             QString &toUpdate);
+
+    void addWordFromUserMessage(QStringView string,
+                                ChannelChatters *chatters = nullptr);
+
+    void appendEmote(const EmotePtr &emote);
+
+    MessageColor textColor() const;
 
     static void triggerHighlights(const Channel *channel,
                                   const HighlightAlert &alert);

@@ -6,9 +6,13 @@
 
 #include "Application.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
+#include "providers/kick/KickChatServer.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Theme.hpp"
+#include "widgets/buttons/LabelButton.hpp"
+#include "widgets/helper/NotebookTab.hpp"
+#include "widgets/Notebook.hpp"
 
 #include <QDialogButtonBox>
 #include <QEvent>
@@ -19,10 +23,147 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QStackedLayout>
 #include <QTableView>
 #include <QVBoxLayout>
 
+#include <vector>
+
+namespace {
+
+using namespace chatterino;
+
+QWidget *makeLine(bool horizontal)
+{
+    auto *line = new QFrame;
+    line->setFrameShape(horizontal ? QFrame::HLine : QFrame::VLine);
+    line->setFrameShadow(QFrame::Sunken);
+    line->setLineWidth(1);
+    return line;
+}
+
+QWidget *makeHLine()
+{
+    return makeLine(true);
+}
+QWidget *makeVLine()
+{
+    return makeLine(false);
+}
+
+class MicroNotebookButton : public LabelButton
+{
+public:
+    MicroNotebookButton(const QString &text)
+        : LabelButton(text, nullptr, {6, 3})
+    {
+    }
+
+    void setSelected(bool selected)
+    {
+        if (this->selected == selected)
+        {
+            return;
+        }
+        this->selected = selected;
+        this->invalidateContent();
+    }
+
+protected:
+    void paintContent(QPainter &painter) override
+    {
+        painter.setPen({});
+        if (this->selected)
+        {
+            painter.setBrush(getTheme()->tabs.selected.backgrounds.regular);
+        }
+        else
+        {
+            painter.setBrush(getTheme()->tabs.regular.backgrounds.regular);
+        }
+        painter.drawRect(this->rect());
+
+        if (this->selected)
+        {
+            painter.setPen({getTheme()->tabs.selected.line.regular, 1});
+            painter.drawLine(this->rect().topLeft() + QPoint{0, 1},
+                             this->rect().topRight() + QPoint{0, 1});
+        }
+    }
+
+private:
+    bool selected = false;
+};
+}  // namespace
+
 namespace chatterino {
+
+class MicroNotebook : public QWidget
+{
+public:
+    MicroNotebook(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        auto *rootLayout = new QVBoxLayout(this);
+        rootLayout->setSpacing(0);
+        auto *topWidget = new QWidget;
+        topWidget->setLayout(&this->topBar);
+        rootLayout->addWidget(topWidget);
+        rootLayout->addWidget(makeHLine());
+
+        auto *pageWidget = new QWidget;
+        pageWidget->setLayout(&this->layout);
+        rootLayout->addWidget(pageWidget, 1);
+
+        rootLayout->setContentsMargins({});
+        this->layout.setContentsMargins({});
+        this->topBar.setContentsMargins({10, 10, 10, 0});
+    }
+
+    int addPage(QWidget *page, QString name)
+    {
+        int index = this->layout.addWidget(page);
+        if (!this->items.empty())
+        {
+            this->topBar.addSpacing(1);
+            this->topBar.addWidget(makeVLine());
+            this->topBar.addSpacing(1);
+        }
+        auto *pageButton = new MicroNotebookButton(name);
+        this->topBar.addWidget(pageButton);
+        QObject::connect(pageButton, &MicroNotebookButton::leftClicked, this,
+                         [this, index] {
+                             this->layout.setCurrentIndex(index);
+                         });
+        QObject::connect(&this->layout, &QStackedLayout::currentChanged,
+                         pageButton, [pageButton, index](int currentIndex) {
+                             pageButton->setSelected(index == currentIndex);
+                         });
+        pageButton->setSelected(this->layout.currentIndex() == index);
+
+        this->items.emplace_back(Item{.name = std::move(name), .index = index});
+        return index;
+    }
+
+    void select(QWidget *page)
+    {
+        this->layout.setCurrentWidget(page);
+    }
+
+    bool isSelected(QWidget *page) const
+    {
+        return this->layout.currentWidget() == page;
+    }
+
+private:
+    struct Item {
+        QString name;
+        int index;
+    };
+    std::vector<Item> items;
+    QStackedLayout layout;
+    QHBoxLayout topBar;
+};
 
 SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     : BaseWindow(
@@ -41,9 +182,15 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
 
     this->tabFilter_.dialog = this;
 
-    auto *layout = new QVBoxLayout(this->getLayoutContainer());
-
     auto &ui = this->ui_;
+    auto *rootLayout = new QVBoxLayout(this->getLayoutContainer());
+    rootLayout->setContentsMargins({});
+    ui.notebook = new MicroNotebook(this->getLayoutContainer());
+    rootLayout->addWidget(ui.notebook, 1);
+
+    ui.twitchPage = new QWidget;
+    auto *layout = new QVBoxLayout(ui.twitchPage);
+
     // Channel
     ui.channel = new AutoCheckedRadioButton("Channel");
     layout->addWidget(ui.channel);
@@ -160,9 +307,35 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
 
     layout->addStretch(1);
 
+    ui.notebook->addPage(ui.twitchPage, "Twitch");
+
+    // Kick
+    {
+        ui.kickPage = new QWidget;
+        auto *layout = new QVBoxLayout(ui.kickPage);
+
+        auto *kickLabel = new QLabel(
+            "Join a Kick channel by its name.<br>This is <b>very "
+            "experimental</b> and Chatterino7 specific. Only basic features "
+            "are supported. Please report bugs <a "
+            "href=\"https://github.com/SevenTV/chatterino7/issues\">here</a>.");
+        kickLabel->setOpenExternalLinks(true);
+        kickLabel->setWordWrap(true);
+        layout->addWidget(kickLabel);
+
+        ui.kickName = new QLineEdit();
+        ui.kickName->setPlaceholderText("Username");
+        layout->addWidget(ui.kickName);
+
+        layout->addStretch(1);
+
+        ui.notebook->addPage(ui.kickPage, "Kick");
+    }
+
     auto *buttonBox =
         new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
-    layout->addWidget(buttonBox);
+    buttonBox->setContentsMargins({10, 10, 10, 10});
+    rootLayout->addWidget(buttonBox);
 
     QObject::connect(buttonBox, &QDialogButtonBox::accepted, this, [this] {
         this->ok();
@@ -228,6 +401,11 @@ void SelectChannelDialog::setSelectedChannel(
             this->ui_.automod->setFocus();
         }
         break;
+        case Channel::Type::Kick: {
+            this->ui_.kickName->setText(channel->getName());
+            this->ui_.notebook->select(this->ui_.kickPage);
+        }
+        break;
         default: {
             this->ui_.channel->setChecked(true);
         }
@@ -241,6 +419,12 @@ IndirectChannel SelectChannelDialog::getSelectedChannel() const
     if (!this->hasSelectedChannel_)
     {
         return this->selectedChannel_;
+    }
+
+    if (this->ui_.notebook->isSelected(this->ui_.kickPage))
+    {
+        return getApp()->getKickChatServer()->getOrCreate(
+            this->ui_.kickName->text().trimmed());
     }
 
     if (this->ui_.channel->isChecked())

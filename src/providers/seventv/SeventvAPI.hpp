@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <functional>
 
 class QString;
@@ -31,6 +32,9 @@ public:
     void getUserByTwitchID(const QString &twitchID,
                            SuccessCallback<const QJsonObject &> &&onSuccess,
                            ErrorCallback &&onError);
+    void getUserByKickID(uint64_t userID,
+                         SuccessCallback<const QJsonObject &> &&onSuccess,
+                         ErrorCallback &&onError);
     void getEmoteSet(const QString &emoteSet,
                      SuccessCallback<const QJsonObject &> &&onSuccess,
                      ErrorCallback &&onError);
