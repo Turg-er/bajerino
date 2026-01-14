@@ -6,6 +6,7 @@
 
 #include "controllers/accounts/Account.hpp"
 #include "controllers/accounts/AccountModel.hpp"
+#include "providers/kick/KickAccount.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "util/SharedPtrElementLess.hpp"
 
@@ -33,6 +34,23 @@ AccountController::AccountController()
             }
         });
 
+    std::ignore =
+        this->kick.accounts.itemInserted.connect([this](const auto &args) {
+            this->accounts_.insert(args.item);
+        });
+
+    std::ignore =
+        this->kick.accounts.itemRemoved.connect([this](const auto &args) {
+            if (args.caller != this)
+            {
+                this->accounts_.removeFirstMatching(
+                    [&](const auto &item) {
+                        return item == args.item;
+                    },
+                    this);
+            }
+        });
+
     std::ignore = this->accounts_.itemRemoved.connect([this](const auto &args) {
         switch (args.item->getProviderId())
         {
@@ -47,6 +65,17 @@ AccountController::AccountController()
                 }
             }
             break;
+            case ProviderId::Kick: {
+                if (args.caller != this)
+                {
+                    this->kick.accounts.removeFirstMatching(
+                        [&](const auto &item) {
+                            return item == args.item;
+                        },
+                        this);
+                }
+            }
+            break;
         }
     });
 }
@@ -54,6 +83,7 @@ AccountController::AccountController()
 void AccountController::load()
 {
     this->twitch.load();
+    this->kick.load();
 }
 
 AccountModel *AccountController::createModel(QObject *parent)

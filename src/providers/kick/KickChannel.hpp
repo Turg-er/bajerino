@@ -4,6 +4,8 @@
 #include "common/Channel.hpp"
 #include "common/ChannelChatters.hpp"
 
+#include <chrono>
+#include <queue>
 #include <unordered_map>
 
 namespace chatterino {
@@ -79,6 +81,15 @@ public:
     const QString &seventvUserID() const;
     const QString &seventvEmoteSetID() const;
 
+    bool canSendMessage() const override;
+    void sendMessage(const QString &message) override;
+    void sendReply(const QString &message, const QString &replyToID);
+    bool isMod() const override;
+    bool isVip() const;
+    bool isBroadcaster() const override;
+    bool hasModRights() const override;
+    bool hasHighRateLimit() const override;
+
     friend QDebug operator<<(QDebug dbg, const KickChannel &chan);
 
 private:
@@ -91,6 +102,14 @@ private:
 
     void resolveChannelInfo();
     void setUserInfo(UserInit init);
+
+    size_t maxBurstMessages() const;
+    std::chrono::milliseconds minMessageOffset() const;
+    bool checkMessageRatelimit();
+
+    QString prepareMessage(const QString &message) const;
+
+    void addLoginMessage();
 
     void updateSeventvData(const QString &newUserID,
                            const QString &newEmoteSetID);
@@ -113,6 +132,13 @@ private:
     std::weak_ptr<const Message> lastSeventvMessage_;
     /// A list of the emotes listed in the lat 7TV emote update message.
     std::vector<QString> lastSeventvEmoteNames_;
+
+    std::queue<std::chrono::steady_clock::time_point> lastMessageTimestamps_;
+    std::chrono::steady_clock::time_point lastMessageSpeedErrorTs_;
+    std::chrono::steady_clock::time_point lastMessageAmountErrorTs_;
+
+    bool isMod_ = false;
+    bool isVip_ = false;
 };
 
 }  // namespace chatterino
