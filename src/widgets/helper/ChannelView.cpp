@@ -3463,6 +3463,7 @@ void ChannelView::updateID()
 
     boost::hash_combine(seed, first);
     boost::hash_combine(seed, second);
+    boost::hash_combine(seed, this->underlyingChannel_->getType());
 
     this->id_ = seed;
 }
