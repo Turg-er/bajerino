@@ -52,6 +52,12 @@ enum class DebugObject : size_t {
     MessageThread,
     Message,
 
+    // Chatterino7
+    SeventvPersonalEmoteSets,
+    SeventvPersonalEmoteAssignments,
+    SeventvPaints,
+    SeventvPaintAssignments,
+
     Count,
 };
 
@@ -131,5 +137,13 @@ constexpr magic_enum::customize::customize_t
             return "lua::api::HTTPRequest";
         case chatterino::DebugObject::MessageDrawingBuffer:
             return "message drawing buffers";
+        case chatterino::DebugObject::SeventvPersonalEmoteSets:
+            return "7TV Personal Emote Sets";
+        case chatterino::DebugObject::SeventvPersonalEmoteAssignments:
+            return "7TV Personal Emote Assignments";
+        case chatterino::DebugObject::SeventvPaints:
+            return "7TV Paints";
+        case chatterino::DebugObject::SeventvPaintAssignments:
+            return "7TV Paint Assignments";
     }
 }
