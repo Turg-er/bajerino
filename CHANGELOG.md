@@ -2,6 +2,7 @@
 
 ## Unversioned
 
+- Minor: Added a countdown timer to the input box to show when you can chat again during slow mode or after a timeout. This feature is disabled by default, and can be enabled with the "Show countdown on slow mode or when timed out" setting. (#6782)
 - Minor: Add search engine selection for context menu search action. (#6743, #6770)
 - Minor: Add a separate highlight option for watchstreak notifications. (#6571, #6581)
 - Minor: Badges now link to their home page like emotes in the context menu. (#6437)
@@ -27,9 +28,10 @@
 - Minor: Added Markdown support to user notes. (#6490)
 - Minor: Moderators and VIPs in shared chats now show their channel badges. (#6653)
 - Minor: Added message read/update methods to the `Channel` plugin API. (#6650)
+- Minor: Added a display name change event to `Channel` for plugins. (#6594)
 - Minor: Added action to reset `/watching`. (#6759)
 - Minor: Removed messaging about running flatpak. This is already apparent in the newer Flatpak runtimes. (#6768)
-- Minor: Add `/(un)monitor` and `/(un)restrict` commands for moderators. (#6750)
+- Minor: Add `/(un)monitor` and `/(un)restrict` commands for moderators. (#6750, #6785)
 - Bugfix: Fixed context menu hotkeys not working on macOS. (#6778)
 - Bugfix: Moderation checks now include the lead moderator badge. (#6642)
 - Bugfix: Fixed lead moderator badges not being filtered by the `Channel` badge setting. (#6665)
@@ -85,7 +87,7 @@
 - Dev: Unwrapped `LimitedQueueSnapshot` to `std::vector`. (#6606)
 - Dev: Simplified uses of `getMessageSnapshot`. (#6607)
 - Dev: Disabled `llvm-prefer-static-over-anonymous-namespace` in clang-tidy. (#6610)
-- Dev: Added experimental spell checker support. (#6446, #6703, #6722, #6730, #6731)
+- Dev: Added experimental spell checker support. (#6446, #6703, #6722, #6730, #6731, #6779, #6780)
 - Dev: Added Clazy linting in CI. (#6623)
 - Dev: Added custom clang-tidy module linting in CI. (#6626)
 - Dev: CMake option `USE_ALTERNATE_LINKER` now errors if the given linker can't be found. (#6692)
@@ -103,6 +105,7 @@
 - Dev: Remove unused `reloadChannelAndSubscriberEmotes`. (#6756)
 - Dev: Refactored `DebugCount`. (#6753)
 - Dev: Moved `PluginMeta` to its own file. (#6757)
+- Dev: Moves some `Channel` signals to `TwitchChannel`. (#6787)
 
 ## 2.5.4
 
