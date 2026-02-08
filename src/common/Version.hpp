@@ -60,13 +60,6 @@ public:
     // Returns a string about the current running system
     const QString &runningString() const;
 
-#ifdef Q_OS_MACOS
-    bool isRunningInRosetta() const
-    {
-        return this->isRunningInRosetta_;
-    }
-#endif
-
     // Returns an extra string about this specific build
     const QString &extraString() const;
 
@@ -91,9 +84,6 @@ private:
     QString dateOfBuild_;
     QString fullVersion_;
     bool isSupportedOS_;
-#ifdef Q_OS_MACOS
-    bool isRunningInRosetta_ = false;
-#endif
 
     QString buildString_;
     // Generate a build string (e.g. Chatterino 2.3.5 (commit ...)) and store it in buildString_ for future use
