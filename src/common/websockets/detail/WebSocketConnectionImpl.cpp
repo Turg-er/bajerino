@@ -99,7 +99,27 @@ void WebSocketConnectionHelper<Derived, Inner>::onResolve(
         return;
     }
 
-    this->resolvedEndpoints = results;
+    // FIXME: wait for c2#6805 and c2#6804
+    std::vector<asio::ip::basic_endpoint<asio::ip::tcp>> entries;
+    for (const auto &entry : results)
+    {
+        entries.emplace_back(entry.endpoint());
+    }
+    // IPv4 first, because these usually work
+    std::ranges::sort(entries, [](const auto &a, const auto &b) {
+        return a.address() < b.address();
+    });
+
+    if (results.empty())
+    {
+        this->resolvedEndpoints = results;
+    }
+    else
+    {
+        this->resolvedEndpoints = asio::ip::tcp::resolver::results_type::create(
+            entries.begin(), entries.end(), results.begin()->host_name(),
+            results.begin()->service_name());
+    }
 
     this->tryConnect(this->resolvedEndpoints.begin());
 }
@@ -143,6 +163,13 @@ void WebSocketConnectionHelper<Derived, Inner>::onTcpHandshake(
         qCDebug(chatterinoWebsocket)
             << *this << "error in tcp handshake" << ep.address().to_string()
             << ec.message();
+
+        beast::get_lowest_layer(this->stream).socket().close(ec);
+        if (ec)
+        {
+            qCDebug(chatterinoWebsocket)
+                << *this << "closing websocket after error" << ec.message();
+        }
         this->tryConnect(++endpointIterator);
         return;
     }
