@@ -99,43 +99,22 @@ void WebSocketConnectionHelper<Derived, Inner>::onResolve(
         return;
     }
 
-    // FIXME: wait for c2#6805 and c2#6804
-    std::vector<asio::ip::basic_endpoint<asio::ip::tcp>> entries;
-    for (const auto &entry : results)
-    {
-        entries.emplace_back(entry.endpoint());
-    }
-    // IPv4 first, because these usually work
-    std::ranges::sort(entries, [](const auto &a, const auto &b) {
-        return a.address() < b.address();
-    });
+    this->resolvedEndpoints = BalancedResolverResults(results);
 
-    if (results.empty())
-    {
-        this->resolvedEndpoints = results;
-    }
-    else
-    {
-        this->resolvedEndpoints = asio::ip::tcp::resolver::results_type::create(
-            entries.begin(), entries.end(), results.begin()->host_name(),
-            results.begin()->service_name());
-    }
-
-    this->tryConnect(this->resolvedEndpoints.begin());
+    this->tryConnect(this->resolvedEndpoints.advanceEntry());
 }
 
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::tryConnect(
-    boost::asio::ip::tcp::resolver::results_type::const_iterator
-        endpointIterator)
+    std::optional<BalancedResolverResults::Entry> entry)
 {
-    if (endpointIterator == this->resolvedEndpoints.end())
+    if (!entry)
     {
         this->fail("Ran out of resolved endpoints"sv, u"connect");
         return;
     }
 
-    const auto &endpoint = endpointIterator->endpoint();
+    auto endpoint = entry->endpoint();
 
     qCDebug(chatterinoWebsocket)
         << *this << "connect to" << endpoint.address().to_string();
@@ -147,16 +126,14 @@ void WebSocketConnectionHelper<Derived, Inner>::tryConnect(
         .async_connect(endpoint,
                        beast::bind_front_handler(
                            &WebSocketConnectionHelper::onTcpHandshake,
-                           this->shared_from_this(), endpointIterator));
+                           this->shared_from_this(), *std::move(entry)));
 }
 
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::onTcpHandshake(
-    boost::asio::ip::tcp::resolver::results_type::const_iterator
-        endpointIterator,
-    boost::system::error_code ec)
+    const BalancedResolverResults::Entry &entry, boost::system::error_code ec)
 {
-    const auto &ep = endpointIterator->endpoint();
+    const auto &ep = entry.endpoint();
 
     if (ec)
     {
@@ -170,7 +147,8 @@ void WebSocketConnectionHelper<Derived, Inner>::onTcpHandshake(
             qCDebug(chatterinoWebsocket)
                 << *this << "closing websocket after error" << ec.message();
         }
-        this->tryConnect(++endpointIterator);
+
+        this->tryConnect(this->resolvedEndpoints.advanceEntry());
         return;
     }
 
