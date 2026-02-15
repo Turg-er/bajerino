@@ -46,6 +46,27 @@ const QString CHATTERINO_OS = u"freebsd"_s;
 const QString CHATTERINO_OS = u"unknown"_s;
 #endif
 
+QJsonValue getForArchitecture(const QJsonObject &obj, const QString &key)
+{
+    auto val = obj[key];
+
+#ifdef Q_PROCESSOR_ARM
+    QString armKey = key % u"_arm";
+    if (obj[armKey].isString())
+    {
+        val = obj[armKey];
+    }
+#elifdef Q_PROCESSOR_X86
+    QString x86Key = key % u"_x86";
+    if (obj[x86Key].isString())
+    {
+        val = obj[x86Key];
+    }
+#endif
+
+    return val;
+}
+
 }  // namespace
 
 namespace chatterino {
@@ -350,6 +371,10 @@ void Updates::checkForUpdates()
 
         /// Version available on every platform
         auto version = object["version"];
+        if (object["v2_version"_L1].isString())
+        {
+            version = object["v2_version"_L1].toString();
+        }
 
         if (!version.isString())
         {
@@ -361,24 +386,7 @@ void Updates::checkForUpdates()
 
 #    if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
         /// Downloads an installer for the new version
-        auto updateExeUrl = object["updateexe"_L1];
-
-#        if defined(Q_PROCESSOR_ARM)
-
-        if (object["update_arm"_L1].isString())
-        {
-            updateExeUrl = object["update_arm"_L1];
-        }
-
-#        elif defined(Q_PROCESSOR_X86)
-
-        if (object["update_x86"_L1].isString())
-        {
-            updateExeUrl = object["update_x86"_L1];
-        }
-
-#        endif
-
+        auto updateExeUrl = getForArchitecture(object, u"updateexe"_s);
         if (!updateExeUrl.isString())
         {
             this->setStatus_(SearchFailed);
@@ -391,7 +399,7 @@ void Updates::checkForUpdates()
 
 #        ifdef Q_OS_WIN
         /// Windows portable
-        auto portableUrl = object["portable_download"];
+        auto portableUrl = getForArchitecture(object, "portable_download");
         if (!portableUrl.isString())
         {
             this->setStatus_(SearchFailed);
