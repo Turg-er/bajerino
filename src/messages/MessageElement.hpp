@@ -644,10 +644,10 @@ public:
     void addToContainer(MessageLayoutContainer &container,
                         const MessageLayoutContext &ctx) override;
 
-    DecryptedBadge *setScale(float scale_);
+    DecryptedBadge *setScale(float scale);
 
 private:
-    float scale_ = 1.F;
+    float scale = 1.F;
 };
 
 // contains a text, formated depending on the preferences

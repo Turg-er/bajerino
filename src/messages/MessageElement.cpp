@@ -723,27 +723,22 @@ std::string_view DecryptedBadge::type() const
 }
 
 void DecryptedBadge::addToContainer(MessageLayoutContainer &container,
-                                    const MessageLayoutContext &ctx)
+                                    const MessageLayoutContext & /*ctx*/)
 {
-    if (!ctx.flags.hasAny(this->getFlags()))
-    {
-        return;
-    }
-
-    auto image =
-        this->getEmote()->images.getImageOrLoaded(container.getImageScale());
+    auto image = this->getEmote()->images.getImageOrLoaded(
+        container.getImageScale() * this->scale);
     if (image->isEmpty())
     {
         return;
     }
 
     container.addElement(this->makeImageLayoutElement(
-        image, image->size() * container.getScale() * this->scale_));
+        image, image->size() * container.getScale() * this->scale));
 }
 
-DecryptedBadge *DecryptedBadge::setScale(float scale_)
+DecryptedBadge *DecryptedBadge::setScale(float scale)
 {
-    this->scale_ = scale_;
+    this->scale = scale;
     return this;
 }
 
