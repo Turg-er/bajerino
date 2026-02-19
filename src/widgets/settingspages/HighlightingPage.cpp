@@ -265,7 +265,7 @@ HighlightingPage::HighlightingPage()
                 [](const auto &value) {
                     if (value.isEmpty())
                     {
-                        return QString("Default sound: Chatterino Ping");
+                        return QString("Default sound: Bajerino Ping");
                     }
 
                     auto url = QUrl::fromLocalFile(value);
@@ -314,11 +314,11 @@ HighlightingPage::HighlightingPage()
                 this->managedConnections_);
         }
 
+        layout.append(
+            createCheckBox("Play highlight sound even when Bajerino is focused",
+                           getSettings()->highlightAlwaysPlaySound));
         layout.append(createCheckBox(
-            "Play highlight sound even when Chatterino is focused",
-            getSettings()->highlightAlwaysPlaySound));
-        layout.append(createCheckBox(
-            "Flash taskbar only stops highlighting when Chatterino is focused",
+            "Flash taskbar only stops highlighting when Bajerino is focused",
             getSettings()->longAlerts));
     }
 

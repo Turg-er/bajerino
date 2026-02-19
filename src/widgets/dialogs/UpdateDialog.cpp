@@ -82,7 +82,7 @@ void UpdateDialog::updateStatusChanged(Updates::Status status)
 
         case Updates::Downloading: {
             this->ui_.label->setText(
-                "Downloading updates.\n\nChatterino will restart "
+                "Downloading updates.\n\nBajerino will restart "
                 "automatically when the download is done.");
         }
         break;

@@ -15,6 +15,8 @@ public:
 
     bool isPortable{};
 
+    bool useChatterinoDirectory{};
+
     /// Marked by the line `externally-packaged`
     ///
     /// The externally packaged mode comes with the following changes:

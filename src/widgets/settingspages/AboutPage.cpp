@@ -72,15 +72,17 @@ AboutPage::AboutPage()
             label->setTextInteractionFlags(Qt::TextBrowserInteraction);
         }
 
-        // About Chatterino
-        auto aboutChatterino = layout.emplace<QGroupBox>("About Chatterino...");
+        // About Bajerino
+        auto aboutChatterino = layout.emplace<QGroupBox>("About Bajerino...");
         {
             auto l = aboutChatterino.emplace<QVBoxLayout>();
 
             // clang-format off
-            l.emplace<QLabel>("Chatterino Wiki can be found <a href=\"" % LINK_CHATTERINO_WIKI % "\">here</a>")->setOpenExternalLinks(true);
-            l.emplace<QLabel>("All about Chatterino's <a href=\"" % LINK_CHATTERINO_FEATURES % "\">features</a>")->setOpenExternalLinks(true);
-            l.emplace<QLabel>("Join the official Chatterino <a href=\"" % LINK_CHATTERINO_DISCORD % "\">Discord</a>")->setOpenExternalLinks(true);
+            l.emplace<QLabel>("Bajerino Repo can be found <a href=\"" % LINK_BAJERINO_SOURCE % "\">here</a>")->setOpenExternalLinks(true);
+
+            l.emplace<QLabel>("Bajerino Wiki can be found <a href=\"" % LINK_CHATTERINO_WIKI % "\">here</a>")->setOpenExternalLinks(true);
+            l.emplace<QLabel>("All about Bajerino's <a href=\"" % LINK_CHATTERINO_FEATURES % "\">features</a>")->setOpenExternalLinks(true);
+            l.emplace<QLabel>("Join the official Bajerino <a href=\"" % LINK_CHATTERINO_DISCORD % "\">Discord</a>")->setOpenExternalLinks(true);
             l.emplace<QLabel>("Join the official 7TV <a href=\"" % LINK_SEVENTV_DISCORD % "\">Discord</a>")->setOpenExternalLinks(true);
             // clang-format on
         }
@@ -293,7 +295,7 @@ void AboutPage::addLicense(QFormLayout *form, const QString &name,
                     BaseWindow::BoundsCheckOnShow,
                 },
                 parent);
-            window->setWindowTitle("Chatterino - License for " + name);
+            window->setWindowTitle("Bajerino - License for " + name);
             window->setAttribute(Qt::WA_DeleteOnClose);
             auto *layout = new QVBoxLayout();
             auto *edit = new QTextEdit;

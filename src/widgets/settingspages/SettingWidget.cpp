@@ -428,7 +428,8 @@ SettingWidget *SettingWidget::colorButton(const QString &label,
 
 SettingWidget *SettingWidget::lineEdit(const QString &label,
                                        QStringSetting &setting,
-                                       const QString &placeholderText)
+                                       const QString &placeholderText,
+                                       const bool trim)
 {
     auto *widget = new SettingWidget(label);
 
@@ -449,6 +450,13 @@ SettingWidget *SettingWidget::lineEdit(const QString &label,
                      [&setting](const QString &newValue) {
                          setting = newValue;
                      });
+
+    QObject::connect(edit, &QLineEdit::editingFinished, [&setting, trim]() {
+        if (trim)
+        {
+            setting = setting.getValue().trimmed();
+        }
+    });
 
     // Update the widget to reflect the new setting value if the setting changes
     // This _will_ fire every time the widget changes, so we are being conservative

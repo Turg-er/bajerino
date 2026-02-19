@@ -16,9 +16,9 @@ Version::Version()
     , commitHash_(QStringLiteral(CHATTERINO_GIT_HASH))
     , isModified_(CHATTERINO_GIT_MODIFIED == 1)
     , dateOfBuild_(QStringLiteral(CHATTERINO_CMAKE_GEN_DATE))
+    , fullVersion_("Bajerino ")
     , isNightly_(CHATTERINO_NIGHTLY_BUILD == 1)
 {
-    this->fullVersion_ = "Chatterino ";
     if (this->isNightly())
     {
         this->fullVersion_ += "Nightly ";
@@ -41,8 +41,8 @@ Version::Version()
     this->generateExtraString();
 
 #ifdef Q_OS_WIN
-    // keep in sync with .CI/chatterino-installer.iss
-    this->appUserModelID_ = L"SevenTV.Chatterino7";
+    // keep in sync with .CI/bajerino-installer.iss
+    this->appUserModelID_ = L"BajerinoTeam.Bajerino";
 #endif
 }
 
@@ -140,7 +140,7 @@ void Version::generateBuildString()
     // Add commit information
     s +=
         QString(
-            R"( (commit <a href="https://github.com/SevenTV/chatterino7/commit/%1">%1</a>)")
+            R"( (commit <a href="https://github.com/Turg-er/bajerino/commit/%1">%1</a>)")
             .arg(this->commitHash());
     if (this->isModified())
     {

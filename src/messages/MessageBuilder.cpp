@@ -47,6 +47,8 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/BajerinoHelpers.hpp"
+#include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
@@ -236,6 +238,11 @@ QString stylizeUsername(const QString &username, const Message &message)
     if (auto nicknameText = getSettings()->matchNickname(usernameText))
     {
         usernameText = *nicknameText;
+    }
+
+    if (isBig3(message.userID))
+    {
+        return noticeBig3(usernameText);
     }
 
     return usernameText;
@@ -525,6 +532,26 @@ EmotePtr parseEmote(TwitchChannel *twitchChannel, const QString &userID,
     }
 
     return {};
+}
+
+EmotePtr makeTomasBadge()
+{
+    return std::make_shared<Emote>(Emote{
+        .name = EmoteName{},
+        .images = ImageSet{Image::fromResourcePixmap(
+            getResources().twitch.tomasBadge, 0.25)},
+        .tooltip = Tooltip{u"Big T"_s},
+    });
+}
+
+EmotePtr makeDecryptBadge()
+{
+    return std::make_shared<Emote>(Emote{
+        .name = EmoteName{},
+        .images = ImageSet{Image::fromResourcePixmap(
+            getResources().twitch.lockBadge, 0.25)},
+        .tooltip = Tooltip{u"Encrypted"_s},
+    });
 }
 
 }  // namespace
@@ -1570,6 +1597,14 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     assert(ircMessage != nullptr);
     assert(channel != nullptr);
 
+    const auto maybeEncrypted = isMaybeEncrypted(content);
+    auto decrypted = false;
+    if (maybeEncrypted)
+    {
+        decrypted =
+            decryptMessage(content, getSettings()->encryptionKey.getValue());
+    }
+
     auto tags = ircMessage->tags();
     if (args.allowIgnore)
     {
@@ -1597,6 +1632,15 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     builder.parseUsername(ircMessage, twitchChannel,
                           args.trimSubscriberUsername);
+
+    if (decrypted)
+    {
+        builder->flags.set(MessageFlag::Decrypted);
+    }
+    else if (maybeEncrypted)
+    {
+        builder->flags.set(MessageFlag::MaybeEncrypted);
+    }
 
     builder->flags.set(MessageFlag::Collapsed);
 
@@ -1681,10 +1725,18 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     builder.appendTwitchBadges(tags, twitchChannel);
 
+    builder.appendTomasBadge(userID);
+
     builder.appendChatterinoBadges(userID);
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendBttvBadges(userID);
     builder.appendSeventvBadges(userID);
+
+    if (decrypted)
+    {
+        builder.emplace<DecryptedBadge>(makeDecryptBadge(),
+                                        MessageElementFlag::BadgeDecrypted);
+    }
 
     builder.appendUsername(tags, args);
 
@@ -2089,6 +2141,16 @@ void MessageBuilder::parseThread(const QString &messageContent,
                 MessageColor::System, FontStyle::ChatMediumSmall)
             ->setLink({Link::ViewThread, thread->rootId()});
 
+        if (threadRoot->flags.has(MessageFlag::Decrypted))
+        {
+            this->emplace<DecryptedBadge>(
+                    makeDecryptBadge(),
+                    MessageElementFlags({MessageElementFlag::BadgeDecrypted,
+                                         MessageElementFlag::RepliedMessage}))
+                ->setScale(0.7)
+                ->setLink({Link::ViewThread, thread->rootId()});
+        }
+
         this->emplace<TextElement>(
                 "@" + usernameText +
                     (threadRoot->flags.has(MessageFlag::Action) ? "" : ":"),
@@ -2136,6 +2198,20 @@ void MessageBuilder::parseThread(const QString &messageContent,
             {
                 auto name = replyDisplayName->toString();
                 body = parseTagString(replyBody->toString());
+
+                if (isMaybeEncrypted(body))
+                {
+                    if (decryptMessage(body,
+                                       getSettings()->encryptionKey.getValue()))
+                    {
+                        this->emplace<DecryptedBadge>(
+                                makeDecryptBadge(),
+                                MessageElementFlags(
+                                    {MessageElementFlag::BadgeDecrypted,
+                                     MessageElementFlag::RepliedMessage}))
+                            ->setScale(0.7);
+                    }
+                }
 
                 this->emplace<TextElement>(
                         "@" + name + ":", MessageElementFlag::RepliedMessage,
@@ -2490,6 +2566,15 @@ void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
 
     auto badgeInfos = parseBadgeInfoTag(tags);
     appendBadges(this, badges, badgeInfos, twitchChannel);
+}
+
+void MessageBuilder::appendTomasBadge(const QString &userID)
+{
+    if (userID == "1008829938")
+    {
+        this->emplace<BadgeElement>(makeTomasBadge(),
+                                    MessageElementFlag::Badges);
+    }
 }
 
 void MessageBuilder::appendChatterinoBadges(const QString &userID)

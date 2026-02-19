@@ -46,12 +46,12 @@ PluginsPage::PluginsPage()
         auto groupLayout = group.setLayoutType<QFormLayout>();
         auto *scaryLabel = new QLabel(
             "Plugins can expand functionality of "
-            "Chatterino. They can be made in Lua. This functionality is "
+            "Bajerino. They can be made in Lua. This functionality is "
             "still in public alpha stage. Use ONLY the plugins you trust. "
             "The permission system is best effort, always "
             "assume plugins can bypass permissions and can execute "
             "arbitrary code. To see how to create plugins " +
-            formatRichNamedLink("https://github.com/Chatterino/chatterino2/"
+            formatRichNamedLink("https://github.com/turg-er/bajerino/"
                                 "blob/master/docs/wip-plugins.md",
                                 "look at the manual") +
             ".");
@@ -81,7 +81,7 @@ PluginsPage::PluginsPage()
             box->setEnabled(false);
             auto *disabledLabel = new QLabel(this);
             disabledLabel->setText("Plugins will not be fully loaded because "
-                                   "Chatterino is in safe mode. You can still "
+                                   "Bajerino is in safe mode. You can still "
                                    "enable and disable them.");
             groupLayout->addRow(disabledLabel);
         }

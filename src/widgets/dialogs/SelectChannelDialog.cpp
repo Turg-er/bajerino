@@ -87,7 +87,7 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     layout->addWidget(ui.whispers);
 
     ui.whispersLabel = new QLabel(
-        "Shows the whispers that you receive while Chatterino is running");
+        "Shows the whispers that you receive while Bajerino is running");
     ui.whispersLabel->setVisible(false);
     ui.whispersLabel->setWordWrap(true);
     layout->addWidget(ui.whispersLabel);
@@ -122,7 +122,7 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     ui.watching = new AutoCheckedRadioButton("Watching");
     layout->addWidget(ui.watching);
 
-    ui.watchingLabel = new QLabel("Requires the Chatterino browser extension");
+    ui.watchingLabel = new QLabel("Requires the Bajerino browser extension");
     ui.watchingLabel->setVisible(false);
     layout->addWidget(ui.watchingLabel);
 
@@ -179,7 +179,7 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
 
         auto *kickLabel = new QLabel(
             "Join a Kick channel by its name.<br>This is <b>very "
-            "experimental</b> and Chatterino7 specific. Only basic features "
+            "experimental</b> and Bajerino specific. Only basic features "
             "are supported. Please report bugs <a "
             "href=\"https://github.com/SevenTV/chatterino7/issues\">here</a>.");
         kickLabel->setOpenExternalLinks(true);

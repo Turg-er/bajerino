@@ -764,19 +764,26 @@ void Window::addMenuBar()
     QMenu *helpMenu = mainMenu->addMenu(QString("Help"));
 
     // Help->Chatterino Wiki item
-    QAction *helpWiki = helpMenu->addAction(QString("Chatterino Wiki"));
+    QAction *helpWiki = helpMenu->addAction(QString("Bajerino Wiki"));
     connect(helpWiki, &QAction::triggered, this, []() {
         QDesktopServices::openUrl(QUrl(LINK_CHATTERINO_WIKI.toString()));
     });
 
     // Help->Chatterino Github
-    QAction *helpGithub = helpMenu->addAction(QString("Chatterino GitHub"));
+    QAction *helpGithub = helpMenu->addAction(QString("Bajerino GitHub"));
     connect(helpGithub, &QAction::triggered, this, []() {
         QDesktopServices::openUrl(QUrl(LINK_CHATTERINO_SOURCE.toString()));
     });
 
+    // Help->Chatterino Github
+    QAction *helpBajerinoGithub =
+        helpMenu->addAction(QString("Bajerino GitHub"));
+    connect(helpBajerinoGithub, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl(LINK_BAJERINO_SOURCE.toString()));
+    });
+
     // Help->Chatterino Discord
-    QAction *helpDiscord = helpMenu->addAction(QString("Chatterino Discord"));
+    QAction *helpDiscord = helpMenu->addAction(QString("Bajerino Discord"));
     connect(helpDiscord, &QAction::triggered, this, []() {
         QDesktopServices::openUrl(QUrl(LINK_CHATTERINO_DISCORD.toString()));
     });

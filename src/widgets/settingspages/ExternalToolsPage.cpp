@@ -141,7 +141,7 @@ void ExternalToolsPage::initLayout(GeneralPageView &layout)
 
         layout.addDescription(
             QStringLiteral(
-                "Chatterino expects the executable to be called \"%1\".")
+                "Bajerino expects the executable to be called \"%1\".")
                 .arg(STREAMLINK_BINARY_NAME));
 
         layout.addLayout(form);
@@ -242,8 +242,8 @@ void ExternalToolsPage::initLayout(GeneralPageView &layout)
 
         layout.addDescription(
             u"Check the spelling of words in the input box of splits."
-            " Chatterino does not include dictionaries - they have to "
-            "be downloaded or created manually. Chatterino expects "
+            " Bajerino does not include dictionaries - they have to "
+            "be downloaded or created manually. Bajerino expects "
             "Hunspell "
             "dictionaries in " %
             formatRichNamedLink(getApp()->getPaths().dictionariesDirectory,

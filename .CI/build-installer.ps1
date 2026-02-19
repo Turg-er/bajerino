@@ -1,5 +1,5 @@
-if (-not (Test-Path -PathType Container Chatterino2)) {
-    Write-Error "Couldn't find a folder called 'Chatterino2' in the current directory.";
+if (-not (Test-Path -PathType Container Bajerino)) {
+    Write-Error "Couldn't find a folder called 'Bajerino' in the current directory.";
     exit 1
 }
 
@@ -15,13 +15,13 @@ if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
     # for example when updating from nightly to stable.
-    Write-Output "" | Out-File Chatterino2/modes -Encoding ASCII;
-    $installerBaseName = "Chatterino7.Installer";
+    Write-Output "" | Out-File Bajerino/modes -Encoding ASCII;
+    $installerBaseName = "Bajerino7.Installer";
 }
 else {
-    Write-Output nightly | Out-File Chatterino2/modes -Encoding ASCII;
+    Write-Output nightly | Out-File Bajerino/modes -Encoding ASCII;
     $defines = "/DIS_NIGHTLY=1";
-    $installerBaseName = "Chatterino7.Nightly.Installer";
+    $installerBaseName = "Bajerino7.Nightly.Installer";
 }
 
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLower()
@@ -53,6 +53,6 @@ ISCC `
     /DVCRT_ARCH="$architecture" `
     $defines `
     /O. `
-    "$PSScriptRoot\chatterino-installer.iss";
+    "$PSScriptRoot\bajerino-installer.iss";
 
 Move-Item "$installerBaseName.exe" "$installerBaseName.exe"

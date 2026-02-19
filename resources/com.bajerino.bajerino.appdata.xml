@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 2019 Artem Polishchuk <ego.cordatus@gmail.com> -->
+<component type="desktop-application">
+    <id>com.bajerino.bajerino.desktop</id>
+    <launchable type="desktop-id">com.bajerino.bajerino.desktop</launchable>
+    <metadata_license>CC0-1.0</metadata_license>
+    <project_license>MIT</project_license>
+    <content_rating type="oars-1.0">
+        <content_attribute id="social-chat">intense</content_attribute>
+    </content_rating>
+    <name>Bajerino</name>
+    <developer_name>Bajerino Developers</developer_name>
+    <summary>
+        Chat client for twitch.tv
+    </summary>
+    <description>
+        <p>
+            Bajerino is a chat client for Twitch.tv.
+        </p>
+    </description>
+    <screenshots>
+        <screenshot type="default">
+            <image>https://chatterino.com/img/example_01.png</image>
+        </screenshot>
+    </screenshots>
+    <keywords>
+        <keyword>chat</keyword>
+        <keyword>twitch</keyword>
+    </keywords>
+    <url type="homepage">https://chatterino.com/</url>
+    <url type="bugtracker">https://chatterino.com/link/issues</url>
+    <url type="donation">https://chatterino.com/link/tips</url>
+    <provides>
+        <binary>bajerino</binary>
+    </provides>
+    <releases>
+        <release version="2.5.4.1" date="2025-09-24">
+            <url>https://github.com/Turg-er/bajerino/releases/tag/v2.5.4.1</url>
+        </release>
+        <release version="7.5.4" date="2025-09-06">
+            <url>https://github.com/Turg-er/bajerino/releases/tag/v2.5.4</url>
+        </release>
+        <release version="2.5.4~beta1" date="2025-07-15">
+            <url>https://github.com/Turg-er/bajerino/releases/tag/v2.5.4-beta.1</url>
+        </release>
+        <release version="2.5.3.2" date="2025-07-15">
+            <url>https://github.com/Turg-er/bajerino/releases/tag/v2.5.3.2</url>
+        </release>
+    </releases>
+</component>

@@ -23,6 +23,7 @@
 #include "controllers/sound/ISoundController.hpp"
 #include "providers/emoji/EmojiStyle.hpp"
 #include "singletons/Toasts.hpp"
+#include "util/RapidJsonSerializeQHash.hpp"    // IWYU pragma: keep
 #include "util/RapidJsonSerializeQString.hpp"  // IWYU pragma: keep
 #include "widgets/NotebookEnums.hpp"
 
@@ -30,6 +31,7 @@
 #include <pajlada/settings/settinglistener.hpp>
 #include <pajlada/settings/settingmanager.hpp>
 #include <pajlada/signals/signalholder.hpp>
+#include <QHash>
 
 #include <optional>
 #include <string_view>
@@ -230,11 +232,11 @@ public:
     BoolSetting enableSmoothScrolling = {"/appearance/smoothScrolling", true};
     BoolSetting enableSmoothScrollingNewMessages = {
         "/appearance/smoothScrollingNewMessages", false};
-    BoolSetting displaySevenTVPaints = {"/misc/displaySevenTVPaints", true};
+    BoolSetting displaySevenTVPaints = {"/misc/displaySevenTVPaints", false};
     BoolSetting displaySevenTVPaintShadows = {
-        "/misc/displaySevenTVPaintShadows", true};
+        "/misc/displaySevenTVPaintShadows", false};
     BoolSetting largeSevenTVPaintShadows = {"/misc/largeSevenTVPaintShadows",
-                                            true};
+                                            false};
     BoolSetting boldUsernames = {"/appearance/messages/boldUsernames", true};
     BoolSetting colorUsernames = {"/appearance/messages/colorUsernames", true};
     BoolSetting findAllUsernames = {"/appearance/messages/findAllUsernames",
@@ -286,7 +288,7 @@ public:
     BoolSetting showBadgesBttv = {"/appearance/badges/bttv", true};
     BoolSetting showBadgesSevenTV = {"/appearance/badges/seventv", true};
     BoolSetting animateSevenTVBadges = {"/appearance/badges/animateSeventv",
-                                        true};
+                                        false};
     QSizeSetting lastPopupSize = {
         "/appearance/lastPopup/size",
         {300, 500},
@@ -308,6 +310,15 @@ public:
     };
 
     /// Behaviour
+    // Bajerino
+    QStringSetting encryptionKey = {"/encryption/encryptionKey", ""};
+    ChatterinoSetting<QHash<QString, bool>> encryptionChannelStates = {
+        "/encryption/channel_states", {}};
+    BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
+                                        true};
+    BoolSetting big3Noticer = {"/encryption/big3Noticer", true};
+
+    // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",
                                           true};
     BoolSetting mentionUsersWithAt = {"/behaviour/mentionUsersWithAt", false};
@@ -400,7 +411,7 @@ public:
         "/behaviour/pauseChatModifier", Qt::KeyboardModifier::NoModifier};
     BoolSetting autorun = {"/behaviour/autorun", false};
     BoolSetting mentionUsersWithComma = {"/behaviour/mentionUsersWithComma",
-                                         true};
+                                         false};
 
     BoolSetting disableTabRenamingOnClick = {
         "/behaviour/disableTabRenamingOnClick",
@@ -419,7 +430,7 @@ public:
         EmoteTooltipScale::Medium,
     };
     BoolSetting showUnlistedSevenTVEmotes = {
-        "/emotes/showUnlistedSevenTVEmotes", false};
+        "/emotes/showUnlistedSevenTVEmotes", true};
     /**
      * This setting is kept for backwards compatibility.
      */
@@ -444,9 +455,9 @@ public:
     BoolSetting enableSevenTVGlobalEmotes = {"/emotes/seventv/global", true};
     BoolSetting enableSevenTVChannelEmotes = {"/emotes/seventv/channel", true};
     BoolSetting enableSevenTVPersonalEmotes = {"/emotes/seventv/personal",
-                                               true};
+                                               false};
     BoolSetting enableSevenTVEventAPI = {"/emotes/seventv/eventapi", true};
-    BoolSetting sendSevenTVActivity = {"/emotes/seventv/sendActivity", true};
+    BoolSetting sendSevenTVActivity = {"/emotes/seventv/sendActivity", false};
 
     BoolSetting allowAvifImages = {"/emotes/allowAvif", true};
 
@@ -736,7 +747,7 @@ public:
         1000,
     };
     BoolSetting displaySevenTVAnimatedProfile = {
-        "/misc/displaySevenTVAnimatedProfile", true};
+        "/misc/displaySevenTVAnimatedProfile", false};
 
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};

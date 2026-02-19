@@ -288,7 +288,7 @@ void Toasts::ensureInitialized()
     this->initialized_ = true;
 
     auto *instance = WinToast::instance();
-    instance->setAppName(L"Chatterino7");
+    instance->setAppName(L"Bajerino");
     instance->setAppUserModelId(Version::instance().appUserModelID());
     if (!getSettings()->createShortcutForToasts)
     {
@@ -350,7 +350,7 @@ void Toasts::ensureInitialized()
     {
         return;
     }
-    auto result = notify_init("Chatterino");
+    auto result = notify_init("bajerino");
 
     if (result == 0)
     {
@@ -371,9 +371,8 @@ void Toasts::sendLibnotify(const QString &channelName,
     NotifyNotification *notif = notify_notification_new(
         str.toUtf8().constData(), channelTitle.toUtf8().constData(), nullptr);
 
-    notify_notification_set_hint(
-        notif, "desktop-entry",
-        g_variant_new_string("com.chatterino.chatterino"));
+    notify_notification_set_hint(notif, "desktop-entry",
+                                 g_variant_new_string("com.bajerino.bajerino"));
 
     // this will be freed in onNotificationDestroyed
     auto *channelNameHeap = new QString(channelName);

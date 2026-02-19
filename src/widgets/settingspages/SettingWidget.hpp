@@ -96,7 +96,7 @@ public:
         colorButton(const QString &label, QStringSetting &setting);
     [[nodiscard("Must use created setting widget")]] static SettingWidget *
         lineEdit(const QString &label, QStringSetting &setting,
-                 const QString &placeholderText = {});
+                 const QString &placeholderText = {}, bool trim = false);
 
     [[nodiscard("Must use created setting widget")]] static SettingWidget *
         fontButton(const QString &label, QStringSetting &familySetting,

@@ -327,6 +327,7 @@ private:
 
     void appendTwitchBadges(const QVariantMap &tags,
                             TwitchChannel *twitchChannel);
+    void appendTomasBadge(const QString &userID);
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
     void appendBttvBadges(const QString &userID);

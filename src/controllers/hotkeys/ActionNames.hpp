@@ -136,7 +136,7 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
                   {"Subscriber emotes only", {"subscriber"}},
               },
               .argumentsPrompt = "Emote type:",
-              .argumentsPromptHover = "Which emotes should Chatterino reload",
+              .argumentsPromptHover = "Which emotes should Bajerino reload",
           }},
          {"runCommand",
           ActionDefinition{
@@ -272,6 +272,8 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .argumentsPrompt = "Behavior:",
           }},
          {"undo", ActionDefinition{"Undo"}},
+         {"toggleEncryption",
+          ActionDefinition{.displayName = "Toggle encryption"}},
 
      }},
     {HotkeyCategory::Window,
@@ -318,7 +320,7 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .argumentsPromptHover =
                   "What should be included in the new popup",
           }},
-         {"quit", ActionDefinition{"Quit Chatterino"}},
+         {"quit", ActionDefinition{"Quit Bajerino"}},
          {"removeTab", ActionDefinition{"Remove current tab"}},
          {"reopenSplit", ActionDefinition{"Reopen closed split"}},
          {"setStreamerMode",

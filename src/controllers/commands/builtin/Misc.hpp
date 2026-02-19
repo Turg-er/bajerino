@@ -33,5 +33,7 @@ QString injectStreamUpdateNoStream(const CommandContext &ctx);
 QString copyToClipboard(const CommandContext &ctx);
 QString unstableSetUserClientSideColor(const CommandContext &ctx);
 QString openUsercard(const CommandContext &ctx);
+QString sendEncrypted(const CommandContext &ctx);
+QString sendUnencrypted(const CommandContext &ctx);
 
 }  // namespace chatterino::commands

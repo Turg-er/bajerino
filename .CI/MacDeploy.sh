@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-# Bundle relevant qt & system dependencies into the ./chatterino.app folder
+# Bundle relevant qt & system dependencies into the ./bajerino.app folder
 
 set -eo pipefail
 
-if [ -d bin/chatterino.app ] && [ ! -d chatterino.app ]; then
-    >&2 echo "Moving bin/chatterino.app down one directory"
-    mv bin/chatterino.app chatterino.app
+if [ -d bin/bajerino.app ] && [ ! -d bajerino.app ]; then
+    >&2 echo "Moving bin/bajerino.app down one directory"
+    mv bin/bajerino.app bajerino.app
 fi
 
 if [ -n "$Qt5_DIR" ]; then
@@ -43,14 +43,14 @@ if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
     codesign -s "$MACOS_CODESIGN_CERTIFICATE" --force kimg/kimg_avif.dylib
 fi
 
-mkdir -p chatterino.app/Contents/Frameworks
-mkdir -p chatterino.app/Contents/PlugIns/imageformats
-cp kimg/libKF6Archive.6.dylib chatterino.app/Contents/Frameworks/
-cp kimg/kimg_avif.dylib chatterino.app/Contents/PlugIns/imageformats/
+mkdir -p bajerino.app/Contents/Frameworks
+mkdir -p bajerino.app/Contents/PlugIns/imageformats
+cp kimg/libKF6Archive.6.dylib bajerino.app/Contents/Frameworks/
+cp kimg/kimg_avif.dylib bajerino.app/Contents/PlugIns/imageformats/
 
-macdeployqt chatterino.app "${_macdeployqt_args[@]}" -verbose=1
+macdeployqt bajerino.app "${_macdeployqt_args[@]}" -verbose=1
 
 if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
-    # Validate that chatterino.app was codesigned correctly
-    codesign -v chatterino.app
+    # Validate that bajerino.app was codesigned correctly
+    codesign -v bajerino.app
 fi

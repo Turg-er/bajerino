@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Chatterino
+Name=Bajerino
 Comment=Chat client for Twitch
-Exec=chatterino
-Icon=com.chatterino.chatterino
+Exec=bajerino
+Icon=com.bajerino.bajerino
 Terminal=false
 Categories=Network;InstantMessaging;
-StartupWMClass=chatterino
+StartupWMClass=bajerino

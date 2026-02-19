@@ -125,3 +125,9 @@ aqtinstall.log
 
 # sccache (CI)
 .sccache
+
+# bajerino
+tools/python-crypt-helper
+!tools/python-crypt-helper/*.py
+!tools/python-crypt-helper/README.md
+!tools/python-crypt-helper/requirements.txt

@@ -5,7 +5,7 @@ on:
     workflows: ["Build"]
     types: [completed]
     # make sure this only runs on the default branch
-    branches: [chatterino7, "bugfix-release/**", "release/*"]
+    branches: [master, "bugfix-release/**", "release/*"]
   workflow_dispatch:
 
 env:
@@ -35,12 +35,12 @@ jobs:
         uses: dawidd6/action-download-artifact@v15
         with:
           workflow: build.yml
-          name: chatterino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
+          name: bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
           commit: ${{ github.sha }}
           path: build/
 
       - name: Unzip
-        run: 7z e -spf chatterino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
+        run: 7z e -spf bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
         working-directory: build
 
       - name: Install InnoSetup
@@ -127,13 +127,13 @@ jobs:
         with:
           workflow: build.yml
           name_is_regexp: true
-          name: '((^[Cc]hatterino)-[^wW].+$)|(^.+\.7z$)'
+          name: '((^[Bb]ajerino)-[^wW].+$)|(^.+\.7z$)'
           path: build/
 
       - name: Fix Directories
         working-directory: build
         run: |
-          for file in */ ; do 
+          for file in */ ; do
             mv "$file$(find "$file" -type f -printf '%f')" ".tmp.${file%/}";
             rm -rf "$file";
             mv ".tmp.${file%/}" "${file%/}";
@@ -144,12 +144,12 @@ jobs:
         working-directory: build
         run: |
           ls -l
-          mv Chatterino-ubuntu-22.04-Qt-6.7.2.deb Chatterino-Ubuntu-22.04-Qt6.deb
-          mv Chatterino-ubuntu-24.04-Qt-6.7.2.deb Chatterino-Ubuntu-24.04-Qt6.deb
+          mv Bajerino-ubuntu-22.04-Qt-6.7.2.deb Bajerino-Ubuntu-22.04-Qt6.deb
+          mv Bajerino-ubuntu-24.04-Qt-6.7.2.deb Bajerino-Ubuntu-24.04-Qt6.deb
 
-          mv Chatterino-x86_64-Qt-6.7.2.AppImage Chatterino-x86_64-Qt6.AppImage
+          mv Bajerino-x86_64-Qt-6.7.2.AppImage Bajerino-x86_64-Qt6.AppImage
 
-          mv chatterino-macos-Qt-6.9.3-universal.dmg Chatterino.dmg
+          mv bajerino-macos-Qt-6.9.3-universal.dmg Bajerino.dmg
 
       - name: Hash files
         working-directory: build

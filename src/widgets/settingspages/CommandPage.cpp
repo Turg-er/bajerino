@@ -33,7 +33,7 @@ inline const QString HELP_TEXT = u"{1} => first word &nbsp;&nbsp;&nbsp; {1+} => 
 
 QString c1settingsPath()
 {
-    return combinePath(qgetenv("appdata"), "Chatterino\\Custom\\Commands.txt");
+    return combinePath(qgetenv("appdata"), "Bajerino\\Custom\\Commands.txt");
 }
 
 void checkCommandDuplicates(EditableModelView *view, QLabel *duplicateWarning)
@@ -107,7 +107,7 @@ CommandPage::CommandPage()
     // TODO: asyncronously check path
     if (QFile(c1settingsPath()).exists())
     {
-        auto *button = new QPushButton("Import commands from Chatterino 1");
+        auto *button = new QPushButton("Import commands from Bajerino 1");
         this->view->addCustomButton(button);
 
         QObject::connect(button, &QPushButton::clicked, this, [this] {
@@ -115,7 +115,7 @@ CommandPage::CommandPage()
             if (!c1settings.open(QIODevice::ReadOnly))
             {
                 QMessageBox::warning(
-                    this, "Chatterino 1 Importer",
+                    this, "Bajerino 1 Importer",
                     "Failed to read settings: " + c1settings.errorString());
                 return;
             }

@@ -53,7 +53,7 @@ const QString CRASHPAD_EXECUTABLE_NAME = QStringLiteral("crashpad-handler.exe");
 #    error Unsupported platform
 #endif
 
-const QString RECOVERY_FILE = u"chatterino-recovery.json"_s;
+const QString RECOVERY_FILE = u"bajerino-recovery.json"_s;
 
 /// The recovery options are saved outside the settings
 /// to be able to read them without loading the settings.

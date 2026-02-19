@@ -98,7 +98,7 @@ namespace chatterino {
 Args::Args(const QApplication &app, const Paths &paths)
 {
     QCommandLineParser parser;
-    parser.setApplicationDescription("Chatterino 2 Client for Twitch Chat");
+    parser.setApplicationDescription("Bajerino Client for Twitch Chat");
     parser.addHelpOption();
 
     // Used internally by app to restart after unexpected crashes
@@ -118,14 +118,14 @@ Args::Args(const QApplication &app, const Paths &paths)
                                      "allowing you to see debug output.");
     // Safe mode
     QCommandLineOption safeModeOption(
-        "safe-mode", "Starts Chatterino without loading Plugins and always "
+        "safe-mode", "Starts Bajerino without loading Plugins and always "
                      "show the settings button.");
 
     QCommandLineOption loginOption(
         "login",
-        "Starts Chatterino logged in as the account matching the supplied "
+        "Starts Bajerino logged in as the account matching the supplied "
         "username. If the supplied username does not match any account "
-        "Chatterino starts logged in as anonymous.",
+        "Bajerino starts logged in as anonymous.",
         "username");
 
     // Channel layout

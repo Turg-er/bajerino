@@ -2,16 +2,21 @@ name: Changelog Check
 
 on:
   pull_request:
-    branches: [chatterino7]
+    branches: [master]
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
 
 jobs:
   check-changelog:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        changelog:
+          - CHANGELOG.baj.md
+          - CHANGELOG.c7.md
     steps:
       # Gives an error if there's no change in the changelog (except using label)
       - name: Changelog check
         uses: dangoslen/changelog-enforcer@v3
         with:
-          changeLogPath: "CHANGELOG.c7.md"
+          changeLogPath: ${{ matrix.changelog }}
           skipLabels: "no changelog entry needed, ci, submodules"

@@ -703,6 +703,50 @@ std::string_view FfzBadgeElement::type() const
     return std::remove_pointer_t<decltype(this)>::TYPE;
 }
 
+// DECRYPTED BADGE
+DecryptedBadge::DecryptedBadge(const EmotePtr &data, MessageElementFlags flags_)
+    : BadgeElement(data, flags_)
+{
+}
+
+QJsonObject DecryptedBadge::toJson() const
+{
+    auto base = BadgeElement::toJson();
+    base["type"_L1] = u"DecryptedBadgeElement"_s;
+
+    return base;
+}
+
+std::string_view DecryptedBadge::type() const
+{
+    return std::remove_pointer_t<decltype(this)>::TYPE;
+}
+
+void DecryptedBadge::addToContainer(MessageLayoutContainer &container,
+                                    const MessageLayoutContext &ctx)
+{
+    if (!ctx.flags.hasAny(this->getFlags()))
+    {
+        return;
+    }
+
+    auto image =
+        this->getEmote()->images.getImageOrLoaded(container.getImageScale());
+    if (image->isEmpty())
+    {
+        return;
+    }
+
+    container.addElement(this->makeImageLayoutElement(
+        image, image->size() * container.getScale() * this->scale_));
+}
+
+DecryptedBadge *DecryptedBadge::setScale(float scale_)
+{
+    this->scale_ = scale_;
+    return this;
+}
+
 // TEXT
 TextElement::TextElement(const QString &text, MessageElementFlags flags,
                          const MessageColor &color, FontStyle style)

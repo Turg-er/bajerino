@@ -223,13 +223,26 @@ void SplitInput::initLayout()
         this->ui_.sendWaitStatus->setHidden(true);
         hbox->addWidget(this->ui_.sendWaitStatus);
 
+        auto inputButtonBox = box.emplace<QBoxLayout>(QBoxLayout::LeftToRight)
+                                  .withoutMargin()
+                                  .withoutSpacing();
+
+        this->ui_.encryptionToggleCheckbox = new QCheckBox();
+        this->ui_.encryptionToggleCheckbox->setToolTip("Toggle Encryption");
+        this->ui_.encryptionToggleCheckbox->setFocusPolicy(Qt::NoFocus);
+        this->ui_.encryptionToggleCheckbox->setChecked(false);
+        this->updateEncryptToggleButton();
+        inputButtonBox->addWidget(this->ui_.encryptionToggleCheckbox, 0,
+                                  Qt::AlignRight);
+        inputButtonBox->addSpacing(1);
+
         this->ui_.emoteButton = new SvgButton(
             {
                 .dark = ":/buttons/emote.svg",
                 .light = ":/buttons/emoteDark.svg",
             },
             nullptr, QSize{6, 3});
-        box->addWidget(this->ui_.emoteButton, 0, Qt::AlignRight);
+        inputButtonBox->addWidget(this->ui_.emoteButton, 0, Qt::AlignRight);
     }
 
     // ---- misc
@@ -283,6 +296,34 @@ void SplitInput::initLayout()
             }
         },
         this->managedConnections_);
+
+    this->signalHolder_.managedConnect(this->split_->channelChanged, [this] {
+        auto channelStates = getSettings()->encryptionChannelStates.getValue();
+        this->ui_.encryptionToggleCheckbox->setChecked(
+            channelStates.value(this->split_->getChannel()->getName(), false));
+    });
+
+    getSettings()->encryptionChannelStates.connect(
+        [this](const QHash<QString, bool> &channelStates, auto) {
+            this->ui_.encryptionToggleCheckbox->setChecked(channelStates.value(
+                this->split_->getChannel()->getName(), false));
+        },
+        this->managedConnections_);
+
+    getSettings()->useLockIconForToggle.connect(
+        [this](bool, const auto &) {
+            this->updateEncryptToggleButton();
+        },
+        this->managedConnections_);
+
+    QObject::connect(this->ui_.encryptionToggleCheckbox, &QCheckBox::toggled,
+                     this, [this](bool value) {
+                         auto channelStates =
+                             getSettings()->encryptionChannelStates.getValue();
+                         channelStates[this->split_->getChannel()->getName()] =
+                             value;
+                         getSettings()->encryptionChannelStates = channelStates;
+                     });
 }
 
 void SplitInput::triggerSelfMessageReceived()
@@ -300,6 +341,7 @@ void SplitInput::scaleChangedEvent(float scale)
     // update the icon size of the buttons
     this->updateEmoteButton();
     this->updateCancelReplyButton();
+    this->updateEncryptToggleButton();
 
     // set maximum height
     if (!this->hidden)
@@ -330,6 +372,7 @@ void SplitInput::themeChangedEvent()
         this->theme->splits.input.background);
     this->backgroundColorAnimation.stop();
     this->updateTextEditPalette();
+    this->updateEncryptToggleButton();
 
     if (this->theme->isLightTheme())
     {
@@ -345,6 +388,56 @@ void SplitInput::themeChangedEvent()
     if (this->replyTarget_ != nullptr)
     {
         this->ui_.vbox->setSpacing(this->marginForTheme());
+    }
+}
+
+void SplitInput::updateEncryptToggleButton()
+{
+    if (this->ui_.encryptionToggleCheckbox == nullptr)
+    {
+        return;
+    }
+
+    auto scale = this->scale();
+
+    this->ui_.encryptionToggleCheckbox->setFixedSize(
+        static_cast<int>(24 * scale), static_cast<int>(18 * scale));
+
+    if (!getSettings()->useLockIconForToggle)
+    {
+        this->ui_.encryptionToggleCheckbox->setStyleSheet(
+            QString("QCheckBox:hover {"
+                    "background: rgba(%1, 0.25);"
+                    "}"
+                    "QCheckBox::indicator {"
+                    "width: %2px;"
+                    "height: %2px;"
+                    "subcontrol-position: center center;"
+                    "}")
+                .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
+                .arg(static_cast<int>(14 * scale)));
+    }
+    else
+    {
+        this->ui_.encryptionToggleCheckbox->setStyleSheet(
+            QString("QCheckBox:hover {"
+                    "background: rgba(%1, 0.25);"
+                    "}"
+                    "QCheckBox::indicator {"
+                    "width: %2px;"
+                    "height: %2px;"
+                    "subcontrol-position: center center;"
+                    "padding-bottom: %3px;"
+                    "}"
+                    "QCheckBox::indicator:unchecked {"
+                    "image: url(:/buttons/openlock.svg);"
+                    "}"
+                    "QCheckBox::indicator:checked {"
+                    "image: url(:/buttons/lock.svg);"
+                    "}")
+                .arg(this->theme->isLightTheme() ? "0, 0, 0" : "255, 255, 255")
+                .arg(static_cast<int>(13 * scale))
+                .arg(static_cast<int>(2 * scale)));
     }
 }
 
@@ -397,6 +490,19 @@ void SplitInput::openEmotePopup()
     this->emotePopup_->show();
     this->emotePopup_->raise();
     this->emotePopup_->activateWindow();
+}
+
+void SplitInput::handleToggleEncryption()
+{
+    auto c = this->split_->getChannel();
+    if (c == nullptr)
+    {
+        return;
+    }
+
+    auto channelStates = getSettings()->encryptionChannelStates.getValue();
+    this->ui_.encryptionToggleCheckbox->setChecked(
+        !channelStates.value(c->getName(), false));
 }
 
 QString SplitInput::handleSendMessage(const std::vector<QString> &arguments)
@@ -735,6 +841,12 @@ void SplitInput::addShortcuts()
              auto cursor = this->ui_.textEdit->textCursor();
              cursor.select(QTextCursor::WordUnderCursor);
              this->ui_.textEdit->setTextCursor(cursor);
+             return "";
+         }},
+        {"toggleEncryption",
+         [this](const std::vector<QString> &arguments) -> QString {
+             (void)arguments;
+             handleToggleEncryption();
              return "";
          }},
     };
@@ -1282,8 +1394,12 @@ void SplitInput::setReply(MessagePtr target)
             this->ui_.textEdit->setPlainText(replyPrefix + plainText + " ");
             this->ui_.textEdit->moveCursor(QTextCursor::EndOfBlock);
             this->ui_.textEdit->resetCompletion();
-            this->ui_.replyLabel->setText("Replying to @" +
-                                          this->replyTarget_->displayName);
+            this->ui_.replyLabel->setText(
+                QString("Replying to %1@%2")
+                    .arg(this->replyTarget_->flags.has(MessageFlag::Decrypted)
+                             ? "🔒 "
+                             : "",
+                         this->replyTarget_->displayName));
         }
     }
     else

@@ -7,6 +7,7 @@
 #include "messages/Message.hpp"
 #include "widgets/BaseWidget.hpp"
 
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -108,6 +109,8 @@ protected:
 
     virtual void giveFocus(Qt::FocusReason reason);
 
+    void handleToggleEncryption();
+
     QString handleSendMessage(const std::vector<QString> &arguments);
     void postMessageSend(const QString &message,
                          const std::vector<QString> &arguments);
@@ -130,6 +133,7 @@ protected:
     void clearReplyTarget();
 
     void updateCancelReplyButton();
+    void updateEncryptToggleButton();
 
     // scaledMaxHeight returns the height in pixels that this widget can grow to
     // This does not take hidden into account, so callers must take hidden into account themselves
@@ -169,6 +173,7 @@ protected:
         QLabel *textEditLength;
         LabelButton *sendButton;
         QLabel *sendWaitStatus;
+        QCheckBox *encryptionToggleCheckbox;
         SvgButton *emoteButton;
     } ui_;
 

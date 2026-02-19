@@ -47,6 +47,7 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Toasts.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/PostToThread.hpp"
@@ -776,6 +777,22 @@ QString TwitchChannel::prepareMessage(const QString &message) const
         app->getEmotes()->getEmojis()->replaceShortCodes(message);
 
     parsedMessage = parsedMessage.simplified();
+
+    if (parsedMessage.isEmpty())
+    {
+        return "";
+    }
+
+    auto channelStates = getSettings()->encryptionChannelStates.getValue();
+    if (parsedMessage.startsWith("/d "))
+    {
+        parsedMessage.remove(0, 3);
+    }
+    else if (channelStates.value(this->getName(), false))
+    {
+        parsedMessage = encryptMessage(parsedMessage,
+                                       getSettings()->encryptionKey.getValue());
+    }
 
     if (parsedMessage.isEmpty())
     {

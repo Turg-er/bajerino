@@ -2,8 +2,8 @@
 
 set -eo pipefail
 
-if [ ! -d chatterino.app ]; then
-    echo "ERROR: No 'chatterino.app' dir found in the build directory. Make sure you've run ./CI/MacDeploy.sh"
+if [ ! -d bajerino.app ]; then
+    echo "ERROR: No 'bajerino.app' dir found in the build directory. Make sure you've run ./CI/MacDeploy.sh"
     exit 1
 fi
 
@@ -23,12 +23,16 @@ fi
 
 if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then
     echo "Codesigning force deep inside the app"
-    codesign -s "$MACOS_CODESIGN_CERTIFICATE" --deep --force chatterino.app
+    codesign -s "$MACOS_CODESIGN_CERTIFICATE" --deep --force bajerino.app
     echo "Done!"
 fi
 
+echo "Self sign"
+codesign --force --deep -s - bajerino.app
+echo "Done!"
+
 echo "Running dmgbuild.."
-dmgbuild --settings ./../.CI/dmg-settings.py -D app=./chatterino.app Chatterino2 "$OUTPUT_DMG_PATH"
+dmgbuild --settings ./../.CI/dmg-settings.py -D app=./bajerino.app Bajerino "$OUTPUT_DMG_PATH"
 echo "Done!"
 
 if [ -n "$MACOS_CODESIGN_CERTIFICATE" ]; then

@@ -12,6 +12,9 @@
 
 namespace chatterino {
 
+inline constexpr QStringView LINK_BAJERINO_SOURCE =
+    u"https://github.com/turg-er/bajerino";
+
 inline constexpr QStringView LINK_CHATTERINO_WIKI =
     u"https://wiki.chatterino.com";
 inline constexpr QStringView LINK_CHATTERINO_DISCORD =

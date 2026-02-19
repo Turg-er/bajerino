@@ -31,6 +31,7 @@
 #include "singletons/StreamerMode.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/BajerinoHelpers.hpp"
 #include "util/Clipboard.hpp"
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
@@ -920,6 +921,15 @@ void UserInfoPopup::setData(const QString &name,
     }
 
     this->ui_.nameLabel->setText(name);
+
+    if (isBig3(this->userId_))
+    {
+        const QString noticed = noticeBig3(name);
+        this->setWindowTitle(
+            TEXT_TITLE.arg(noticed, this->underlyingChannel_->getName()));
+        this->ui_.nameLabel->setText(noticed);
+    }
+
     this->ui_.nameLabel->setProperty("copy-text", name);
 
     if (this->isKick_)
@@ -1020,7 +1030,14 @@ void UserInfoPopup::updateUserData()
         if (this->userName_.isEmpty())
         {
             this->userName_ = user.login;
-            this->ui_.nameLabel->setText(user.login);
+            if (isBig3(user.id))
+            {
+                this->ui_.nameLabel->setText(noticeBig3(user.login));
+            }
+            else
+            {
+                this->ui_.nameLabel->setText(user.login);
+            }
 
             // Ensure recent messages are shown
             this->updateLatestMessages();
@@ -1042,7 +1059,14 @@ void UserInfoPopup::updateUserData()
         }
         else
         {
-            this->ui_.nameLabel->setText(user.displayName);
+            if (isBig3(user.id))
+            {
+                this->ui_.nameLabel->setText(noticeBig3(user.displayName));
+            }
+            else
+            {
+                this->ui_.nameLabel->setText(user.displayName);
+            }
             this->ui_.nameLabel->setProperty("copy-text", user.displayName);
         }
 
@@ -1058,6 +1082,13 @@ void UserInfoPopup::updateUserData()
         this->ui_.createdDateLabel->setMouseTracking(true);
         this->ui_.userIDLabel->setText(TEXT_USER_ID % user.id);
         this->ui_.userIDLabel->setProperty("copy-text", user.id);
+
+        if (isBig3(user.id))
+        {
+            this->setWindowTitle(
+                TEXT_TITLE.arg(noticeBig3(user.displayName),
+                               this->underlyingChannel_->getName()));
+        }
 
         if (getApp()->getStreamerMode()->isEnabled() &&
             getSettings()->streamerModeHideUsercardAvatars)
@@ -1263,7 +1294,7 @@ void UserInfoPopup::loadAvatar(const QString &userID, const QString &pictureURL,
     else
     {
         QNetworkRequest req(pictureURL);
-        req.setHeader(QNetworkRequest::UserAgentHeader, "Chatterino");
+        req.setHeader(QNetworkRequest::UserAgentHeader, "Bajerino");
         static auto *manager = new QNetworkAccessManager();
         auto *reply = manager->get(req);
 

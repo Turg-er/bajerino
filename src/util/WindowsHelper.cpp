@@ -64,7 +64,7 @@ bool isRegisteredForStartup()
 {
     QSettings settings(RUN_KEY, QSettings::NativeFormat);
 
-    return !settings.value("Chatterino").toString().isEmpty();
+    return !settings.value("Bajerino").toString().isEmpty();
 }
 
 void setRegisteredForStartup(bool isRegistered)
@@ -83,11 +83,11 @@ void setRegisteredForStartup(bool isRegistered)
                            .absoluteFilePath()
                            .replace('/', '\\');
 
-        settings.setValue("Chatterino", "\"" + exePath + "\" --autorun");
+        settings.setValue("Bajerino", "\"" + exePath + "\" --autorun");
     }
     else
     {
-        settings.remove("Chatterino");
+        settings.remove("Bajerino");
     }
 }
 

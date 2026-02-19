@@ -581,6 +581,8 @@ set(SOURCE_FILES
         util/AbandonObject.hpp
         util/AttachToConsole.cpp
         util/AttachToConsole.hpp
+        util/BajerinoHelpers.cpp
+        util/BajerinoHelpers.hpp
         util/BadgeRegistry.cpp
         util/BadgeRegistry.hpp
         util/BoostJsonWrap.cpp
@@ -589,6 +591,8 @@ set(SOURCE_FILES
         util/ChannelHelpers.hpp
         util/Clipboard.cpp
         util/Clipboard.hpp
+        util/Crypto.cpp
+        util/Crypto.hpp
         util/CustomPlayer.cpp
         util/CustomPlayer.hpp
         util/DebugCount.cpp
@@ -926,7 +930,7 @@ if(CHATTERINO_PLUGINS)
         PUBLIC
         CHATTERINO_HAVE_PLUGINS
     )
-    message(STATUS "Building Chatterino with lua plugin support enabled.")
+    message(STATUS "Building Bajerino with lua plugin support enabled.")
 endif()
 
 if (CHATTERINO_GENERATE_COVERAGE)
@@ -1140,12 +1144,12 @@ if (BUILD_APP)
                 ARCHIVE DESTINATION lib/static
                 )
 
-        install(FILES ${CMAKE_SOURCE_DIR}/resources/com.chatterino.chatterino.desktop
+        install(FILES ${CMAKE_SOURCE_DIR}/resources/com.bajerino.bajerino.desktop
                 DESTINATION share/applications
                 )
 
         install(FILES ${CMAKE_SOURCE_DIR}/resources/icon.png
-                RENAME com.chatterino.chatterino.png
+                RENAME com.bajerino.bajerino.png
                 DESTINATION share/icons/hicolor/256x256/apps
                 )
     endif ()
@@ -1246,7 +1250,7 @@ if (APPLE AND BUILD_APP)
     set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
     set_target_properties(${EXECUTABLE_PROJECT}
         PROPERTIES
-        MACOSX_BUNDLE_BUNDLE_NAME "Chatterino"
+        MACOSX_BUNDLE_BUNDLE_NAME "Bajerino"
         MACOSX_BUNDLE_GUI_IDENTIFIER "app.7tv.chatterino7"
         MACOSX_BUNDLE_LONG_VERSION_STRING "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"

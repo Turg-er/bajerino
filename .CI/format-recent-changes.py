@@ -72,8 +72,10 @@ print(
 
 
 unreleased_lines = get_unreleased_lines("../CHANGELOG.md")
+bajerino_changes = get_unreleased_lines("../CHANGELOG.baj.md")
 seventv_changes = get_unreleased_lines("../CHANGELOG.c7.md")
 
+unreleased_lines += bajerino_changes
 unreleased_lines += seventv_changes
 unreleased_lines.sort(key=lambda it: it[0], reverse=True)
 
@@ -86,6 +88,12 @@ for _, line in unreleased_lines[:5]:
 if len(unreleased_lines) > 5:
     print("<details><summary>More Changes</summary>\n")
     for _, line in unreleased_lines[5:]:
+        print(line)
+    print("</details>")
+
+if len(bajerino_changes) > 0:
+    print("<details><summary>Bajerino Changes</summary>\n")
+    for _, line in bajerino_changes:
         print(line)
     print("</details>")
 

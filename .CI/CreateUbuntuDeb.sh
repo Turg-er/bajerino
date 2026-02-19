@@ -16,7 +16,7 @@ packaging_dir="package"
 ubuntu_release="$(lsb_release -rs)"
 
 # The final path where we'll save the .deb package
-deb_path="Chatterino-ubuntu-${ubuntu_release}-x86_64.deb"
+deb_path="Bajerino-ubuntu-${ubuntu_release}-x86_64.deb"
 
 # Refactor opportunity:
 case "$ubuntu_release" in
@@ -37,16 +37,16 @@ esac
 echo "Building Ubuntu .deb file on '$ubuntu_release'"
 echo "Dependencies: $dependencies"
 
-if [ ! -f ./bin/chatterino ] || [ ! -x ./bin/chatterino ]; then
-    echo "ERROR: No chatterino binary file found. This script must be run in the build folder, and chatterino must be built first."
+if [ ! -f ./bin/bajerino ] || [ ! -x ./bin/bajerino ]; then
+    echo "ERROR: No bajerino binary file found. This script must be run in the build folder, and bajerino must be built first."
     exit 1
 fi
 
-chatterino_version=$(git describe --tags 2>/dev/null) || true
-if [ "$(echo "$chatterino_version" | cut -c1-1)" = 'v' ]; then
-    chatterino_version="$(echo "$chatterino_version" | cut -c2-)"
+bajerino_version=$(git describe --tags 2>/dev/null) || true
+if [ "$(echo "$bajerino_version" | cut -c1-1)" = 'v' ]; then
+    bajerino_version="$(echo "$bajerino_version" | cut -c2-)"
 else
-    chatterino_version="0.0.0-dev"
+    bajerino_version="0.0.0-dev"
 fi
 
 # Make sure no old remnants of a previous packaging remains
@@ -56,14 +56,14 @@ mkdir -p "$packaging_dir/DEBIAN"
 
 echo "Making control file"
 cat >> "$packaging_dir/DEBIAN/control" << EOF
-Package: chatterino
-Version: $chatterino_version
+Package: bajerino
+Version: $bajerino_version
 Architecture: amd64
 Maintainer: Mm2PL <mm2pl@kotmisia.pl>
 Depends: $dependencies
 Section: net
 Priority: optional
-Homepage: https://github.com/Chatterino/chatterino2
+Homepage: https://github.com/turg-er/bajerino
 Description: Ubuntu package built for $ubuntu_release
 EOF
 cat "$packaging_dir/DEBIAN/control"

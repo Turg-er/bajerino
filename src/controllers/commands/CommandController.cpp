@@ -349,6 +349,10 @@ CommandController::CommandController(const Paths &paths)
 
     /// Supported commands
 
+    this->registerCommand("/e", &commands::sendEncrypted);
+
+    this->registerCommand("/d", &commands::sendUnencrypted);
+
     this->registerCommand("/debug-args", &commands::listArgs);
 
     this->registerCommand("/debug-env", &commands::listEnvironmentVariables);

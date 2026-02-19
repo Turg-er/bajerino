@@ -77,6 +77,10 @@ enum class MessageFlag : std::int64_t {
     /// Note: If this message is inside a reply thread, the root must not have the flag either.
     InvalidReplyTarget = (1LL << 42),
     WatchStreak = (1LL << 43),
+    /// Message is possibly encrypted but could not be decrypted
+    MaybeEncrypted = (1LL << 62),
+    /// Message was encrypted and successfully decrypted
+    Decrypted = (1LL << 63),
 };
 using MessageFlags = FlagsEnum<MessageFlag>;
 

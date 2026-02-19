@@ -127,7 +127,7 @@ SeventvEventAPI *makeSeventvEventAPI(Settings &settings)
     if (enabled)
     {
         return new SeventvEventAPI(SEVENTV_EVENTAPI_URL %
-                                   "?app=Chatterino&version=" %
+                                   "?app=Bajerino&version=" %
                                    Version::instance().version());
     }
 
@@ -165,7 +165,7 @@ IApplication::~IApplication()
     INSTANCE = nullptr;
 }
 
-// this class is responsible for handling the workflow of Chatterino
+// this class is responsible for handling the workflow of Bajerino
 // It will create the instances of the major classes, and connect their signals
 // to each other
 
@@ -236,7 +236,7 @@ void Application::initialize(Settings &settings, const Paths &paths)
         getSettings()->currentVersion.getValue() != "" &&
         getSettings()->currentVersion.getValue() != CHATTERINO_VERSION)
     {
-        auto *box = new QMessageBox(QMessageBox::Information, "Chatterino 7",
+        auto *box = new QMessageBox(QMessageBox::Information, "Bajerino",
                                     "Show changelog?",
                                     QMessageBox::Yes | QMessageBox::No);
         box->setAttribute(Qt::WA_DeleteOnClose);
@@ -293,7 +293,7 @@ void Application::initialize(Settings &settings, const Paths &paths)
                     if (auto channel = split->getChannel(); !channel->isEmpty())
                     {
                         channel->addSystemMessage(
-                            "Chatterino unexpectedly crashed and restarted. "
+                            "Bajerino unexpectedly crashed and restarted. "
                             "You can disable automatic restarts in the "
                             "settings.");
                     }

@@ -17,6 +17,7 @@
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Clipboard.hpp"
+#include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/IncognitoBrowser.hpp"
 #include "util/StreamLink.hpp"
@@ -718,7 +719,7 @@ QString openUsercard(const CommandContext &ctx)
         {
             channel->addSystemMessage(
                 "A usercard can only be displayed for a channel that is "
-                "currently opened in Chatterino.");
+                "currently opened in Bajerino.");
             return "";
         }
 
@@ -773,6 +774,57 @@ QString openUsercard(const CommandContext &ctx)
     userPopup->moveTo(QCursor::pos(), widgets::BoundsChecking::CursorPosition);
     userPopup->show();
     return "";
+}
+
+QString sendEncrypted(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+
+    if (ctx.words.size() < 2)
+    {
+        ctx.channel->addSystemMessage("Usage: /e <message>");
+        return "";
+    }
+    auto message = ctx.words.mid(1).join(" ");
+
+    auto channelStates = getSettings()->encryptionChannelStates.getValue();
+    if (channelStates.value(ctx.channel->getName(), false))
+    {
+        ctx.channel->addSystemMessage(
+            "Bajerino is set to encrypt automatically so invoking this "
+            "command is unnecessary.");
+        return message;
+    }
+
+    return encryptMessage(message, getSettings()->encryptionKey.getValue());
+}
+
+QString sendUnencrypted(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+
+    if (ctx.words.size() < 2)
+    {
+        ctx.channel->addSystemMessage("Usage: /d <message>");
+        return "";
+    }
+    auto message = ctx.words.join(" ");
+
+    auto channelStates = getSettings()->encryptionChannelStates.getValue();
+    if (!channelStates.value(ctx.channel->getName(), false))
+    {
+        ctx.channel->addSystemMessage(
+            "Bajerino is set to not encrypt automatically so invoking "
+            "this command is unnecessary.");
+    }
+
+    return message;
 }
 
 }  // namespace chatterino::commands
