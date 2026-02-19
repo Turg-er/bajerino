@@ -1,5 +1,10 @@
-## 2.5.4 Bajerino
+# Changelog
+
 ## Unversioned
+
+- Major: Rebase on Chatterino7 instead of Chatterino (956b241e5dd02dc6e00f9fe807ebb7ed53dbf9ea)
+
+## 2.5.4 Bajerino
 
 - Major: Refactor crypto and remove legacy crypto code. (484a8826cfbb2b9ab5cbcfc424975f881504e361)
 - Major: Add custom badge for tomas. (a4cf35e4f3622725ab13e524a8723d5c77c1b1b1)
