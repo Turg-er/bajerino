@@ -1294,7 +1294,7 @@ void UserInfoPopup::loadAvatar(const QString &userID, const QString &pictureURL,
     else
     {
         QNetworkRequest req(pictureURL);
-        req.setHeader(QNetworkRequest::UserAgentHeader, "Bajerino");
+        req.setHeader(QNetworkRequest::UserAgentHeader, "Chatterino");
         static auto *manager = new QNetworkAccessManager();
         auto *reply = manager->get(req);
 

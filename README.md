@@ -2,6 +2,8 @@
 Chatterino7 [![GitHub Actions Build (Windows, Ubuntu, MacOS)](https://github.com/seventv/chatterino7/actions/workflows/build.yml/badge.svg?branch=chatterino7)](https://github.com/SevenTV/chatterino7/actions?query=workflow%3ABuild+branch%3Achatterino7) [![Chocolatey Package](https://img.shields.io/chocolatey/v/chatterino7?include_prereleases)](https://chocolatey.org/packages/chatterino7)
 ============
 
+Bajerino is a fork of Chatterino7, but with useless features.
+
 Chatterino7 is a fork of Chatterino 2. This fork mainly contains features that aren't accepted into Chatterino 2, most notably 7TV subscriber features.
 
 ### Features of Chatterino7
@@ -54,7 +56,7 @@ Windows users can also install Chatterino [from Chocolatey](https://chocolatey.o
 
 You can download the latest Chatterino 2 build over [here](https://github.com/Chatterino/chatterino2/releases/tag/nightly-build)
 
-You might also need to install the [VC++ Redistributables](https://aka.ms/vs/17/release/vc_redist.x64.exe) from Microsoft if you do not have it installed already.  
+You might also need to install the [VC++ Redistributables](https://aka.ms/vs/17/release/vc_redist.x64.exe) from Microsoft if you do not have it installed already.
 If you still receive an error about `MSVCR120.dll missing`, then you should install the [VC++ 2013 Restributable](https://download.microsoft.com/download/2/E/6/2E61CFA4-993B-4DD4-91DA-3737CD5CD6E3/vcredist_x64.exe).
 
 ## Building
