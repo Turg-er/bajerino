@@ -317,6 +317,8 @@ public:
     BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
                                         true};
     BoolSetting big3Noticer = {"/bajerino/big3Noticer", true};
+    BoolSetting twitchIrcJoinAsAnonymous = {"/bajerino/joinIrcAsAnonymous",
+                                            false};
 
     // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",

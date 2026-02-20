@@ -153,6 +153,22 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         u"To know who rules over you, simply find out who you "
         "are not allowed to criticise."_s);
 
+    SettingWidget::checkbox("Join Twitch IRC anonymously (requires restart)",
+                            s.twitchIrcJoinAsAnonymous)
+        ->addKeywords({"bajerino", "irc", "anonymous", "helix", "eventsub",
+                       "restart", "automod", "mod"})
+        ->addTo(layout);
+    layout.addDescription(
+        "Reconnects Twitch IRC using an anonymous identity while keeping your "
+        "signed-in account for Helix API actions. This can let you keep "
+        "reading chat even if your signed-in account is banned in a channel. "
+        "When enabled, chat sending is forced over Helix and all experimental "
+        "Twitch EventSub features are disabled (requires restart).\n\n"
+        "Feature impact: moderation and AutoMod EventSub features are "
+        "unavailable. If you are not a mod, you also lose personal "
+        "EventSub updates that indicate when your message was held by "
+        "AutoMod and later approved by a moderator.");
+
     layout.addTitle("Interface");
 
     {
@@ -1635,10 +1651,18 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "these mentions will never be stripped.")
         ->addTo(layout);
 
-    SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
-        ->setTooltip("'Helix' will use Twitch's Helix API to send message. "
-                     "'IRC' will use IRC to send messages.")
-        ->addTo(layout);
+    auto *chatSendProtocol =
+        SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
+            ->setTooltip("'Helix' will use Twitch's Helix API to send "
+                         "messages. 'IRC' will use IRC to send messages.\n\n"
+                         "This option is disabled while 'Join Twitch IRC "
+                         "anonymously' is enabled because IRC sending "
+                         "requires an authenticated IRC connection.");
+    chatSendProtocol->setEnabled(!s.twitchIrcJoinAsAnonymous);
+    s.twitchIrcJoinAsAnonymous.connect([chatSendProtocol](bool value) {
+        chatSendProtocol->setEnabled(!value);
+    });
+    chatSendProtocol->addTo(layout);
 
     SettingWidget::checkbox("Show send message button", s.showSendButton)
         ->setTooltip("Show a Send button next to each split input that can be "
@@ -1650,10 +1674,14 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                      "playback on your system")
         ->addTo(layout);
 
-    SettingWidget::checkbox(
+    auto *experimentalEventSub = SettingWidget::checkbox(
         "Enable experimental Twitch EventSub support (requires restart)",
-        s.enableExperimentalEventSub)
-        ->addTo(layout);
+        s.enableExperimentalEventSub);
+    experimentalEventSub->setEnabled(!s.twitchIrcJoinAsAnonymous);
+    s.twitchIrcJoinAsAnonymous.connect([experimentalEventSub](bool value) {
+        experimentalEventSub->setEnabled(!value);
+    });
+    experimentalEventSub->addTo(layout);
 
     SettingWidget::checkbox("Disable renaming of tabs on double-click",
                             s.disableTabRenamingOnClick)

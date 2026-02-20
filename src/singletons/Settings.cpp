@@ -301,6 +301,11 @@ void Settings::disableSave()
 
 bool Settings::shouldSendHelixChat() const
 {
+    if (this->twitchIrcJoinAsAnonymous)
+    {
+        return true;
+    }
+
     switch (this->chatSendProtocol.getEnum())
     {
         case ChatSendProtocol::Helix:

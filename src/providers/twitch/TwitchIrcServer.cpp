@@ -27,6 +27,7 @@
 #include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/PostToThread.hpp"
@@ -228,6 +229,14 @@ void TwitchIrcServer::initialize()
         });
     });
 
+    getSettings()->twitchIrcJoinAsAnonymous.connect(
+        [this](const bool &) {
+            postToThread([this] {
+                this->connect();
+            });
+        },
+        false);  // above getAccounts will already trigger this so theres no point
+
     this->signalHolder.managedConnect(
         getApp()->getTwitchPubSub()->pointReward.redeemed, [this](auto &data) {
             QString channelId = data.value("channel_id").toString();
@@ -268,8 +277,11 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
 {
     std::shared_ptr<TwitchAccount> account =
         getApp()->getAccounts()->twitch.getCurrent();
+    bool forceAnonymous = getSettings()->twitchIrcJoinAsAnonymous;
 
-    qCDebug(chatterinoTwitch) << "logging in as" << account->getUserName();
+    qCDebug(chatterinoTwitch)
+        << "logging in as"
+        << (forceAnonymous ? u"anonymous (forced)"_s : account->getUserName());
 
     // twitch.tv/tags enables IRCv3 tags on messages. See https://dev.twitch.tv/docs/irc/tags
     // twitch.tv/commands enables a bunch of miscellaneous command capabilities. See https://dev.twitch.tv/docs/irc/commands
@@ -284,7 +296,8 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
     connection->network()->setSkipCapabilityValidation(true);
     connection->network()->setRequestedCapabilities(caps);
 
-    QString username = account->getUserName();
+    QString username =
+        forceAnonymous ? ANONYMOUS_USERNAME : account->getUserName();
     QString oauthToken = account->getOAuthToken();
 
     if (!oauthToken.startsWith("oauth:"))
@@ -296,9 +309,14 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
     connection->setNickName(username);
     connection->setRealName(username);
 
-    if (!account->isAnon())
+    if (!forceAnonymous && !account->isAnon())
     {
         connection->setPassword(oauthToken);
+    }
+    else
+    {
+        // Twitch uses this as their anon password
+        connection->setPassword(u"SCHMOOPIIE"_s);
     }
 
     // https://dev.twitch.tv/docs/irc#connecting-to-the-twitch-irc-server

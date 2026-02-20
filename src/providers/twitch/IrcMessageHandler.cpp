@@ -21,6 +21,7 @@
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchAccountManager.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchHelpers.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "providers/twitch/UserColor.hpp"
@@ -1064,7 +1065,9 @@ void IrcMessageHandler::handleJoinMessage(Communi::IrcMessage *message)
     }
 
     if (message->nick() ==
-        getApp()->getAccounts()->twitch.getCurrent()->getUserName())
+            getApp()->getAccounts()->twitch.getCurrent()->getUserName() ||
+        (getSettings()->twitchIrcJoinAsAnonymous &&
+         message->nick().compare(ANONYMOUS_USERNAME, Qt::CaseInsensitive) == 0))
     {
         twitchChannel->addSystemMessage("joined channel");
         twitchChannel->joined.invoke();
@@ -1096,7 +1099,9 @@ void IrcMessageHandler::handlePartMessage(Communi::IrcMessage *message)
                                      twitchChannel->isBroadcaster());
     }
 
-    if (message->nick() == selfAccountName)
+    if (message->nick() == selfAccountName ||
+        (getSettings()->twitchIrcJoinAsAnonymous &&
+         message->nick().compare(ANONYMOUS_USERNAME, Qt::CaseInsensitive) == 0))
     {
         channel->addMessage(generateBannedMessage(false),
                             MessageContext::Original);
