@@ -2,7 +2,8 @@
 
 ## Unversioned
 
-- Major: Rebase on Chatterino7 instead of Chatterino (956b241e5dd02dc6e00f9fe807ebb7ed53dbf9ea)
+- Major: Rebase on Chatterino7 instead of Chatterino (956b241e5dd02dc6e00f9fe807ebb7ed53dbf9ea) (2879b11a2e466da13e4f2ffb47b9425d6e12df72) (a3e4463d45514474675de5b62bb91c0564471aff) (8a0a103448b4ba5f8c65a6b52dbb1a2fe8d06e39) (5f95858eb0928c63a632dbf9fd203fbb37f39b4f) (63b3019323cf468ec6eabfb13259686cf63bf480)
+- Minor: Added anon mode where user joins chat as a logged out as user, so user doesn't appear in user's joined or parted, but still able to make API calls and send messages as signed in user. Disables the event sub which has some useful mod features or if not signed in tells you whether your message was held by automod. (6f85d48fcc31006cb91a75efb2eb441805b4cbdc)
 
 ## 2.5.4 Bajerino
 
