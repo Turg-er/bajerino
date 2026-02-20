@@ -127,7 +127,7 @@ SeventvEventAPI *makeSeventvEventAPI(Settings &settings)
     if (enabled)
     {
         return new SeventvEventAPI(SEVENTV_EVENTAPI_URL %
-                                   "?app=Bajerino&version=" %
+                                   "?app=Chatterino&version=" %
                                    Version::instance().version());
     }
 

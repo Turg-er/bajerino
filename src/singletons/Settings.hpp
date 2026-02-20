@@ -316,7 +316,7 @@ public:
         "/encryption/channel_states", {}};
     BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
                                         true};
-    BoolSetting big3Noticer = {"/encryption/big3Noticer", true};
+    BoolSetting big3Noticer = {"/bajerino/big3Noticer", true};
 
     // General
     BoolSetting allowDuplicateMessages = {"/behaviour/allowDuplicateMessages",
@@ -449,7 +449,7 @@ public:
     BoolSetting enableBTTVGlobalEmotes = {"/emotes/bttv/global", true};
     BoolSetting enableBTTVChannelEmotes = {"/emotes/bttv/channel", true};
     BoolSetting enableBTTVLiveUpdates = {"/emotes/bttv/liveupdates", true};
-    BoolSetting sendBTTVActivity = {"/emotes/bttv/sendActivity", true};
+    BoolSetting sendBTTVActivity = {"/emotes/bttv/sendActivity", false};
     BoolSetting enableFFZGlobalEmotes = {"/emotes/ffz/global", true};
     BoolSetting enableFFZChannelEmotes = {"/emotes/ffz/channel", true};
     BoolSetting enableSevenTVGlobalEmotes = {"/emotes/seventv/global", true};
