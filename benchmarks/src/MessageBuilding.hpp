@@ -15,6 +15,7 @@
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
+#include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
 
 #include <benchmark/benchmark.h>
@@ -106,6 +107,11 @@ public:
         return &this->logging;
     }
 
+    SeventvPersonalEmotes *getSeventvPersonalEmotes() override
+    {
+        return &this->seventvPersonalEmotes;
+    }
+
     mock::EmptyLogging logging;
     AccountController accounts;
     mock::EmoteController emotes;
@@ -122,6 +128,7 @@ public:
     FfzEmotes ffzEmotes;
     SeventvEmotes seventvEmotes;
     DisabledStreamerMode streamerMode;
+    SeventvPersonalEmotes seventvPersonalEmotes;
 };
 
 class MessageBenchmark

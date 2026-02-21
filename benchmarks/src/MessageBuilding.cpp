@@ -67,7 +67,7 @@ MessageBenchmark::MessageBenchmark(QString name)
             seventv::detail::parseEmotes(seventvEmotes->object()["emote_set"_L1]
                                              .toObject()["emotes"_L1]
                                              .toArray(),
-                                         false)));
+                                         SeventvEmoteSetKind::Channel)));
     }
 
     if (bttvEmotes)
