@@ -57,6 +57,7 @@
 - Bugfix: Fixed incorrect deletion length in tab autocomplete when completion included emojis. (#6800)
 - Bugfix: Fixed WebSockets for 7TV or BTTV not connecting on Windows if IPv6 attempts fail. (#6805)
 - Bugfix: Fixed portable updates not showing an error if the updater is not present. (#6801)
+- Bugfix: Fixed liveupdates connection debug count becoming negative. (#6806)
 - Dev: Nightly builds are now defined through a build flag rather than the Modes file. (#6798)
 - Dev: Update release documentation. (#6498)
 - Dev: Make code sanitizers opt in with the `CHATTERINO_SANITIZER_SUPPORT` CMake option. After that's enabled, use the `SANITIZE_*` flag to enable individual sanitizers. (#6493)
@@ -114,6 +115,8 @@
 - Dev: Updated `pajlada-serialize` to v0.2.1. (#6797)
 - Dev: Updated `pajlada-signals` to v0.1.1. (#6797)
 - Dev: Balance IPv4 and IPv6 connection attempts. (#6804)
+- Dev: Factored out recent messages benchmark helper. (#6815)
+- Dev: Added `CHATTERINO_FORCE_LTO` CMake option to skip LTO check. (#6816)
 
 ## 2.5.4
 
