@@ -156,7 +156,8 @@ void Updates::installUpdates()
     if (Version::instance().isNightly())
     {
         // Since Nightly builds can be installed in many different ways, we ask the user to download the update manually.
-        QDesktopServices::openUrl(QUrl("https://chatterino.com/#downloads"));
+        QDesktopServices::openUrl(
+            QUrl("https://github.com/SevenTV/chatterino7/releases"));
         return;
     }
 
