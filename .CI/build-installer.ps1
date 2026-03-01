@@ -3,6 +3,9 @@ if (-not (Test-Path -PathType Container Chatterino2)) {
     exit 1
 }
 
+Set-PSDebug -Trace 2
+
+
 # Check if we're on a tag
 $OldErrorActionPref = $ErrorActionPreference;
 $ErrorActionPreference = 'Continue';
@@ -10,7 +13,7 @@ git describe --exact-match --match 'v*' *> $null;
 $isTagged = $?;
 $ErrorActionPreference = $OldErrorActionPref;
 
-$defines = $null;
+$defines = "";
 if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
