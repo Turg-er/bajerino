@@ -3,9 +3,6 @@ if (-not (Test-Path -PathType Container Chatterino2)) {
     exit 1
 }
 
-Set-PSDebug -Trace 2
-
-
 # Check if we're on a tag
 $OldErrorActionPref = $ErrorActionPreference;
 $ErrorActionPreference = 'Continue';
@@ -13,7 +10,7 @@ git describe --exact-match --match 'v*' *> $null;
 $isTagged = $?;
 $ErrorActionPreference = $OldErrorActionPref;
 
-$defines = "";
+$defines = $null;
 if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
@@ -30,7 +27,7 @@ else {
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLower()
 if ($architecture -eq 'arm64') {
     $installerBaseName = "Experimental-ARM64-$installerBaseName"
-    $defines = "$defines /DIS_ARM=1"
+    $defines = "$defines /DIS_ARM=1".Trim()
 }
 
 if ($Env:GITHUB_OUTPUT) {
