@@ -29,7 +29,6 @@
 #include <QLoggingCategory>
 #include <QString>
 
-
 using namespace Qt::StringLiterals;
 
 namespace chatterino::commands {
