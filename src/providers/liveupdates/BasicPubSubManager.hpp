@@ -147,7 +147,6 @@ private:
     {
         assertInGuiThread();
 
-        DebugCount::increase(DebugObject::LiveUpdatesConnection);
         this->addingClient_ = false;
         this->diag.connectionsOpened.fetch_add(1, std::memory_order_acq_rel);
 
@@ -166,6 +165,12 @@ private:
         {
             const auto last = std::move(this->pendingSubscriptions_.back());
             this->pendingSubscriptions_.pop_back();
+            if (this->isSubscribed(last))
+            {
+                // we subscribed to this in the meantime
+                continue;
+            }
+
             if (!client->subscribe(last))
             {
                 qCDebug(chatterinoLiveupdates)
@@ -271,6 +276,7 @@ private:
                 std::weak_ptr{client}, this->derived(), id));
         client->ws_ = std::move(hdl);
         this->clients_.emplace(id, std::move(client));
+        DebugCount::increase(DebugObject::LiveUpdatesConnection);
     }
 
     bool trySubscribe(const Subscription &subscription)
@@ -283,6 +289,13 @@ private:
             }
         }
         return false;
+    }
+
+    bool isSubscribed(const Subscription &subscription) const
+    {
+        return std::ranges::any_of(this->clients_, [&](const auto &c) {
+            return c.second->isSubscribed(subscription);
+        });
     }
 
     Client *resolve(size_t id)

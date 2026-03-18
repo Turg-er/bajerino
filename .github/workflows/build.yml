@@ -149,7 +149,7 @@ jobs:
 
       - name: Upload artifact - AppImage (Ubuntu)
         if: matrix.build-appimage
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: Bajerino-x86_64-Qt-${{ matrix.qt-version }}.AppImage
           path: build/Bajerino-x86_64.AppImage
@@ -162,7 +162,7 @@ jobs:
 
       - name: Upload artifact - .deb (Ubuntu)
         if: matrix.build-deb
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: Bajerino-${{ matrix.os }}-Qt-${{ matrix.qt-version }}.deb
           path: build/Bajerino-${{ matrix.os }}-x86_64.deb
@@ -335,14 +335,14 @@ jobs:
 
       - name: Upload artifact (Windows - binary)
         if: startsWith(matrix.os, 'windows') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
           path: build/bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.zip
 
       - name: Upload artifact (Windows - symbols)
         if: startsWith(matrix.os, 'windows') && !matrix.skip-artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}-symbols.pdb.7z
           path: build/bin/bajerino-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.pdb.7z
@@ -435,7 +435,7 @@ jobs:
 
       - name: Upload artifact (MacOS)
         if: startsWith(matrix.os, 'macos')
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: bajerino-macos-Qt-${{ matrix.qt-version }}-universal.dmg
           path: build/bajerino-macos-Qt-${{ matrix.qt-version }}-universal.dmg
@@ -443,16 +443,16 @@ jobs:
   create-release:
     needs: [build-ubuntu-docker, build]
     runs-on: ubuntu-latest
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/master')
     permissions:
       contents: write
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/master')
 
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # allows for tags access
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         name: Download artifacts
         with:
           path: release-artifacts/
