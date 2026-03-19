@@ -8,7 +8,6 @@
 #include "common/QLogging.hpp"
 
 #include <QNetworkProxy>
-#include <QSslConfiguration>
 #include <QUrl>
 
 namespace {
@@ -46,34 +45,58 @@ QNetworkProxy createProxyFromUrl(const QUrl &url)
     return proxy;
 }
 
-/**
- * Attempts to apply the proxy specified by `url` as the application proxy.
- */
-void applyProxy(const QString &url)
+std::optional<QNetworkProxy> proxyFromUrl(const QString &url)
 {
     auto proxyUrl = QUrl(url);
     if (!proxyUrl.isValid() || proxyUrl.isEmpty())
     {
         qCDebug(chatterinoNetwork)
             << "Invalid or empty proxy url: " << proxyUrl;
-        return;
+        return std::nullopt;
     }
 
-    const auto proxy = createProxyFromUrl(proxyUrl);
-
-    QNetworkProxy::setApplicationProxy(proxy);
-    qCDebug(chatterinoNetwork) << "Set application proxy to" << proxy;
+    return createProxyFromUrl(proxyUrl);
 }
 
 }  // namespace
 
 namespace chatterino {
 
+std::optional<QNetworkProxy> NetworkConfigurationProvider::proxyFromEnv(
+    const Env &env)
+{
+    if (!env.proxyUrl)
+    {
+        return std::nullopt;
+    }
+
+    return proxyFromUrl(*env.proxyUrl);
+}
+
 void NetworkConfigurationProvider::applyFromEnv(const Env &env)
 {
-    if (env.proxyUrl)
+    if (env.proxyTwitchApiOnly)
     {
-        applyProxy(*env.proxyUrl);
+        if (!env.proxyUrl)
+        {
+            qCWarning(chatterinoNetwork)
+                << "BAJERINO_PROXY_TWITCH_API_ONLY is enabled but "
+                   "CHATTERINO2_PROXY_URL is not set; Twitch API requests "
+                   "will be made directly";
+        }
+        else
+        {
+            qCDebug(chatterinoNetwork)
+                << "Selective Twitch API proxying enabled; skipping global "
+                   "application proxy";
+        }
+        return;
+    }
+
+    if (const auto proxy = NetworkConfigurationProvider::proxyFromEnv(env))
+    {
+        QNetworkProxy::setApplicationProxy(*proxy);
+        qCDebug(chatterinoNetwork) << "Set application proxy to" << *proxy;
     }
 }
 

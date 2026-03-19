@@ -6,6 +6,14 @@ Bajerino is a fork of Chatterino7, but with useless features.
 
 Chatterino7 is a fork of Chatterino 2. This fork mainly contains features that aren't accepted into Chatterino 2, most notably 7TV subscriber features.
 
+### Features of Bajerino
+
+- Message encryption: set an `Encryption Password` in settings, then use the per-channel encryption toggle in the split input to encrypt outgoing messages. Bajerino will also try to decrypt incoming messages with the same password.
+
+- Anon Mode: the `Join Twitch IRC anonymously` setting reconnects Twitch IRC as an anonymous user while keeping your signed-in account for Helix API actions. This is useful if you want to read chat without exposing your logged-in IRC identity, but it forces chat sending over Helix and disables Twitch EventSub features.
+
+- Selective Twitch API proxying: `CHATTERINO2_PROXY_URL` works as the normal proxy setting, and `BAJERINO_PROXY_TWITCH_API_ONLY=1` limits proxy use to authenticated Twitch API HTTP requests only. Twitch images, IRC, and third-party services stay direct, so it pairs well with Anon Mode.
+
 ### Features of Chatterino7
 
 - 7TV Name Paints
@@ -40,6 +48,14 @@ If you don't have a GitHub account and want to report issues or want to join the
 ### AVIF Support
 
 When building Chatterino 7, you might not have access to a static build of `libavif`. In that case, you can define `CHATTERINO_NO_AVIF_PLUGIN` in CMake. If you have `qavif.so` from [kimageformats](https://invent.kde.org/frameworks/kimageformats) installed on your system, Chatterino will pick it up and use AVIF images.
+
+### Proxying
+
+If you set `CHATTERINO2_PROXY_URL`, Bajerino proxies Qt network traffic by default.
+
+If you also set `BAJERINO_PROXY_TWITCH_API_ONLY=1`, Bajerino only uses that proxy for authenticated Twitch API HTTP requests. Twitch images, IRC, and requests to other services stay direct.
+
+This is intended to pair well with the `Join Twitch IRC anonymously` setting when you want Twitch API traffic proxied without proxying IRC.
 
 ## Original Chatterino 2 Readme
 

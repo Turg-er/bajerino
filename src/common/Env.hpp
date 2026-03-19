@@ -19,6 +19,7 @@ public:
 
     const QString recentMessagesApiUrl;
     const QString linkResolverUrl;
+    const bool proxyTwitchApiOnly;
     const QString twitchServerHost;
     const uint16_t twitchServerPort;
     const bool twitchServerSecure;

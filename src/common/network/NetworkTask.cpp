@@ -108,6 +108,13 @@ QNetworkReply *NetworkTask::createReply()
     const auto &data = this->data_;
     const auto &request = this->data_->request;
     auto *accessManager = NetworkManager::accessManager;
+    if (data->useProxy && NetworkManager::proxiedAccessManager)
+    {
+        accessManager = NetworkManager::proxiedAccessManager;
+    }
+
+    assert(accessManager != nullptr);
+
     switch (this->data_->requestType)
     {
         case NetworkRequestType::Get:
@@ -171,8 +178,8 @@ QNetworkReply *NetworkTask::createReply()
             {
                 assert(data->multiPartPayload == nullptr);
 
-                return NetworkManager::accessManager->sendCustomRequest(
-                    request, "PATCH", data->payload);
+                return accessManager->sendCustomRequest(request, "PATCH",
+                                                        data->payload);
             }
     }
     return nullptr;

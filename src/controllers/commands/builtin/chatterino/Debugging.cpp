@@ -95,6 +95,7 @@ QString listEnvironmentVariables(const CommandContext &ctx)
         "recentMessagesApiUrl: " + env.recentMessagesApiUrl,
         "linkResolverUrl: " + env.linkResolverUrl,
         "proxyUrl: " + env.proxyUrl.value_or("N/A"),
+        "proxyTwitchApiOnly: " + QString::number(env.proxyTwitchApiOnly),
         "twitchServerHost: " + env.twitchServerHost,
         "twitchServerPort: " + QString::number(env.twitchServerPort),
         "twitchServerSecure: " + QString::number(env.twitchServerSecure),

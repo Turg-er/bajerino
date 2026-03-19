@@ -56,6 +56,7 @@ void checkMissingScopes(const std::shared_ptr<TwitchAccount> &account)
 {
     NetworkRequest(u"https://id.twitch.tv/oauth2/validate"_s,
                    NetworkRequestType::Get)
+        .useProxy()
         .header("Authorization", u"OAuth " % account->getOAuthToken())
         .timeout(20000)
         .onSuccess([account](const auto &res) {

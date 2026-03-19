@@ -69,6 +69,7 @@ public:
         const std::vector<std::pair<QByteArray, QByteArray>> &headers) &&;
     NetworkRequest timeout(int ms) &&;
     NetworkRequest concurrent() &&;
+    NetworkRequest useProxy(bool on = true) &&;
     NetworkRequest multiPart(QHttpMultiPart *payload) &&;
     /**
      * This will change `RedirectPolicyAttribute`.

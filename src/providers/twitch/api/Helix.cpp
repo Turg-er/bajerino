@@ -3846,6 +3846,7 @@ NetworkRequest Helix::makeRequest(const QString &url, const QUrlQuery &urlQuery,
     fullUrl.setQuery(urlQuery);
 
     return NetworkRequest(fullUrl, type)
+        .useProxy()
         .timeout(5 * 1000)
         .header("Accept", "application/json")
         .header("Client-ID", this->clientId)

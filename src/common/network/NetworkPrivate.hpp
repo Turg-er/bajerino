@@ -45,6 +45,7 @@ public:
     QPointer<QObject> caller;
     bool cache{};
     bool executeConcurrently{};
+    bool useProxy{};
 
     NetworkSuccessCallback onSuccess;
     NetworkErrorCallback onError;

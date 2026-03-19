@@ -16,6 +16,7 @@ class NetworkManager : public QObject
 public:
     static QThread *workerThread;
     static QNetworkAccessManager *accessManager;
+    static QNetworkAccessManager *proxiedAccessManager;
 
     static void init();
     static void deinit();

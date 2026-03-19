@@ -139,6 +139,12 @@ NetworkRequest NetworkRequest::concurrent() &&
     return std::move(*this);
 }
 
+NetworkRequest NetworkRequest::useProxy(bool on) &&
+{
+    this->data->useProxy = on;
+    return std::move(*this);
+}
+
 NetworkRequest NetworkRequest::multiPart(QHttpMultiPart *payload) &&
 {
     this->data->multiPartPayload = {payload, {}};
