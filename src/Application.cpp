@@ -90,7 +90,7 @@ ISoundController *makeSoundController(Settings &settings)
     switch (soundBackend)
     {
         case SoundBackend::Miniaudio: {
-            return new MiniaudioBackend();
+            return new MiniaudioBackend(settings.soundMiniaudioKeepEngineAlive);
         }
         break;
 
@@ -100,7 +100,7 @@ ISoundController *makeSoundController(Settings &settings)
         break;
 
         default: {
-            return new MiniaudioBackend();
+            return new MiniaudioBackend(settings.soundMiniaudioKeepEngineAlive);
         }
         break;
     }

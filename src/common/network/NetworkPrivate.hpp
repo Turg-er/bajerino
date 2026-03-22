@@ -46,6 +46,8 @@ public:
     bool cache{};
     bool executeConcurrently{};
     bool useProxy{};
+    /// Hide the request body in logs
+    bool hideRequestBody = false;
 
     NetworkSuccessCallback onSuccess;
     NetworkErrorCallback onError;
