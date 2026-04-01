@@ -77,7 +77,6 @@ void Client::onMessage(const QByteArray &msg)
         }
         break;
         case Opcode::Ack: {
-            qCDebug(chatterinoSeventvEventAPI).noquote() << "ACK:" << msg;
             // unhandled
         }
         break;

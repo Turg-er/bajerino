@@ -216,8 +216,8 @@ void SeventvEventAPI::reconnect()
 
 void SeventvEventAPI::reconnectRandom()
 {
-    size_t i =
-        QRandomGenerator::global()->bounded(this->private_->clients().size());
+    size_t i = QRandomGenerator::global()->bounded(
+        static_cast<quint32>(this->private_->clients().size()));
     for (const auto &[id, c] : this->private_->clients())
     {
         if (i == 0)
