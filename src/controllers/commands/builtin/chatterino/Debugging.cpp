@@ -14,6 +14,7 @@
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
+#include "providers/seventv/SeventvEventAPI.hpp"
 #include "providers/twitch/eventsub/Controller.hpp"
 #include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
@@ -243,6 +244,14 @@ QString debugTest(const CommandContext &ctx)
     else if (command == "pubsub-reconnect")
     {
         getApp()->getTwitchPubSub()->reconnect();
+    }
+    else if (command == "7tv-reconnect")
+    {
+        getApp()->getSeventvEventAPI()->reconnect();
+    }
+    else if (command == "7tv-reconnect-random")
+    {
+        getApp()->getSeventvEventAPI()->reconnectRandom();
     }
     else
     {

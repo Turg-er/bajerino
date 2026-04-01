@@ -52,6 +52,8 @@ void Client::onMessage(const QByteArray &msg)
                 std::chrono::milliseconds{
                     message.data["heartbeat_interval"].toInt()},
                 std::memory_order::relaxed);
+            auto limit = message.data["subscription_limit"].toInteger();
+            this->maxSubscriptions = static_cast<size_t>(std::max(limit, 1LL));
         }
         break;
         case Opcode::Heartbeat: {
@@ -75,6 +77,7 @@ void Client::onMessage(const QByteArray &msg)
         }
         break;
         case Opcode::Ack: {
+            qCDebug(chatterinoSeventvEventAPI).noquote() << "ACK:" << msg;
             // unhandled
         }
         break;
