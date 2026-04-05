@@ -127,6 +127,7 @@ std::shared_ptr<Message> Message::clone() const
     cloned->count = this->count;
     cloned->reward = this->reward;
     cloned->platform = this->platform;
+    cloned->bits = this->bits;
     std::ranges::transform(this->elements, std::back_inserter(cloned->elements),
                            [](const auto &element) {
                                return element->clone();
