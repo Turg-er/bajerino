@@ -31,7 +31,7 @@ public:
     using Subscription = SubscriptionT;
 
     // The maximum amount of subscriptions this connections can handle
-    size_t maxSubscriptions;
+    const size_t maxSubscriptions;
 
     BasicPubSubClient(size_t maxSubscriptions = 100)
         : maxSubscriptions(maxSubscriptions)
