@@ -1649,6 +1649,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (tags.contains("bits"))
     {
         builder->flags.set(MessageFlag::CheerMessage);
+        builder->bits = tags["bits"].toInt();
     }
 
     // reply threads

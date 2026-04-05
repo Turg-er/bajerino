@@ -149,6 +149,11 @@ void ImageElement::addToContainer(MessageLayoutContainer &container,
     }
 }
 
+ImagePtr ImageElement::image() const
+{
+    return this->image_;
+}
+
 std::unique_ptr<MessageElement> ImageElement::clone() const
 {
     auto el = std::make_unique<ImageElement>(this->image_, this->getFlags());
@@ -1466,6 +1471,11 @@ std::unique_ptr<MessageElement> ScalingImageElement::clone() const
         std::make_unique<ScalingImageElement>(this->images_, this->getFlags());
     el->cloneFrom(*this);
     return el;
+}
+
+const ImageSet &ScalingImageElement::images() const
+{
+    return this->images_;
 }
 
 QJsonObject ScalingImageElement::toJson() const
