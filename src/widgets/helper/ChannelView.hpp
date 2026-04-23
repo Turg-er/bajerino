@@ -161,6 +161,10 @@ public:
     /// @see #channel()
     ChannelPtr underlyingChannel() const;
 
+    /// Same as #underlyingChannel() except that it returns the active channel
+    /// for MultiChannels.
+    ChannelPtr selectedChannel() const;
+
     /// @brief Set the channel this view is displaying
     ///
     /// @see #underlyingChannel()
@@ -326,6 +330,9 @@ private:
     void setInputReply(const MessagePtr &message);
     void showReplyThreadPopup(const MessagePtr &message);
     bool canReplyToMessages() const;
+
+    /// Returns the selected channel as well as enabled flags.
+    std::pair<Channel *, MessageElementFlags> getMultiChannelInfo() const;
 
     void updateID();
     ChannelViewID id_{};
