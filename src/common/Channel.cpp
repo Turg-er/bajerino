@@ -69,7 +69,7 @@ Channel::Channel(const QString &name, Type type)
 Channel::~Channel()
 {
     auto *app = tryGetApp();
-    if (app && this->anythingLogged_)
+    if (app && !isAppAboutToQuit() && this->anythingLogged_)
     {
         app->getChatLogger()->closeChannel(this->name_, this->platform_);
     }
@@ -628,8 +628,8 @@ void Channel::upsertPersonalSeventvEmotes(
         /// @pre @a words must not be empty
         const auto flush = [&]() {
             elements.emplace_back(std::make_unique<TextElement>(
-                std::move(words), textElement->getFlags(), textElement->color(),
-                textElement->fontStyle()));
+                TextElement::CLONE, std::move(words), textElement->getFlags(),
+                textElement->color(), textElement->fontStyle()));
             words.clear();
         };
 
