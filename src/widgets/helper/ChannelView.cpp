@@ -981,18 +981,24 @@ ChannelPtr ChannelView::inferChannel(const Message &msg,
         return base;
     }
 
+    QStringView nameView = msg.channelName;
+    bool kc = nameView.startsWith(u":kick:");
+    if (kc)
+    {
+        nameView = nameView.sliced(sizeof(":kick:") - 1);
+    }
+    if (nameView.startsWith(u'#'))
+    {
+        nameView = nameView.sliced(1);
+    }
+
     const auto *active = mc->activeChannel();
     auto matches = [&](const MultiChannel::ChildChannel &chan) {
         if (!platformMatches(msg.platform, chan.platform))
         {
             return false;
         }
-        QStringView nameView = msg.channelName;
-        bool kc = nameView.startsWith(u":kick:");
-        if (kc)
-        {
-            nameView = nameView.sliced(sizeof(":kick:") - 1);
-        }
+
         return nameView.compare(chan.channel->getName(), Qt::CaseInsensitive) ==
                0;
     };
