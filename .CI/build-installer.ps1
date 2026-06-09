@@ -16,12 +16,12 @@ if ($isTagged) {
     # Make sure, any existing `modes` file is overwritten for the user,
     # for example when updating from nightly to stable.
     Write-Output "" | Out-File Bajerino/modes -Encoding ASCII;
-    $installerBaseName = "Bajerino7.Installer";
+    $installerBaseName = "Bajerino.Installer";
 }
 else {
     Write-Output nightly | Out-File Bajerino/modes -Encoding ASCII;
     $defines = "/DIS_NIGHTLY=1";
-    $installerBaseName = "Bajerino7.Nightly.Installer";
+    $installerBaseName = "Bajerino.Nightly.Installer";
 }
 
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLower()
