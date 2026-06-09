@@ -13,6 +13,7 @@
 #include "providers/twitch/api/Helix.hpp"
 #include "RunGui.hpp"
 #include "singletons/CrashHandler.hpp"
+#include "singletons/FileLogger.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Updates.hpp"
@@ -33,6 +34,7 @@
 #    include <shobjidl_core.h>
 #endif
 
+#include <iostream>
 #include <memory>
 
 #ifdef CHATTERINO_WITH_AVIF_PLUGIN
@@ -54,6 +56,9 @@ int main(int argc, char **argv)
 #endif
 
     std::unique_ptr<Paths> paths;
+
+    // Optional logger override that logs to a file
+    FileLogger logger;
 
     try
     {
@@ -124,17 +129,16 @@ int main(int argc, char **argv)
         qCInfo(chatterinoApp).noquote()
             << "Bajerino Qt SSL library version:"
             << QSslSocket::sslLibraryVersionString();
-#if QT_VERSION >= QT_VERSION_CHECK(6, 1, 0)
         qCInfo(chatterinoApp).noquote()
-            << "Bajerino Qt SSL active backend:" << QSslSocket::activeBackend()
-            << "of" << QSslSocket::availableBackends().join(", ");
+            << "Bajerino Qt SSL active backend:"
+            << QSslSocket::activeBackend() << "of"
+            << QSslSocket::availableBackends().join(", ");
 #    if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend features:"
                               << QSslSocket::supportedFeatures();
 #    endif
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend protocols:"
                               << QSslSocket::supportedProtocols();
-#endif
 
         Settings settings(args, paths->settingsDirectory);
 

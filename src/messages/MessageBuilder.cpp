@@ -56,7 +56,6 @@
 #include "util/Variant.hpp"
 #include "widgets/Window.hpp"
 
-#include <boost/variant.hpp>
 #include <QApplication>
 #include <QColor>
 #include <QDateTime>
@@ -342,12 +341,8 @@ void appendBadges(MessageBuilder *builder,
             {
                 auto infoValue = badgeInfoIt->second;
                 auto predictionText =
-                    infoValue
-                        .replace(R"(\s)", " ")  // standard IRC escapes
-                        .replace(R"(\:)", ";")
-                        .replace(R"(\\)", R"(\)")
-                        .replace("⸝", ",");  // twitch's comma escape
-                // Careful, the first character is RIGHT LOW PARAPHRASE BRACKET or U+2E1D, which just looks like a comma
+                    parseTagString(infoValue).replace("⸝", ",");
+                // Twitch's comma escape. Careful, the first character is RIGHT LOW PARAPHRASE BRACKET or U+2E1D, which just looks like a comma
 
                 tooltip = QString("Predicted %1").arg(predictionText);
             }
@@ -368,7 +363,8 @@ std::vector<TwitchBadge> appendSharedChatBadges(
     auto appendedBadges = std::vector<TwitchBadge>{};
     for (const auto &badge : sharedBadges)
     {
-        if (badge.key_ != "moderator" && badge.key_ != "vip")
+        if (badge.key_ != "moderator" && badge.key_ != "vip" &&
+            badge.key_ != "lead_moderator")
         {
             continue;
         }
@@ -1588,6 +1584,96 @@ MessagePtrMut MessageBuilder::makeClearChatMessage(const QDateTime &now,
     return builder.release();
 }
 
+MessagePtrMut MessageBuilder::makePinSuccessMessage(QString text,
+                                                    const QString &id)
+{
+    MessageBuilder builder;
+    builder.emplace<TimestampElement>();
+    builder->flags.set(MessageFlag::System,
+                       MessageFlag::DoNotTriggerNotification,
+                       MessageFlag::ModerationAction);
+    QString searchText;
+    builder.emplaceSystemTextAndUpdate("Pinned", searchText);
+
+    if (text.isEmpty())
+    {
+        text = id;
+        builder.emplaceSystemTextAndUpdate("message with ID", searchText);
+    }
+
+    if (text.length() > 50)
+    {
+        text = std::move(text).left(50) + "…";
+    }
+    searchText += text;
+
+    builder
+        .emplace<TextElement>(text, MessageElementFlag::Text,
+                              MessageColor::Text)
+        ->setLink({Link::JumpToMessage, id});
+
+    builder->messageText = searchText;
+    builder->searchText = searchText;
+    return builder.release();
+}
+
+MessagePtrMut MessageBuilder::makeCurrentPinnedMessage(
+    const TwitchChannel &chan, const HelixPinnedChatMessage &pin)
+{
+    MessageBuilder builder;
+    builder->channelName = chan.getName();
+    builder.emplace<TimestampElement>();
+    builder->flags.set(MessageFlag::System,
+                       MessageFlag::DoNotTriggerNotification);
+
+    QString text = pin.pinnedBy.login + ' ';
+    builder.emplace<MentionElement>(pin.pinnedBy.displayName,
+                                    pin.pinnedBy.login, MessageColor::System,
+                                    chan.getUserColor(pin.pinnedBy.login));
+    builder.emplaceSystemTextAndUpdate("pinned a message", text);
+
+    auto now = QDateTime::currentDateTimeUtc();
+    builder.appendOrEmplaceSystemTextAndUpdate(
+        formatTime(std::chrono::duration_cast<std::chrono::seconds>(
+            now - pin.startsAt)),
+        text);
+    builder.appendOrEmplaceSystemTextAndUpdate("ago", text);
+    if (pin.endsAt)
+    {
+        auto remaining =
+            std::chrono::duration_cast<std::chrono::seconds>(*pin.endsAt - now);
+        builder.appendOrEmplaceSystemTextAndUpdate(
+            '(' % formatTime(remaining) % " remaining)", text);
+    }
+    else
+    {
+        builder.appendOrEmplaceSystemTextAndUpdate("until the stream ends",
+                                                   text);
+    }
+    builder.appendOrEmplaceSystemTextAndUpdate("from", text);
+    builder
+        .emplace<MentionElement>(pin.sender.displayName, pin.sender.login,
+                                 MessageColor::System,
+                                 chan.getUserColor(pin.sender.login))
+        ->setTrailingSpace(false);
+    text += pin.sender.login;
+    builder.appendOrEmplaceSystemTextAndUpdate(u":"_s, text);
+
+    auto pinMessageText = pin.messageText;
+    if (pinMessageText.length() > 50)
+    {
+        pinMessageText = pinMessageText.left(50) + "…";
+    }
+
+    builder
+        .emplace<TextElement>(pinMessageText, MessageElementFlag::Text,
+                              MessageColor::Text)
+        ->setLink({Link::JumpToMessage, pin.messageID});
+    builder->messageText = pinMessageText;
+    builder->searchText = pinMessageText;
+    return builder.release();
+}
+
 std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     /* mutable */ Channel *channel, const Communi::IrcMessage *ircMessage,
     const MessageParseArgs &args, /* mutable */ QString content,
@@ -1693,6 +1779,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (tags.contains("bits"))
     {
         builder->flags.set(MessageFlag::CheerMessage);
+        builder->bits = tags["bits"].toInt();
     }
 
     // reply threads

@@ -136,10 +136,7 @@ SeventvEventAPI *makeSeventvEventAPI(Settings &settings)
 
 eventsub::IController *makeEventSubController(Settings &settings)
 {
-    bool enabled = settings.enableExperimentalEventSub &&
-                   !settings.twitchIrcJoinAsAnonymous;
-
-    if (enabled)
+    if (!settings.twitchIrcJoinAsAnonymous)
     {
         return new eventsub::Controller();
     }

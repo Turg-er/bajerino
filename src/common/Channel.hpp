@@ -18,12 +18,15 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 
 namespace chatterino {
 
 struct Message;
 using MessagePtr = std::shared_ptr<const Message>;
 using MessagePtrMut = std::shared_ptr<Message>;
+
+enum class MessagePlatform : uint8_t;
 
 class EmoteMap;
 
@@ -58,6 +61,7 @@ public:
         Kick,
         /// Misc
         Misc,
+        Multi,
     };
 
     explicit Channel(const QString &name, Type type);
@@ -121,6 +125,8 @@ public:
                         const MessagePtr &replacement);
     void disableMessage(const QString &messageID);
 
+    void mergeFrom(std::span<std::span<const MessagePtr>> sources);
+
     /// Removes all messages from this channel and invokes #messagesCleared
     void clearMessages();
 
@@ -156,6 +162,8 @@ public:
         const QString &userLogin,
         const std::shared_ptr<const EmoteMap> &emoteMap);
 
+    MessagePlatform messagePlatform() const;
+
     TabCompletionModel *completionModel;
     QDate lastDate_;
 
@@ -165,11 +173,24 @@ protected:
     QString platform_;
 
 private:
+    bool canRecurse() const noexcept;
+
     const QString name_;
     LimitedQueue<MessagePtr> messages_;
     Type type_;
     bool anythingLogged_ = false;
+
+    /// Recursion count for message signals.
+    ///
+    /// This is intended to prevent _trivial_ infinite recursion of signals
+    /// (e.g. unconditionally adding a message in `messageAppended`). It is not
+    /// intended to prevent all infinite recursion. That will still crash the
+    /// program.
+    uint8_t recursionCount_ = 0;
+
     QTimer clearCompletionModelTimer_;
+
+    MessagePlatform messagePlatform_;
 };
 
 using ChannelPtr = std::shared_ptr<Channel>;

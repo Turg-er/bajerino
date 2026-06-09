@@ -181,6 +181,7 @@ void ResizingTextEdit::keyPressEvent(QKeyEvent *event)
                 QSignalBlocker dontTriggerCursorMovement(this);
                 this->completer_->complete();
             }
+            this->textChanged();
             return;
         }
 
@@ -210,6 +211,7 @@ void ResizingTextEdit::keyPressEvent(QKeyEvent *event)
             QSignalBlocker dontTriggerCursorMovement(this);
             this->completer_->complete();
         }
+        this->textChanged();
         return;
     }
 
@@ -246,10 +248,7 @@ void ResizingTextEdit::focusOutEvent(QFocusEvent *event)
 
 void ResizingTextEdit::setCompleter(QCompleter *c)
 {
-    if (this->completer_)
-    {
-        QObject::disconnect(this->completer_, nullptr, this, nullptr);
-    }
+    delete this->completer_;
 
     this->completer_ = c;
 

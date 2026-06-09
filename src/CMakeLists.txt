@@ -107,6 +107,8 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/GetVIPs.hpp
         controllers/commands/builtin/twitch/LowTrust.cpp
         controllers/commands/builtin/twitch/LowTrust.hpp
+        controllers/commands/builtin/twitch/Pin.cpp
+        controllers/commands/builtin/twitch/Pin.hpp
         controllers/commands/builtin/twitch/Poll.cpp
         controllers/commands/builtin/twitch/Poll.hpp
         controllers/commands/builtin/twitch/Prediction.cpp
@@ -182,6 +184,8 @@ set(SOURCE_FILES
         controllers/filters/lang/expressions/Expression.hpp
         controllers/filters/lang/expressions/BinaryOperation.cpp
         controllers/filters/lang/expressions/BinaryOperation.hpp
+        controllers/filters/lang/expressions/IdentifierExpression.cpp
+        controllers/filters/lang/expressions/IdentifierExpression.hpp
         controllers/filters/lang/expressions/ListExpression.cpp
         controllers/filters/lang/expressions/ListExpression.hpp
         controllers/filters/lang/expressions/RegexExpression.cpp
@@ -271,6 +275,8 @@ set(SOURCE_FILES
         controllers/plugins/api/HTTPRequest.hpp
         controllers/plugins/api/HTTPResponse.cpp
         controllers/plugins/api/HTTPResponse.hpp
+        controllers/plugins/api/Images.cpp
+        controllers/plugins/api/Images.hpp
         controllers/plugins/api/IOWrapper.cpp
         controllers/plugins/api/IOWrapper.hpp
         controllers/plugins/api/JSON.cpp
@@ -283,6 +289,8 @@ set(SOURCE_FILES
         controllers/plugins/api/Message.hpp
         controllers/plugins/api/WebSocket.cpp
         controllers/plugins/api/WebSocket.hpp
+        controllers/plugins/api/WindowManager.cpp
+        controllers/plugins/api/WindowManager.hpp
         controllers/plugins/ConnectionManager.cpp
         controllers/plugins/ConnectionManager.hpp
         controllers/plugins/LuaAPI.cpp
@@ -548,6 +556,8 @@ set(SOURCE_FILES
 
         singletons/CrashHandler.cpp
         singletons/CrashHandler.hpp
+        singletons/FileLogger.cpp
+        singletons/FileLogger.hpp
         singletons/Fonts.cpp
         singletons/Fonts.hpp
         singletons/ImageUploader.cpp
@@ -625,10 +635,15 @@ set(SOURCE_FILES
         util/LayoutHelper.hpp
         util/LoadPixmap.cpp
         util/LoadPixmap.hpp
+        util/MultiChannel.cpp
+        util/MultiChannel.hpp
         util/OnceFlag.cpp
         util/OnceFlag.hpp
         util/RapidjsonHelpers.cpp
         util/RapidjsonHelpers.hpp
+        util/RapidJsonSerializeQSize.hpp
+        util/RapidJsonSerializeQString.hpp
+        util/RapidJsonSerializeQStringView.hpp
         util/RatelimitBucket.cpp
         util/RatelimitBucket.hpp
         util/RenameThread.cpp
@@ -914,11 +929,11 @@ set(SOURCE_FILES
         )
 
 if (APPLE)
-    set(MACOS_BUNDLE_ICON_FILE "${CMAKE_SOURCE_DIR}/resources/bajerino.icns")
-    list(APPEND SOURCE_FILES "${MACOS_BUNDLE_ICON_FILE}")
-    set_source_files_properties(${MACOS_BUNDLE_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+  set(MACOS_BUNDLE_ICON_FILE "${CMAKE_SOURCE_DIR}/resources/bajerino.icns")
+  list(APPEND SOURCE_FILES "${MACOS_BUNDLE_ICON_FILE}")
+  set_source_files_properties(${MACOS_BUNDLE_ICON_FILE} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
-    list(APPEND SOURCE_FILES util/MacOsHelpers.mm)
+  list(APPEND SOURCE_FILES util/MacOsHelpers.mm)
 endif ()
 
 # Generate source groups for use in IDEs
@@ -930,20 +945,20 @@ list(APPEND SOURCE_FILES ${RES_AUTOGEN_FILES})
 add_library(${LIBRARY_PROJECT} OBJECT ${SOURCE_FILES})
 
 if(CHATTERINO_PLUGINS)
-    target_compile_definitions(${LIBRARY_PROJECT}
+  target_compile_definitions(${LIBRARY_PROJECT}
         PUBLIC
         CHATTERINO_HAVE_PLUGINS
     )
-    message(STATUS "Building Bajerino with lua plugin support enabled.")
+  message(STATUS "Building Bajerino with lua plugin support enabled.")
 endif()
 
 if (CHATTERINO_GENERATE_COVERAGE)
-    include(CodeCoverage)
-    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
-        append_coverage_compiler_flags_to_target(${LIBRARY_PROJECT})
-    endif()
-    message(STATUS "project source dir: ${PROJECT_SOURCE_DIR}/src")
-    setup_target_for_coverage_gcovr_html(
+  include(CodeCoverage)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "(GNU|Clang)")
+    append_coverage_compiler_flags_to_target(${LIBRARY_PROJECT})
+  endif()
+  message(STATUS "project source dir: ${PROJECT_SOURCE_DIR}/src")
+  setup_target_for_coverage_gcovr_html(
         NAME coverage
         EXECUTABLE ctest
         EXCLUDE "/usr/include/*"
@@ -972,14 +987,14 @@ if (CHATTERINO_GENERATE_COVERAGE)
 endif ()
 
 if(TARGET rapidjson)
-    message(STATUS "rapidjson: Linking to rapidjson target")
-    target_link_libraries(${LIBRARY_PROJECT} PUBLIC rapidjson)
+  message(STATUS "rapidjson: Linking to rapidjson target")
+  target_link_libraries(${LIBRARY_PROJECT} PUBLIC rapidjson)
 elseif(DEFINED RAPIDJSON_INCLUDE_DIRS)
-    message(STATUS "rapidjson: RAPIDJSON_INCLUDE_DIRS defined (${RAPIDJSON_INCLUDE_DIRS}). Most likely a system install.")
-    target_include_directories(${LIBRARY_PROJECT} SYSTEM PUBLIC ${RAPIDJSON_INCLUDE_DIRS})
+  message(STATUS "rapidjson: RAPIDJSON_INCLUDE_DIRS defined (${RAPIDJSON_INCLUDE_DIRS}). Most likely a system install.")
+  target_include_directories(${LIBRARY_PROJECT} SYSTEM PUBLIC ${RAPIDJSON_INCLUDE_DIRS})
 elseif(DEFINED RapidJSON_SOURCE_DIR)
-    message(STATUS "rapidjson: RapidJSON_SOURCE_DIR defined, assuming this is a submodule/source build. (${RapidJSON_SOURCE_DIR})")
-    target_include_directories(${LIBRARY_PROJECT} SYSTEM PUBLIC ${RapidJSON_SOURCE_DIR}/include)
+  message(STATUS "rapidjson: RapidJSON_SOURCE_DIR defined, assuming this is a submodule/source build. (${RapidJSON_SOURCE_DIR})")
+  target_include_directories(${LIBRARY_PROJECT} SYSTEM PUBLIC ${RapidJSON_SOURCE_DIR}/include)
 endif()
 
 target_link_libraries(${LIBRARY_PROJECT}
@@ -991,6 +1006,7 @@ target_link_libraries(${LIBRARY_PROJECT}
         Qt${MAJOR_QT_VERSION}::Network
         Qt${MAJOR_QT_VERSION}::NetworkPrivate # for DELETE with a body (Kick)
         Qt${MAJOR_QT_VERSION}::Svg
+        Qt${MAJOR_QT_VERSION}::SvgWidgets
         Qt${MAJOR_QT_VERSION}::Concurrent
 
         LibCommuni::LibCommuni
@@ -1005,27 +1021,27 @@ target_link_libraries(${LIBRARY_PROJECT}
         BoostCertify
         )
 if (CHATTERINO_PLUGINS)
-    target_link_libraries(${LIBRARY_PROJECT} PUBLIC lua sol2::sol2)
+  target_link_libraries(${LIBRARY_PROJECT} PUBLIC lua sol2::sol2)
 endif()
 
 if (CHATTERINO_SPELLCHECK)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_SPELLCHECK)
-    target_link_libraries(${LIBRARY_PROJECT} PRIVATE hunspell::hunspell)
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_SPELLCHECK)
+  target_link_libraries(${LIBRARY_PROJECT} PRIVATE hunspell::hunspell)
 endif()
 
 if (CHATTERINO_ALLOW_PRIVATE_QT_API)
-    target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt${MAJOR_QT_VERSION}::GuiPrivate)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
+  target_link_libraries(${LIBRARY_PROJECT} PUBLIC Qt${MAJOR_QT_VERSION}::GuiPrivate)
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
         CHATTERINO_WITH_PRIVATE_QT_API)
 endif()
 
 if (BUILD_WITH_QTKEYCHAIN)
-    target_link_libraries(${LIBRARY_PROJECT}
+  target_link_libraries(${LIBRARY_PROJECT}
             PUBLIC
             qt${MAJOR_QT_VERSION}keychain
             )
 else()
-    target_compile_definitions(${LIBRARY_PROJECT}
+  target_compile_definitions(${LIBRARY_PROJECT}
         PUBLIC
         NO_QTKEYCHAIN
         )
@@ -1036,7 +1052,7 @@ endif()
 # - CMAKE_BIN_DIR/bin for BINARIES
 # an additional argument specifies the subdirectory.
 function(set_target_directory_hierarchy TARGET)
-    set_target_properties(${TARGET}
+  set_target_properties(${TARGET}
         PROPERTIES
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/${ARGV1}"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib/${ARGV1}"
@@ -1048,60 +1064,60 @@ function(set_target_directory_hierarchy TARGET)
 endfunction()
 
 if (BUILD_APP)
-    if (APPLE)
-        add_executable(${EXECUTABLE_PROJECT} ${MACOS_BUNDLE_ICON_FILE} main.cpp)
-    else()
-        add_executable(${EXECUTABLE_PROJECT} main.cpp)
-    endif()
+  if (APPLE)
+    add_executable(${EXECUTABLE_PROJECT} ${MACOS_BUNDLE_ICON_FILE} main.cpp)
+  else()
+    add_executable(${EXECUTABLE_PROJECT} main.cpp)
+  endif()
 
-    if (CHATTERINO_WITH_AVIF_PLUGIN)
-        target_link_libraries(${EXECUTABLE_PROJECT} PRIVATE kimageformats)
-        target_compile_definitions(${EXECUTABLE_PROJECT} PRIVATE CHATTERINO_WITH_AVIF_PLUGIN)
-    endif()
+  if (CHATTERINO_WITH_AVIF_PLUGIN)
+    target_link_libraries(${EXECUTABLE_PROJECT} PRIVATE kimageformats)
+    target_compile_definitions(${EXECUTABLE_PROJECT} PRIVATE CHATTERINO_WITH_AVIF_PLUGIN)
+  endif()
 
-    if(CHATTERINO_SANITIZER_SUPPORT)
-        add_sanitizers(${EXECUTABLE_PROJECT})
-    endif()
+  if(CHATTERINO_SANITIZER_SUPPORT)
+    add_sanitizers(${EXECUTABLE_PROJECT})
+  endif()
 
-    if (CHATTERINO_STATIC_QT_BUILD)
-        qt_import_plugins(${EXECUTABLE_PROJECT} INCLUDE_BY_TYPE
+  if (CHATTERINO_STATIC_QT_BUILD)
+    qt_import_plugins(${EXECUTABLE_PROJECT} INCLUDE_BY_TYPE
             platforms Qt::QXcbIntegrationPlugin
             Qt::QMinimalIntegrationPlugin
         )
-    endif ()
+  endif ()
 
-    target_include_directories(${EXECUTABLE_PROJECT} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/autogen/)
+  target_include_directories(${EXECUTABLE_PROJECT} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR}/autogen/)
 
-    target_link_libraries(${EXECUTABLE_PROJECT} PUBLIC ${LIBRARY_PROJECT})
+  target_link_libraries(${EXECUTABLE_PROJECT} PUBLIC ${LIBRARY_PROJECT})
 
-    set_target_directory_hierarchy(${EXECUTABLE_PROJECT})
+  set_target_directory_hierarchy(${EXECUTABLE_PROJECT})
 
-    if (WIN32)
-        if (WINDEPLOYQT_PATH)
-            file(TO_CMAKE_PATH "${WINDEPLOYQT_PATH}" WINDEPLOYQT_PATH)
-        else()
-            if (VCPKG_INSTALLED_DIR AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
-                find_program(WINDEPLOYQT_PATH NAMES windeployqt.debug.bat)
-            else()
-                find_program(WINDEPLOYQT_PATH NAMES windeployqt)
-            endif()
-        endif()
+  if (WIN32)
+    if (WINDEPLOYQT_PATH)
+      file(TO_CMAKE_PATH "${WINDEPLOYQT_PATH}" WINDEPLOYQT_PATH)
+    else()
+      if (VCPKG_INSTALLED_DIR AND (CMAKE_BUILD_TYPE STREQUAL "Debug"))
+        find_program(WINDEPLOYQT_PATH NAMES windeployqt.debug.bat)
+      else()
+        find_program(WINDEPLOYQT_PATH NAMES windeployqt)
+      endif()
+    endif()
 
-        if (NOT EXISTS ${WINDEPLOYQT_PATH})
-            message(FATAL_ERROR "windeployqt.exe not found")
-        endif()
+    if (NOT EXISTS ${WINDEPLOYQT_PATH})
+      message(FATAL_ERROR "windeployqt.exe not found")
+    endif()
 
-        if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-            set(WINDEPLOYQT_MODE --debug)
-            get_target_property(QT_CORE_LOC Qt${MAJOR_QT_VERSION}::Core LOCATION_DEBUG)
-        else()
-            set(WINDEPLOYQT_MODE --release)
-            get_target_property(QT_CORE_LOC Qt${MAJOR_QT_VERSION}::Core LOCATION)
-        endif()
-        get_filename_component(QT_BIN_DIR ${QT_CORE_LOC} DIRECTORY)
+    if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+      set(WINDEPLOYQT_MODE --debug)
+      get_target_property(QT_CORE_LOC Qt${MAJOR_QT_VERSION}::Core LOCATION_DEBUG)
+    else()
+      set(WINDEPLOYQT_MODE --release)
+      get_target_property(QT_CORE_LOC Qt${MAJOR_QT_VERSION}::Core LOCATION)
+    endif()
+    get_filename_component(QT_BIN_DIR ${QT_CORE_LOC} DIRECTORY)
 
-        # This assumes the installed CRT is up-to-date (see .CI/deploy-crt.ps1)
-        set(WINDEPLOYQT_COMMAND_ARGV
+    # This assumes the installed CRT is up-to-date (see .CI/deploy-crt.ps1)
+    set(WINDEPLOYQT_COMMAND_ARGV
             "${WINDEPLOYQT_PATH}"
             "$<TARGET_FILE:${EXECUTABLE_PROJECT}>"
             ${WINDEPLOYQT_MODE}
@@ -1109,67 +1125,83 @@ if (BUILD_APP)
             --no-translations
             --no-opengl-sw
         )
-        if (Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")
-            # windeployqt expects to find openssl in '/bin' but we deploy it in '/'.
-            list(APPEND WINDEPLOYQT_COMMAND_ARGV --force-openssl)
-        endif()
-        string(REPLACE ";" " " WINDEPLOYQT_COMMAND "${WINDEPLOYQT_COMMAND_ARGV}")
+    if (Qt6_VERSION VERSION_GREATER_EQUAL "6.8.0")
+      # windeployqt expects to find openssl in '/bin' but we deploy it in '/'.
+      list(APPEND WINDEPLOYQT_COMMAND_ARGV --force-openssl)
+    endif()
+    string(REPLACE ";" " " WINDEPLOYQT_COMMAND "${WINDEPLOYQT_COMMAND_ARGV}")
 
-        install(TARGETS ${EXECUTABLE_PROJECT}
+    install(TARGETS ${EXECUTABLE_PROJECT}
             RUNTIME_DEPENDENCIES
                 PRE_EXCLUDE_REGEXES "api-ms-" "ext-ms-"
                 POST_EXCLUDE_REGEXES ".*system32/.*\\.dll"
                 DIRECTORIES ${QT_BIN_DIR}
-            RUNTIME DESTINATION .)
+            COMPONENT ${PROJECT_NAME}
+            RUNTIME DESTINATION .
+        )
 
-        # Hardcoded list of DLLs to install from Qt - these are marked as optional since they only exist for vcpkg
-        install(FILES
+    # Hardcoded list of DLLs to install from Qt - these are marked as optional since they only exist for vcpkg
+    install(FILES
             ${QT_BIN_DIR}/jpeg62.dll
             ${QT_BIN_DIR}/libwebpdemux.dll
             ${QT_BIN_DIR}/libwebpmux.dll
             ${QT_BIN_DIR}/libwebp.dll
             ${QT_BIN_DIR}/libsharpyuv.dll
             DESTINATION .
-            OPTIONAL)
+            COMPONENT ${PROJECT_NAME}
+            OPTIONAL
+        )
 
-        install(CODE "message(\"-- Running: ${WINDEPLOYQT_COMMAND} --dir \\\"\${CMAKE_INSTALL_PREFIX}\\\"\")")
-        install(CODE "execute_process(COMMAND ${WINDEPLOYQT_COMMAND} --dir \"\${CMAKE_INSTALL_PREFIX}\" COMMAND_ERROR_IS_FATAL ANY)")
-    elseif (APPLE)
-        install(TARGETS ${EXECUTABLE_PROJECT}
+    install(
+            CODE
+                "message(\"-- Running: ${WINDEPLOYQT_COMMAND} --dir \\\"\${CMAKE_INSTALL_PREFIX}\\\"\")"
+            COMPONENT ${PROJECT_NAME}
+        )
+    install(
+            CODE
+                "execute_process(COMMAND ${WINDEPLOYQT_COMMAND} --dir \"\${CMAKE_INSTALL_PREFIX}\" COMMAND_ERROR_IS_FATAL ANY)"
+            COMPONENT ${PROJECT_NAME}
+        )
+  elseif (APPLE)
+    install(TARGETS ${EXECUTABLE_PROJECT}
                 RUNTIME DESTINATION bin
                 BUNDLE DESTINATION bin
                 LIBRARY DESTINATION lib
                 ARCHIVE DESTINATION lib/static
+                COMPONENT ${PROJECT_NAME}
                 )
-    else ()
-        install(TARGETS ${EXECUTABLE_PROJECT}
+  else ()
+    install(TARGETS ${EXECUTABLE_PROJECT}
                 RUNTIME DESTINATION bin
                 LIBRARY DESTINATION lib
                 ARCHIVE DESTINATION lib/static
+                COMPONENT ${PROJECT_NAME}
                 )
 
-        install(FILES ${CMAKE_SOURCE_DIR}/resources/com.bajerino.bajerino.desktop
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/com.bajerino.bajerino.desktop
                 DESTINATION share/applications
+                COMPONENT ${PROJECT_NAME}
                 )
 
-        install(FILES ${CMAKE_SOURCE_DIR}/resources/icon.png
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/icon.png
                 RENAME com.bajerino.bajerino.png
                 DESTINATION share/icons/hicolor/256x256/apps
+                COMPONENT ${PROJECT_NAME}
                 )
-    endif ()
+  endif ()
 
-    if(CHATTERINO_ENABLE_LTO)
-        message(STATUS "Enabling LTO for ${EXECUTABLE_PROJECT}")
-        set_property(TARGET ${EXECUTABLE_PROJECT}
+  if(CHATTERINO_ENABLE_LTO)
+    message(STATUS "Enabling LTO for ${EXECUTABLE_PROJECT}")
+    set_property(TARGET ${EXECUTABLE_PROJECT}
             PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-    endif()
+  endif()
 endif ()
 
 if (USE_PRECOMPILED_HEADERS AND NOT APPLE)
-    message(STATUS "Building with precompiled headers")
-    target_precompile_headers(${LIBRARY_PROJECT} PRIVATE PrecompiledHeader.hpp)
+  message(STATUS "Building with precompiled headers")
+  target_precompile_headers(${LIBRARY_PROJECT} PRIVATE PrecompiledHeader.hpp)
 else ()
-    message(STATUS "Building without precompiled headers")
+  message(STATUS "Building without precompiled headers")
 endif ()
 
 # Enable autogeneration of Qts MOC/RCC/UIC
@@ -1210,7 +1242,6 @@ target_link_libraries(${LIBRARY_PROJECT} PRIVATE ${VERSION_PROJECT})
 target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
     CHATTERINO
     UNICODE
-    AB_CUSTOM_SETTINGS
     IRC_STATIC
     IRC_NAMESPACE=Communi
     $<$<BOOL:${WIN32}>:_WIN32_WINNT=0x0A00> # Windows 10
@@ -1219,6 +1250,9 @@ target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
     $<$<BOOL:${WIN32}>:NOMINMAX>
     # Exclude some headers when including Windows.h
     $<$<BOOL:${WIN32}>:WIN32_LEAN_AND_MEAN>
+    # Don't allow the use of deprecated Boost.Asio functionality
+    # https://www.boost.org/doc/libs/latest/doc/html/boost_asio/using.html#boost_asio.using.macros
+    BOOST_ASIO_NO_DEPRECATED
     )
 
 set(_c2_qt_defs
@@ -1230,29 +1264,29 @@ target_compile_definitions(${VERSION_PROJECT} PUBLIC ${_c2_qt_defs})
 target_compile_definitions(${LIBRARY_PROJECT} PUBLIC ${_c2_qt_defs})
 
 if (USE_SYSTEM_QTKEYCHAIN)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
         CMAKE_BUILD
         )
 endif ()
 if (WIN32)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
         USEWINSDK
         )
-    if (BUILD_APP)
-        set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES WIN32_EXECUTABLE TRUE)
-    endif ()
+  if (BUILD_APP)
+    set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES WIN32_EXECUTABLE TRUE)
+  endif ()
 endif ()
 if (CHATTERINO_DEBUG_NATIVE_MESSAGES)
-    target_compile_definitions(${LIBRARY_PROJECT} PRIVATE CHATTERINO_DEBUG_NM)
+  target_compile_definitions(${LIBRARY_PROJECT} PRIVATE CHATTERINO_DEBUG_NM)
 endif ()
 
 if (MSVC)
-    target_compile_options(${LIBRARY_PROJECT} PUBLIC /EHsc /bigobj /utf-8)
+  target_compile_options(${LIBRARY_PROJECT} PUBLIC /EHsc /bigobj /utf-8)
 endif ()
 
 if (APPLE AND BUILD_APP)
-    set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
-    set_target_properties(${EXECUTABLE_PROJECT}
+  set_target_properties(${EXECUTABLE_PROJECT} PROPERTIES MACOSX_BUNDLE TRUE)
+  set_target_properties(${EXECUTABLE_PROJECT}
         PROPERTIES
         MACOSX_BUNDLE_BUNDLE_NAME "Bajerino"
         MACOSX_BUNDLE_GUI_IDENTIFIER "com.bajerino"
@@ -1273,33 +1307,33 @@ target_include_directories(${LIBRARY_PROJECT} PUBLIC ${CMAKE_SOURCE_DIR}/lib/exp
 
 # miniaudio dependency https://github.com/mackron/miniaudio
 if (USE_SYSTEM_MINIAUDIO)
-    message(STATUS "Building with system miniaudio")
-    include(CheckIncludeFileCXX)
-    CHECK_INCLUDE_FILE_CXX("miniaudio.h" MINIAUDIO_FOUND)
-    if (NOT MINIAUDIO_FOUND)
-        message(FATAL_ERROR "miniaudio.h not found on your system")
-    endif()
+  message(STATUS "Building with system miniaudio")
+  include(CheckIncludeFileCXX)
+  CHECK_INCLUDE_FILE_CXX("miniaudio.h" MINIAUDIO_FOUND)
+  if (NOT MINIAUDIO_FOUND)
+    message(FATAL_ERROR "miniaudio.h not found on your system")
+  endif()
 else ()
-    target_include_directories(${LIBRARY_PROJECT} PUBLIC ${CMAKE_SOURCE_DIR}/lib/miniaudio)
+  target_include_directories(${LIBRARY_PROJECT} PUBLIC ${CMAKE_SOURCE_DIR}/lib/miniaudio)
 endif ()
 
 if (UNIX)
-    if (CMAKE_DL_LIBS)
-        # libdl is a requirement for miniaudio on Linux
-        message(STATUS "Linking with CMake DL libs: '${CMAKE_DL_LIBS}'")
-        target_link_libraries(${LIBRARY_PROJECT} PUBLIC ${CMAKE_DL_LIBS})
-    endif ()
+  if (CMAKE_DL_LIBS)
+    # libdl is a requirement for miniaudio on Linux
+    message(STATUS "Linking with CMake DL libs: '${CMAKE_DL_LIBS}'")
+    target_link_libraries(${LIBRARY_PROJECT} PUBLIC ${CMAKE_DL_LIBS})
+  endif ()
 
-    if (NOT APPLE AND BUILD_WITH_LIBNOTIFY)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(LIBNOTIFY REQUIRED IMPORTED_TARGET libnotify)
-        target_link_libraries(${LIBRARY_PROJECT} PRIVATE PkgConfig::LIBNOTIFY)
-        target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_LIBNOTIFY)
-    endif ()
+  if (NOT APPLE AND BUILD_WITH_LIBNOTIFY)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBNOTIFY REQUIRED IMPORTED_TARGET libnotify)
+    target_link_libraries(${LIBRARY_PROJECT} PRIVATE PkgConfig::LIBNOTIFY)
+    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_LIBNOTIFY)
+  endif ()
 endif ()
 
 if (WIN32)
-    target_link_libraries(${LIBRARY_PROJECT}
+  target_link_libraries(${LIBRARY_PROJECT}
         PUBLIC
         WinToast)
 endif ()
@@ -1316,53 +1350,53 @@ target_link_libraries(${LIBRARY_PROJECT}
         )
 
 if (LIBRT)
-    target_link_libraries(${LIBRARY_PROJECT}
+  target_link_libraries(${LIBRARY_PROJECT}
         PUBLIC
         ${LIBRT}
         )
 endif ()
 
 if (BUILD_WITH_CRASHPAD)
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_CRASHPAD)
-    target_link_libraries(${LIBRARY_PROJECT} PUBLIC crashpad::client)
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_CRASHPAD)
+  target_link_libraries(${LIBRARY_PROJECT} PUBLIC crashpad::client)
 endif()
 
 # Configure compiler warnings
 if (MSVC)
-    # Change flags for RelWithDebInfo
+  # Change flags for RelWithDebInfo
 
-    # Default: "/debug /INCREMENTAL"
-    # Changes:
-    #   - Disable incremental linking to reduce padding
-    #   - Enable all optimizations - by default when /DEBUG is specified,
-    #     these optimizations will be disabled. We need /DEBUG to generate a PDB.
-    # See https://gitlab.kitware.com/cmake/cmake/-/issues/20812 for more details.
-    set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/DEBUG /INCREMENTAL:NO /OPT:REF,ICF,LBR")
+  # Default: "/debug /INCREMENTAL"
+  # Changes:
+  #   - Disable incremental linking to reduce padding
+  #   - Enable all optimizations - by default when /DEBUG is specified,
+  #     these optimizations will be disabled. We need /DEBUG to generate a PDB.
+  # See https://gitlab.kitware.com/cmake/cmake/-/issues/20812 for more details.
+  set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "/DEBUG /INCREMENTAL:NO /OPT:REF,ICF,LBR")
 
-    # Use the function inlining level from 'Release' mode (2).
-    string(REPLACE "/Ob1" "/Ob2" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  # Use the function inlining level from 'Release' mode (2).
+  string(REPLACE "/Ob1" "/Ob2" CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
 
-    # Configure warnings
+  # Configure warnings
 
-    # Someone adds /W3 before we add /W4.
-    # This makes sure, only /W4 is specified.
-    string(REPLACE "/W3" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
-    # 4100 - "unreferenced formal parameter"
-    #        There are a lot of functions and methods where
-    #        an argument was given a name but never used.
-    #        There's a clang-tidy rule that will catch this
-    #        for new/updated functions/methods.
-    #
-    # 4267 - "possible loss of data in return"
-    #        These are implicit conversions from size_t to int/qsizetype.
-    #        We don't use size_t in a lot of cases, since
-    #        Qt doesn't use it - it uses int (or qsizetype in Qt6).
-    #
-    # 4458 - "declaration of 'identifier' hides class member"
-    #        We have a rule of exclusively using `this->`
-    #        to access class members, thus it's fine to reclare a variable
-    #        with the same name as a class member.
-    target_compile_options(${LIBRARY_PROJECT} PUBLIC
+  # Someone adds /W3 before we add /W4.
+  # This makes sure, only /W4 is specified.
+  string(REPLACE "/W3" "/W4" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  # 4100 - "unreferenced formal parameter"
+  #        There are a lot of functions and methods where
+  #        an argument was given a name but never used.
+  #        There's a clang-tidy rule that will catch this
+  #        for new/updated functions/methods.
+  #
+  # 4267 - "possible loss of data in return"
+  #        These are implicit conversions from size_t to int/qsizetype.
+  #        We don't use size_t in a lot of cases, since
+  #        Qt doesn't use it - it uses int (or qsizetype in Qt6).
+  #
+  # 4458 - "declaration of 'identifier' hides class member"
+  #        We have a rule of exclusively using `this->`
+  #        to access class members, thus it's fine to reclare a variable
+  #        with the same name as a class member.
+  target_compile_options(${LIBRARY_PROJECT} PUBLIC
         /W4
         # 5038 - warnings about initialization order
         /w15038
@@ -1376,14 +1410,14 @@ if (MSVC)
         /Zc:__cplusplus
     )
 
-    # Warnings on clang-cl
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_compile_options(${LIBRARY_PROJECT} PUBLIC
+  # Warnings on clang-cl
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${LIBRARY_PROJECT} PUBLIC
             -Wno-missing-designated-field-initializers
         )
-    endif()
+  endif()
 else ()
-    target_compile_options(${LIBRARY_PROJECT} PUBLIC
+  target_compile_options(${LIBRARY_PROJECT} PUBLIC
         -Wall
         # Disable the following warnings
         -Wno-unused-function
@@ -1398,8 +1432,8 @@ else ()
         -Werror=reorder
     )
 
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        target_compile_options(${LIBRARY_PROJECT} PUBLIC
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(${LIBRARY_PROJECT} PUBLIC
             -Wno-unused-local-typedef
             -Wno-unused-private-field
             -Werror=inconsistent-missing-override
@@ -1407,30 +1441,37 @@ else ()
             -Werror=ambiguous-reversed-operator
 
         )
-    else ()
-        target_compile_options(${LIBRARY_PROJECT} PUBLIC
+  else ()
+    target_compile_options(${LIBRARY_PROJECT} PUBLIC
             -Wno-class-memaccess
         )
-    endif()
+  endif()
 endif ()
 
+# Extra Clang warnings
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(${LIBRARY_PROJECT} PUBLIC
+        -Wrange-loop-analysis
+    )
+endif()
+
 if(CHATTERINO_ENABLE_LTO)
-    message(STATUS "Enabling LTO for ${LIBRARY_PROJECT}")
-    set_property(TARGET ${LIBRARY_PROJECT}
+  message(STATUS "Enabling LTO for ${LIBRARY_PROJECT}")
+  set_property(TARGET ${LIBRARY_PROJECT}
                  PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
 if(NOT CHATTERINO_UPDATER)
-    message(STATUS "Disabling the updater.")
-    target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_DISABLE_UPDATER)
+  message(STATUS "Disabling the updater.")
+  target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_DISABLE_UPDATER)
 endif()
 
 if (DOXYGEN_FOUND)
-    message(STATUS "Doxygen found, adding doxygen target")
-    # output will be in docs/html
-    set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/docs")
+  message(STATUS "Doxygen found, adding doxygen target")
+  # output will be in docs/html
+  set(DOXYGEN_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/docs")
 
-    doxygen_add_docs(
+  doxygen_add_docs(
         doxygen
         ${CMAKE_CURRENT_LIST_DIR}
     )

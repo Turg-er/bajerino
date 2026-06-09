@@ -350,7 +350,7 @@ void Toasts::ensureInitialized()
     {
         return;
     }
-    auto result = notify_init("bajerino");
+    auto result = notify_init("Bajerino");
 
     if (result == 0)
     {

@@ -223,11 +223,12 @@ TwitchIrcServer::TwitchIrcServer()
 
 void TwitchIrcServer::initialize()
 {
-    getApp()->getAccounts()->twitch.currentUserChanged.connect([this]() {
-        postToThread([this] {
-            this->connect();
+    this->signalHolder.managedConnect(
+        getApp()->getAccounts()->twitch.currentUserChanged, [this]() {
+            postToThread([this] {
+                this->connect();
+            });
         });
-    });
 
     getSettings()->twitchIrcJoinAsAnonymous.connect(
         [this](const bool &) {

@@ -53,7 +53,11 @@ OutputDir=out
 #ifdef INSTALLER_BASE_NAME
 OutputBaseFilename={#INSTALLER_BASE_NAME}
 #else
+<<<<<<< HEAD:.CI/bajerino-installer.iss
 OutputBaseFilename=Bajerino.Installer
+=======
+OutputBaseFilename=Chatterino7TV.Installer
+>>>>>>> upstream7:.CI/chatterino-installer.iss
 #endif
 Compression=lzma
 SolidCompression=yes
@@ -84,8 +88,13 @@ Source: "{#WORKING_DIR}vc_redist.{#VCRT_ARCH}.exe"; DestDir: "{tmp}"; Tasks: vcr
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
+<<<<<<< HEAD:.CI/bajerino-installer.iss
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "BajerinoTeam.Bajerino"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "BajerinoTeam.Bajerino"; Tasks: desktopicon
+=======
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "SevenTV.Chatterino7TV"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "SevenTV.Chatterino7TV"; Tasks: desktopicon
+>>>>>>> upstream7:.CI/chatterino-installer.iss
 
 [Run]
 ; VC++ redistributable

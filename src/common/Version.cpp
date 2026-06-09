@@ -41,8 +41,13 @@ Version::Version()
     this->generateExtraString();
 
 #ifdef Q_OS_WIN
-    // keep in sync with .CI/bajerino-installer.iss
-    this->appUserModelID_ = L"BajerinoTeam.Bajerino";
+    <<<<<<< HEAD
+        // keep in sync with .CI/bajerino-installer.iss
+        this->appUserModelID_ = L"BajerinoTeam.Bajerino";
+=======
+    // keep in sync with .CI/chatterino-installer.iss
+    this->appUserModelID_ = L"SevenTV.Chatterino7TV";
+>>>>>>> upstream7
 #endif
 }
 

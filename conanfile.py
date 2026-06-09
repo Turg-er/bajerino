@@ -27,7 +27,7 @@ class Bajerino(ConanFile):
         if self.settings.os != "Windows":
             return
 
-        self.requires("libavif/1.3.0")
+        self.requires("libavif/1.4.1")
         if self.options.get_safe("with_benchmark", False):
             self.requires("benchmark/1.9.0")
 
