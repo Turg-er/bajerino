@@ -9,7 +9,9 @@
 #include "common/QLogging.hpp"
 #include "common/WindowDescriptors.hpp"
 #include "debug/AssertInGuiThread.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
+#include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/QMagicEnum.hpp"
@@ -40,6 +42,12 @@ SplitContainer::SplitContainer(Notebook *parent)
     , tab_(nullptr)
 {
     this->refreshTabTitle();
+
+    getSettings()->showAnonymousChannelIndicator.connect(
+        [this](auto, auto) {
+            this->refreshTabTitle();
+        },
+        this->signalHolder_);
 
     this->signalHolder_.managedConnect(
         Split::modifierStatusChanged, [this](auto modifiers) {
@@ -224,11 +232,11 @@ void SplitContainer::addSplit(Split *split)
     auto &&conns = this->connectionsPerSplit_[split];
 
     conns.managedConnect(split->getChannelView().tabHighlightRequested,
-                         [this, split](HighlightState state) {
+                         [this, split](const TabHighlight &highlight) {
                              if (this->tab_ != nullptr)
                              {
                                  this->tab_->updateHighlightState(
-                                     state, split->getChannelView());
+                                     highlight, split->getChannelView());
                              }
                          });
 
@@ -238,6 +246,25 @@ void SplitContainer::addSplit(Split *split)
             this->tab_->newHighlightSourceAdded(split->getChannelView());
         }
     });
+
+    // Refresh the tab title when the split's channel toggles anonymity. The
+    // connection is re-established whenever the split's channel changes.
+    auto connectChannelAnonymous = [this](Split *s) {
+        if (auto *twitchChannel =
+                dynamic_cast<TwitchChannel *>(s->getChannel().get()))
+        {
+            this->connectionsPerSplit_[s].managedConnect(
+                twitchChannel->anonymousChanged, [this]() {
+                    this->refreshTabTitle();
+                });
+        }
+    };
+    connectChannelAnonymous(split);
+    conns.managedConnect(split->channelChanged,
+                         [this, split, connectChannelAnonymous] {
+                             connectChannelAnonymous(split);
+                             this->refreshTabTitle();
+                         });
 
     conns.managedConnect(split->getChannelView().liveStatusChanged, [this]() {
         this->refreshTabLiveStatus();
@@ -878,6 +905,11 @@ NodeDescriptor SplitContainer::buildDescriptorRecursively(
         SplitNodeDescriptor result;
         result.type_ = channelTypeToString(channelType);
         result.channelName_ = currentNode->split_->getChannel()->getName();
+        if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
+                currentNode->split_->getChannel().get()))
+        {
+            result.anonymousOverride_ = twitchChannel->anonymousOverride();
+        }
         result.filters_ = currentNode->split_->getFilters();
         return result;
     }
@@ -993,6 +1025,15 @@ void SplitContainer::refreshTabTitle()
     for (const auto &chatWidget : this->splits_)
     {
         auto channelName = chatWidget->getChannel()->getLocalizedName();
+        if (auto *twitchChannel =
+                dynamic_cast<TwitchChannel *>(chatWidget->getChannel().get()))
+        {
+            if (twitchChannel->isAnonymous() && !channelName.isEmpty() &&
+                getSettings()->showAnonymousChannelIndicator)
+            {
+                channelName += " (anonymous)";
+            }
+        }
         if (channelName.isEmpty())
         {
             continue;

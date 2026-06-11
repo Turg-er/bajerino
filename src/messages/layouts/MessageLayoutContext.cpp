@@ -133,6 +133,30 @@ void MessagePreferences::connectSettings(Settings *settings,
             this->fadeMessageHistory = newValue;
         },
         holder);
+
+    settings->showClientDetectionHighlights.connect(
+        [this](const auto &newValue) {
+            this->enableClientDetectionHighlight = newValue;
+        },
+        holder);
+
+    settings->clientDetectionWebColor.connect(
+        [this](const auto &newValue) {
+            this->clientDetectionWebColor = QColor(newValue);
+        },
+        holder);
+
+    settings->clientDetectionAndroidColor.connect(
+        [this](const auto &newValue) {
+            this->clientDetectionAndroidColor = QColor(newValue);
+        },
+        holder);
+
+    settings->clientDetectionIosColor.connect(
+        [this](const auto &newValue) {
+            this->clientDetectionIosColor = QColor(newValue);
+        },
+        holder);
 }
 
 }  // namespace chatterino

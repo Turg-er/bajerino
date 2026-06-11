@@ -15,7 +15,9 @@
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
+#include "singletons/WindowManager.hpp"
 #include "util/CustomPlayer.hpp"
+#include "util/PostToThread.hpp"
 #include "util/StreamLink.hpp"
 #include "widgets/helper/CommonTexts.hpp"
 
@@ -25,7 +27,9 @@
 #    include <libnotify/notify.h>
 #endif
 
+#include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -51,6 +55,34 @@ bool hasAvatarForChannel(const QString &channelName)
     QFileInfo avatarFile(avatarFilePath(channelName));
     return avatarFile.exists() && avatarFile.isFile();
 }
+
+#ifdef Q_OS_WIN
+bool isRunningFromBuildTree()
+{
+    const QFileInfo appFile(QCoreApplication::applicationFilePath());
+    if (appFile.fileName().compare(u"bajerino.exe"_s, Qt::CaseInsensitive) != 0)
+    {
+        return false;
+    }
+
+    QDir binDir = appFile.absoluteDir();
+    if (binDir.dirName().compare(u"bin"_s, Qt::CaseInsensitive) != 0)
+    {
+        return false;
+    }
+
+    QDir buildDir = binDir;
+    if (!buildDir.cdUp())
+    {
+        return false;
+    }
+
+    return QFileInfo(buildDir.filePath(u"CMakeCache.txt"_s)).exists() ||
+           QFileInfo(buildDir.filePath(u"build.ninja"_s)).exists() ||
+           QFileInfo(buildDir.filePath(u"Makefile"_s)).exists() ||
+           QFileInfo(buildDir.filePath(u"CMakeFiles"_s)).isDir();
+}
+#endif
 
 /// A job that downlaods a twitch avatar and saves it to a file
 class AvatarDownloader : public QObject
@@ -94,6 +126,11 @@ void performReaction(const ToastReaction &reaction, const QString &channelName)
 }
 
 #ifdef CHATTERINO_WITH_LIBNOTIFY
+struct HighlightNotificationData {
+    QString channelName;
+    QString messageId;
+};
+
 void onAction(NotifyNotification *notif, const char *actionRaw, void *userData)
 {
     QString action(actionRaw);
@@ -134,6 +171,28 @@ void onNotificationDestroyed(void *data)
 {
     auto *channelNameHeap = static_cast<QString *>(data);
     delete channelNameHeap;
+}
+
+void onHighlightAction(NotifyNotification *notif, const char *, void *userData)
+{
+    const auto *data = static_cast<HighlightNotificationData *>(userData);
+    if (data != nullptr)
+    {
+        const auto channelName = data->channelName;
+        const auto messageId = data->messageId;
+        runInGuiThread([channelName, messageId] {
+            getApp()->getWindows()->openChannelOrMessageFromTray(channelName,
+                                                                 messageId);
+        });
+    }
+
+    notify_notification_close(notif, nullptr);
+}
+
+void onHighlightNotificationDestroyed(void *data)
+{
+    auto *highlightData = static_cast<HighlightNotificationData *>(data);
+    delete highlightData;
 }
 #endif
 
@@ -242,6 +301,37 @@ void Toasts::sendChannelNotification(const QString &channelName,
     }
 }
 
+bool Toasts::sendHighlightNotification(const QString &channelName,
+                                       const QString &title,
+                                       const QString &body,
+                                       const QString &messageId)
+{
+#ifdef Q_OS_WIN
+    return this->sendWindowsHighlightNotification(channelName, title, body,
+                                                  messageId);
+#elif defined(CHATTERINO_WITH_LIBNOTIFY)
+    return this->sendLibnotifyHighlightNotification(channelName, title, body,
+                                                    messageId);
+#else
+    (void)channelName;
+    (void)title;
+    (void)body;
+    (void)messageId;
+    return false;
+#endif
+}
+
+bool Toasts::isHighlightNotificationSupported()
+{
+#ifdef Q_OS_WIN
+    return WinToast::isCompatible();
+#elif defined(CHATTERINO_WITH_LIBNOTIFY)
+    return true;
+#else
+    return false;
+#endif
+}
+
 #ifdef Q_OS_WIN
 
 class CustomHandler : public WinToastLib::IWinToastHandler
@@ -279,6 +369,52 @@ public:
     }
 };
 
+class HighlightHandler : public WinToastLib::IWinToastHandler
+{
+private:
+    QString channelName_;
+    QString messageId_;
+
+public:
+    HighlightHandler(QString channelName, QString messageId)
+        : channelName_(std::move(channelName))
+        , messageId_(std::move(messageId))
+    {
+    }
+
+    void toastActivated() const override
+    {
+        const auto channelName = this->channelName_;
+        const auto messageId = this->messageId_;
+
+        runInGuiThread([channelName, messageId] {
+            getApp()->getWindows()->openChannelOrMessageFromTray(channelName,
+                                                                 messageId);
+        });
+    }
+
+    void toastActivated(int actionIndex) const override
+    {
+        (void)actionIndex;
+        this->toastActivated();
+    }
+
+    void toastActivated(std::wstring response) const override
+    {
+        (void)response;
+        this->toastActivated();
+    }
+
+    void toastFailed() const override
+    {
+    }
+
+    void toastDismissed(WinToastDismissalReason state) const override
+    {
+        (void)state;
+    }
+};
+
 void Toasts::ensureInitialized()
 {
     if (this->initialized_)
@@ -290,7 +426,7 @@ void Toasts::ensureInitialized()
     auto *instance = WinToast::instance();
     instance->setAppName(L"Bajerino");
     instance->setAppUserModelId(Version::instance().appUserModelID());
-    if (!getSettings()->createShortcutForToasts)
+    if (isRunningFromBuildTree() || !getSettings()->createShortcutForToasts)
     {
         instance->setShortcutPolicy(WinToast::SHORTCUT_POLICY_IGNORE);
     }
@@ -302,6 +438,39 @@ void Toasts::ensureInitialized()
         qCDebug(chatterinoNotification)
             << "Failed to initialize WinToast - error:" << error;
     }
+}
+
+bool Toasts::ensureActionCenterActivation()
+{
+    if (this->actionCenterActivationChecked_)
+    {
+        return this->actionCenterActivationAvailable_;
+    }
+
+    this->actionCenterActivationChecked_ = true;
+
+    if (isRunningFromBuildTree())
+    {
+        qCDebug(chatterinoNotification)
+            << "Skipping WinToast Action Center shortcut creation for build "
+               "tree executable";
+        this->actionCenterActivationAvailable_ = false;
+        return this->actionCenterActivationAvailable_;
+    }
+
+    auto *instance = WinToast::instance();
+    instance->setShortcutPolicy(WinToast::SHORTCUT_POLICY_REQUIRE_CREATE);
+
+    const auto result = instance->createShortcut();
+    this->actionCenterActivationAvailable_ = result >= 0;
+
+    if (!this->actionCenterActivationAvailable_)
+    {
+        qCWarning(chatterinoNotification)
+            << "Failed to prepare WinToast Action Center activation:" << result;
+    }
+
+    return this->actionCenterActivationAvailable_;
 }
 
 void Toasts::sendWindowsNotification(const QString &channelName,
@@ -342,6 +511,43 @@ void Toasts::sendWindowsNotification(const QString &channelName,
     }
 }
 
+bool Toasts::sendWindowsHighlightNotification(const QString &channelName,
+                                              const QString &title,
+                                              const QString &body,
+                                              const QString &messageId)
+{
+    if (!WinToast::isCompatible())
+    {
+        return false;
+    }
+
+    this->ensureInitialized();
+    if (!WinToast::instance()->isInitialized())
+    {
+        return false;
+    }
+
+    this->ensureActionCenterActivation();
+
+    WinToastTemplate templ(WinToastTemplate::Text02);
+    templ.setTextField(title.toStdWString(), WinToastTemplate::FirstLine);
+    templ.setTextField(body.toStdWString(), WinToastTemplate::SecondLine);
+    templ.setAudioOption(WinToastTemplate::AudioOption::Silent);
+
+    WinToast::WinToastError error = WinToast::NoError;
+    const auto toastID = WinToast::instance()->showToast(
+        templ, new HighlightHandler(channelName, messageId), &error);
+
+    if (toastID < 0 || error != WinToast::NoError)
+    {
+        qCWarning(chatterinoNotification)
+            << "Failed to show highlight toast:" << error;
+        return false;
+    }
+
+    return true;
+}
+
 #elif defined(CHATTERINO_WITH_LIBNOTIFY)
 
 void Toasts::ensureInitialized()
@@ -357,6 +563,54 @@ void Toasts::ensureInitialized()
         qCWarning(chatterinoNotification) << "Failed to initialize libnotify";
     }
     this->initialized_ = true;
+}
+
+bool Toasts::sendLibnotifyHighlightNotification(const QString &channelName,
+                                                const QString &title,
+                                                const QString &body,
+                                                const QString &messageId)
+{
+    this->ensureInitialized();
+    if (!notify_is_initted())
+    {
+        return false;
+    }
+
+    auto *notif = notify_notification_new(title.toUtf8().constData(),
+                                          body.toUtf8().constData(), nullptr);
+    if (notif == nullptr)
+    {
+        return false;
+    }
+
+    notify_notification_set_hint(
+        notif, "desktop-entry",
+        g_variant_new_string("com.chatterino.chatterino"));
+    notify_notification_set_timeout(notif, 10000);
+    notify_notification_set_urgency(notif, NOTIFY_URGENCY_NORMAL);
+
+    auto *data = new HighlightNotificationData{
+        .channelName = channelName,
+        .messageId = messageId,
+    };
+
+    notify_notification_add_action(notif, "default", "Open",
+                                   (NotifyActionCallback)onHighlightAction,
+                                   data, onHighlightNotificationDestroyed);
+    notify_notification_add_action(notif, "open", "Open",
+                                   (NotifyActionCallback)onHighlightAction,
+                                   data, nullptr);
+
+    g_signal_connect(notif, "closed", (GCallback)onActionClosed, nullptr);
+
+    const gboolean success = notify_notification_show(notif, nullptr);
+    if (success == 0)
+    {
+        g_object_unref(notif);
+        return false;
+    }
+
+    return true;
 }
 
 void Toasts::sendLibnotify(const QString &channelName,

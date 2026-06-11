@@ -173,7 +173,9 @@ void SearchPopup::updateWindowTitle()
 
     if (this->searchChannels_.size() > 1)
     {
-        historyName = "multiple channels'";
+        this->setWindowTitle("Searching all open tabs");
+        this->searchInput_->setPlaceholderText("Search all open tabs");
+        return;
     }
     else if (this->channelName_ == "/automod")
     {
@@ -196,6 +198,7 @@ void SearchPopup::updateWindowTitle()
         historyName = QString("%1's").arg(this->channelName_);
     }
     this->setWindowTitle("Searching in " + historyName + " history");
+    this->searchInput_->setPlaceholderText("Type to search");
 }
 
 void SearchPopup::showEvent(QShowEvent *e)
@@ -277,7 +280,7 @@ std::vector<MessagePtr> SearchPopup::buildSnapshot()
         std::unique(combinedSnapshot.begin(), combinedSnapshot.end(),
                     [](MessagePtr &a, MessagePtr &b) {
                         // nullptr check prevents system messages from being dropped
-                        return (a->id != nullptr) && a->id == b->id;
+                        return !a->id.isEmpty() && a->id == b->id;
                     });
 
     combinedSnapshot.erase(uniqueIterator, combinedSnapshot.end());

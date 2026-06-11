@@ -26,4 +26,6 @@ QString cancelPrediction(const CommandContext &ctx);
 /// /completeprediction
 QString completePrediction(const CommandContext &ctx);
 
+QString showPredictions(const CommandContext &ctx);
+
 }  // namespace chatterino::commands

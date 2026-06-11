@@ -21,10 +21,12 @@
 #include <IrcMessage>
 #include <pajlada/signals/signalholder.hpp>
 #include <QColor>
+#include <QDateTime>
 #include <QElapsedTimer>
 #include <QRegularExpression>
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
@@ -33,6 +35,8 @@ class TestIrcMessageHandlerP;
 class TestEventSubMessagesP;
 
 namespace chatterino {
+
+class TwitchChannelTestAccess;
 
 enum class HighlightState;
 
@@ -66,6 +70,7 @@ class TwitchIrcServer;
 class TwitchAccount;
 
 const int MAX_QUEUED_REDEMPTIONS = 16;
+const int MAX_RECENT_CHANNEL_POINT_REDEMPTIONS = 1024;
 
 namespace detail {
 
@@ -162,7 +167,104 @@ public:
         int slowMode = 0;
     };
 
-    explicit TwitchChannel(const QString &channelName);
+    struct PinnedMessage {
+        QString pinId;
+        QString messageId;
+        QString text;
+        QString authorId;
+        QString authorName;
+        QString authorLogin;
+        QString authorColor;
+        QString authorBadges;
+        QString pinnerName;
+        QString pinnerLogin;
+        std::optional<QDateTime> endsAt;
+        std::optional<QDateTime> pinnedAt;
+    };
+
+    struct PredictionOutcome {
+        QString id;
+        QString title;
+        QString color;  // "BLUE", "PINK", "GREEN"
+        qlonglong totalPoints = 0;
+        int totalUsers = 0;
+        qlonglong topPoints = 0;
+        QString topPredictorName;
+    };
+
+    struct PredictionEvent {
+        QString id;
+        QString title;
+        QString status;  // "ACTIVE", "LOCKED", "RESOLVED", "CANCELED"
+        std::vector<PredictionOutcome> outcomes;  // 2-10
+        int predictionWindowSeconds = 0;
+        QDateTime createdAt;
+        std::optional<QDateTime> lockedAt;
+        QString winningOutcomeId;
+        QString createdByName;
+        QString lockedByName;
+        QString endedByName;  // mod who resolved/canceled
+        QString selfOutcomeId;
+        int selfPoints = 0;
+    };
+
+    struct PollChoice {
+        QString id;
+        QString title;
+        int totalVotes = 0;
+        int freeVotes = 0;
+        int channelPointsVotes = 0;
+        int totalVoters = 0;
+        int topChannelPointsContribution = 0;
+        QString topChannelPointsContributorName;
+    };
+
+    struct PollSelfVote {
+        QString choiceId;
+        int freeVotes = 0;
+        int channelPointsVotes = 0;
+    };
+
+    struct PollEvent {
+        QString id;
+        QString title;
+        QString status;  // "ACTIVE", "COMPLETED", "TERMINATED", "ARCHIVED"
+        std::vector<PollChoice> choices;  // 2-5
+        int durationSeconds = 0;
+        int remainingDurationMilliseconds = 0;
+        int totalVotes = 0;
+        QDateTime createdAt;
+        std::optional<QDateTime> endsAt;
+        QString createdByName;
+        QString currentUserId;
+        bool channelPointsVotingEnabled = false;
+        int pointsPerVote = 0;
+        std::vector<PollSelfVote> selfVotes;
+    };
+
+    struct ChatWarning {
+        QString id;
+        QString channelId;
+        QString reason;
+        QDateTime createdAt;
+    };
+
+    struct RaidEvent {
+        QString id;
+        QString sourceId;
+        QString targetId;
+        QString targetLogin;
+        QString targetDisplayName;
+        QString targetProfileImage;
+        int viewerCount = 0;
+        int forceRaidNowSeconds = 90;
+        QDateTime raidCreatedAt;
+        QDateTime receivedAt;
+    };
+
+    explicit TwitchChannel(
+        const QString &channelName,
+        std::optional<bool> anonymousOverride = std::nullopt);
     ~TwitchChannel() override;
 
     TwitchChannel(const TwitchChannel &) = delete;
@@ -178,11 +280,28 @@ public:
     // Channel methods
     bool isEmpty() const override;
     bool canSendMessage() const override;
+    /// Effective anonymity: the per-channel override if set, otherwise the
+    /// global default (Settings::twitchIrcJoinAsAnonymous).
+    bool isAnonymous() const;
+    /// The explicit per-channel override, or nullopt when following the global
+    /// default.
+    std::optional<bool> anonymousOverride() const;
+    /// Sets the per-channel override. When the effective anonymity changes, the
+    /// channel is re-homed between the authed and anonymous IRC connections.
+    void setAnonymousOverride(std::optional<bool> anonymousOverride);
     void sendMessage(const QString &message) override;
+    bool sendMessageViaIrc(const QString &message, int duplicateNonce = 0);
+    bool sendSpamMessageViaHelix(
+        const QString &message, int duplicateNonce,
+        std::function<void(bool sent, QString error)> callback);
+    void sendBotMessage(const QString &message);
     void sendReply(const QString &message, const QString &replyId);
     bool isMod() const override;
+    bool isLeadMod() const;
     bool isVip() const;
     bool isStaff() const;
+    bool isFollowing() const;
+    bool isFollowingStatusKnown() const;
     bool isBroadcaster() const override;
     bool hasHighRateLimit() const override;
     bool canReconnect() const override;
@@ -218,6 +337,50 @@ public:
     QString roomId() const;
     SharedAccessGuard<const RoomModes> accessRoomModes() const;
     SharedAccessGuard<const StreamStatus> accessStreamStatus() const;
+    SharedAccessGuard<const std::optional<PinnedMessage>> accessPinnedMessage()
+        const;
+    void setPinnedMessage(std::optional<PinnedMessage> pin);
+    void refreshPinnedMessage();
+    void pinMessage(const QString &messageId, int durationSeconds = 1200,
+                    QString textHint = {});
+    void unpinMessage();
+    void keepPinned();
+    void refreshFollowingStatus(bool force = false);
+    void setFollowingStatus(bool following,
+                            std::optional<QDateTime> followedAt = std::nullopt);
+    void refreshActivePrediction();
+    void refreshLeadModStatus(bool force = false);
+    void refreshChannelPoints();
+    void refreshChatters();
+    void refreshChannelPointsIfStale(bool force = false);
+    void handlePinnedChatUpdate(const QJsonObject &data);
+
+    // Predictions & Points
+    SharedAccessGuard<const std::optional<PredictionEvent>> accessPrediction()
+        const;
+    void setActivePrediction(std::optional<PredictionEvent> prediction);
+    void handlePredictionUpdate(const QJsonObject &data);
+    void handleUserPointsUpdate(const QJsonObject &payload);
+    void refreshPrediction(bool force = false);
+    SharedAccessGuard<const std::optional<PollEvent>> accessPoll() const;
+    void setActivePoll(std::optional<PollEvent> poll);
+    void handlePollUpdate(const QJsonObject &payload);
+    void refreshActivePoll();
+    void refreshPollIfStale(bool force = false);
+    qint64 channelPointBalance() const;
+    bool isChannelPointsFetchInFlight() const;
+    bool shouldShowChannelPoints() const;
+    void setChannelPointBalance(qint64 balance);
+    void handleChatWarningPubSub(const QJsonObject &payload);
+    void handleChatWarningNotice();
+    void refreshChatWarningIfStale(bool force = false,
+                                   bool notifyOnError = false);
+    void acknowledgeChatWarning();
+    void showPendingChatWarningIfVisible();
+    SharedAccessGuard<const std::optional<RaidEvent>> accessRaid() const;
+    void setActiveRaid(std::optional<RaidEvent> raid);
+    void clearActiveRaid();
+    void handleRaidUpdate(const QJsonObject &payload);
 
     /**
      * Records that the channel is no longer joined.
@@ -296,9 +459,9 @@ public:
 
     // Replies
     /**
-     * Stores the given thread in this channel. 
-     * 
-     * Note: This method not take ownership of the MessageThread; this 
+     * Stores the given thread in this channel.
+     *
+     * Note: This method not take ownership of the MessageThread; this
      * TwitchChannel instance will store a weak_ptr to the thread.
      */
     void addReplyThread(const std::shared_ptr<MessageThread> &thread);
@@ -349,6 +512,20 @@ public:
     pajlada::Signals::NoArgSignal streamStatusChanged;
 
     pajlada::Signals::NoArgSignal roomModesChanged;
+    pajlada::Signals::NoArgSignal pinnedMessageChanged;
+    pajlada::Signals::NoArgSignal predictionChanged;
+    pajlada::Signals::NoArgSignal pollChanged;
+    pajlada::Signals::NoArgSignal channelPointsChanged;
+    pajlada::Signals::NoArgSignal followingStatusChanged;
+    pajlada::Signals::NoArgSignal raidChanged;
+    /// Fired when the channel's effective anonymity changes, whether from a
+    /// per-channel override or the global default.
+    pajlada::Signals::NoArgSignal anonymousChanged;
+
+    const QString &lastChannelPointsError() const
+    {
+        return this->lastChannelPointsError_;
+    }
 
     pajlada::Signals::NoArgSignal destroyed;
 
@@ -370,6 +547,7 @@ public:
     bool isChannelPointRewardKnown(const QString &rewardId);
     std::optional<ChannelPointReward> channelPointReward(
         const QString &rewardId) const;
+    bool markChannelPointRedemptionSeen(const QString &key);
 
     // Live status
     void updateStreamStatus(const std::optional<HelixStream> &helixStream,
@@ -420,14 +598,16 @@ private:
         QObjectPtr<Communi::IrcMessage> message;
     };
 
+    std::optional<bool> anonymousOverride_;
+
     void refreshPubSub();
-    void refreshChatters();
     void refreshBadges();
     void refreshCheerEmotes();
     void loadRecentMessages();
     void loadRecentMessagesReconnect();
     void cleanUpReplyThreads();
     void showLoginMessage();
+    void showAnonymousIrcSendBlockedMessage();
 
     /// roomIdChanged is called whenever this channel's ID has been changed
     /// This should only happen once per channel, whenever the ID goes from unset to set
@@ -452,6 +632,7 @@ private:
      **/
     bool setLive(bool newLiveStatus);
     void setMod(bool value);
+    void setLeadMod(bool value, bool known = true);
     void setVIP(bool value);
     void setStaff(bool value);
     void setRoomId(const QString &id);
@@ -466,7 +647,13 @@ private:
      **/
     const QString &getLocalizedName() const override;
 
-    QString prepareMessage(const QString &message) const;
+    QString prepareMessage(const QString &message,
+                           int duplicateNonce = 0) const;
+    void setActiveChatWarning(std::optional<ChatWarning> warning,
+                              bool showIfVisible);
+    void clearChatWarning();
+    void showChatWarningMessage(const ChatWarning &warning);
+    void showChatWarningAuthFallback();
 
     /**
      * Either adds a message mentioning the updated emotes
@@ -512,8 +699,38 @@ private:
     const QString channelUrl_;
     const QString popoutPlayerUrl_;
     int chatterCount_{};
+    std::atomic<bool> chatterFetchInFlight_{false};
+    QDateTime lastChatterRefreshAt_;
+
     UniqueAccess<StreamStatus> streamStatus_;
     UniqueAccess<RoomModes> roomModes;
+    UniqueAccess<std::optional<PinnedMessage>> currentPin_;
+    std::atomic<int> pinnedMessageRefreshFailures_{0};
+    UniqueAccess<std::optional<PredictionEvent>> activePrediction_;
+    std::atomic<bool> predictionFetchInFlight_{false};
+    QDateTime lastPredictionRefreshAt_;
+    QDateTime lastPredictionUpdateAt_;
+    QString lastPredictionSystemMessageKey_;
+    UniqueAccess<std::optional<PollEvent>> activePoll_;
+    std::atomic<bool> pollFetchInFlight_{false};
+    QDateTime lastPollRefreshAt_;
+    QDateTime lastPollUpdateAt_;
+    UniqueAccess<std::optional<ChatWarning>> activeChatWarning_;
+    UniqueAccess<std::optional<RaidEvent>> activeRaid_;
+    QString locallyClearedRaidId_;
+    QDateTime locallyClearedRaidAt_;
+    std::atomic<bool> chatWarningFetchInFlight_{false};
+    std::atomic<bool> chatWarningFetchNotifyOnError_{false};
+    std::atomic<bool> chatWarningAckInFlight_{false};
+    QDateTime lastChatWarningRefreshAt_;
+    QDateTime lastChatWarningUpdateAt_;
+    QDateTime lastChatWarningAuthPromptAt_;
+    QString shownChatWarningMessageId_;
+    std::atomic<qint64> channelPoints_{-1};
+    std::atomic<bool> channelPointsFetchInFlight_{false};
+    QDateTime lastChannelPointsRefreshAt_;
+    QDateTime lastChannelPointsUpdateAt_;
+    QString lastChannelPointsError_;
     bool disconnected_{};
     std::optional<std::chrono::time_point<std::chrono::system_clock>>
         lastConnectedAt_{};
@@ -542,8 +759,21 @@ private:
     UniqueAccess<std::map<QString, ChannelPointReward>> channelPointRewards_;
     boost::circular_buffer_space_optimized<QueuedRedemption>
         waitingRedemptions_{MAX_QUEUED_REDEMPTIONS};
+    boost::circular_buffer_space_optimized<QString>
+        recentChannelPointRedemptions_{MAX_RECENT_CHANNEL_POINT_REDEMPTIONS};
 
     bool mod_ = false;
+    bool leadMod_ = false;
+    bool leadModStatusKnown_ = false;
+    std::atomic<bool> leadModFetchInFlight_{false};
+    bool leadModLookupAttempted_ = false;
+    QDateTime lastLeadModRefreshAt_;
+    bool following_ = false;
+    bool followingStatusKnown_ = false;
+    std::atomic<bool> followingStatusFetchInFlight_{false};
+    QDateTime lastFollowingStatusRefreshAt_;
+    QString followingStatusUserId_;
+    std::optional<QDateTime> followedAt_;
     bool vip_ = false;
     bool staff_ = false;
     UniqueAccess<QString> roomID_;
@@ -604,6 +834,7 @@ private:
     friend class MessageBuilder;
     friend class IrcMessageHandler;
     friend class Commands_E2E_Test;
+    friend class TwitchChannelTestAccess;
     friend class ::TestIrcMessageHandlerP;
     friend class ::TestEventSubMessagesP;
 

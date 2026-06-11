@@ -32,6 +32,8 @@
 #ifdef CHATTERINO_HAVE_PLUGINS
 #    include "controllers/plugins/PluginController.hpp"
 #endif
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
 #include "controllers/emotes/EmoteController.hpp"
 #include "controllers/sound/MiniaudioBackend.hpp"
 #include "controllers/sound/NullBackend.hpp"
@@ -43,6 +45,10 @@
 #include "providers/bttv/BttvLiveUpdates.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
+#include "providers/homies/HomiesBadges.hpp"
+#include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoSupporterBadges.hpp"
+#include "providers/repetitions/RepeatedMessageDetector.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvEventAPI.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -72,7 +78,11 @@
 
 #include <miniaudio.h>
 #include <QApplication>
+#include <QDateTime>
 #include <QDesktopServices>
+#include <QTimer>
+#include <QUrl>
+#include <QUrlQuery>
 
 namespace {
 
@@ -134,16 +144,6 @@ SeventvEventAPI *makeSeventvEventAPI(Settings &settings)
     return nullptr;
 }
 
-eventsub::IController *makeEventSubController(Settings &settings)
-{
-    if (!settings.twitchIrcJoinAsAnonymous)
-    {
-        return new eventsub::Controller();
-    }
-
-    return new eventsub::DummyController();
-}
-
 const QString TWITCH_PUBSUB_URL = "wss://pubsub-edge.twitch.tv";
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -176,7 +176,7 @@ Application::Application(Settings &_settings, const Paths &paths,
     , logging(new Logging(_settings))
     , emotes(new EmoteController)
     , accounts(new AccountController)
-    , eventSub(makeEventSubController(_settings))
+    , eventSub(new eventsub::Controller())
     , hotkeys(new HotkeyController)
     , windows(new WindowManager(_args, paths, _settings, *this->themes,
                                 *this->fonts))
@@ -192,6 +192,9 @@ Application::Application(Settings &_settings, const Paths &paths,
     , ffzBadges(new FfzBadges)
     , bttvBadges(new BttvBadges)
     , seventvBadges(new SeventvBadges)
+    , homiesBadges(new HomiesBadges)
+    , moltorinoSupporterBadges(new MoltorinoSupporterBadges)
+    , repeatedMessageDetector(new RepeatedMessageDetector)
     , seventvPaints(new SeventvPaints)
     , seventvPersonalEmotes(new SeventvPersonalEmotes)
     , userData(new UserDataController(paths))
@@ -256,6 +259,7 @@ void Application::initialize(Settings &settings, const Paths &paths)
     this->windows->initialize();
 
     this->ffzBadges->load();
+    this->moltorinoSupporterBadges->initialize();
 
     // Load global emotes
     this->bttvEmotes->loadEmotes();
@@ -311,6 +315,71 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
     this->streamerMode->start();
 
+    {
+        auto &s = *getSettings();
+        const auto clientId = s.botBadgeClientID.getValue().trimmed();
+        const auto clientSecret = s.botBadgeClientSecret.getValue().trimmed();
+        const auto expiryStr = s.botBadgeAppTokenExpiry.getValue().trimmed();
+
+        if (!clientId.isEmpty() && !clientSecret.isEmpty())
+        {
+            bool needsRefresh = false;
+
+            if (expiryStr.isEmpty())
+            {
+                needsRefresh = true;
+            }
+            else
+            {
+                auto expiry = QDateTime::fromString(expiryStr, Qt::ISODate);
+
+                needsRefresh =
+                    !expiry.isValid() ||
+                    QDateTime::currentDateTimeUtc().secsTo(expiry) < 86400;
+            }
+
+            if (needsRefresh)
+            {
+                QUrl tokenUrl("https://id.twitch.tv/oauth2/token");
+                QUrlQuery tokenQuery;
+                tokenQuery.addQueryItem("client_id", clientId);
+                tokenQuery.addQueryItem("client_secret", clientSecret);
+                tokenQuery.addQueryItem("grant_type", "client_credentials");
+                tokenUrl.setQuery(tokenQuery);
+
+                NetworkRequest(tokenUrl, NetworkRequestType::Post)
+                    .useProxy()
+                    .timeout(15000)
+                    .onSuccess([](const NetworkResult &res) {
+                        auto json = res.parseJson();
+                        auto token =
+                            json.value("access_token").toString().trimmed();
+                        auto expiresIn = json.value("expires_in").toInt();
+
+                        if (!token.isEmpty())
+                        {
+                            auto &settings = *getSettings();
+                            settings.botBadgeAppAccessToken = token;
+                            settings.botBadgeAppTokenExpiry =
+                                QDateTime::currentDateTimeUtc()
+                                    .addSecs(expiresIn)
+                                    .toString(Qt::ISODate);
+                            settings.requestSave();
+
+                            qCDebug(chatterinoApp)
+                                << "Bot badge app token refreshed.";
+                        }
+                    })
+                    .onError([](const NetworkResult &res) {
+                        qCWarning(chatterinoApp)
+                            << "Failed to refresh bot badge app token:"
+                            << res.formatError();
+                    })
+                    .execute();
+            }
+        }
+    }
+
     this->initialized = true;
 }
 
@@ -340,6 +409,8 @@ int Application::run()
             this->twitch->reloadAllSevenTVChannelEmotes();
         },
         false);
+
+    MoltorinoAuth::scheduleStartupRefresh();
 
     return QApplication::exec();
 }
@@ -454,6 +525,28 @@ SeventvBadges *Application::getSeventvBadges()
     assert(this->seventvBadges);
 
     return this->seventvBadges.get();
+}
+
+HomiesBadges *Application::getHomiesBadges()
+{
+    assert(this->homiesBadges);
+
+    return this->homiesBadges.get();
+}
+
+MoltorinoSupporterBadges *Application::getMoltorinoSupporterBadges()
+{
+    assert(this->moltorinoSupporterBadges);
+
+    return this->moltorinoSupporterBadges.get();
+}
+
+RepeatedMessageDetector *Application::getRepeatedMessageDetector()
+{
+    assertInGuiThread();
+    assert(this->repeatedMessageDetector);
+
+    return this->repeatedMessageDetector.get();
 }
 
 IUserDataController *Application::getUserData()
@@ -688,6 +781,9 @@ void Application::stop()
     this->userData.reset();
     this->seventvBadges.reset();
     this->ffzBadges.reset();
+    this->moltorinoSupporterBadges.reset();
+    this->repeatedMessageDetector.reset();
+    this->homiesBadges.reset();
     this->twitch.reset();
     this->highlights.reset();
     this->notifications.reset();

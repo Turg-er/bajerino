@@ -20,7 +20,7 @@ class LinkPredicate : public MessagePredicate
 public:
     /**
      * @brief Create an LinkPredicate
-     * 
+     *
      * @param negate when set, excludes messages containing links from results
     */
     LinkPredicate(bool negate);

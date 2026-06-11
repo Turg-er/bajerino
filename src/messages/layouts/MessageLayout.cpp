@@ -65,9 +65,19 @@ int MessageLayout::getHeight() const
     return static_cast<int>(this->container_.getHeight());
 }
 
+int MessageLayout::getFirstLineHeight() const
+{
+    return this->container_.getFirstLineHeight();
+}
+
 int MessageLayout::getWidth() const
 {
     return static_cast<int>(this->container_.getWidth());
+}
+
+size_t MessageLayout::getLineCount() const
+{
+    return this->container_.getLineCount();
 }
 
 // Layout
@@ -101,11 +111,19 @@ bool MessageLayout::layout(const MessageLayoutContext &ctx,
     layoutRequired |= this->flags.has(MessageLayoutFlag::RequiresLayout);
     this->flags.unset(MessageLayoutFlag::RequiresLayout);
 
+    bool scaleChanged = this->scale_ != ctx.scale ||
+                        this->imageScale_ != ctx.imageScale ||
+                        this->emoteScale_ != ctx.emoteScale ||
+                        this->badgeScale_ != ctx.badgeScale ||
+                        this->centerBadges_ != ctx.centerBadges;
+
     // check if dpi changed
-    layoutRequired |= this->scale_ != ctx.scale;
+    layoutRequired |= scaleChanged;
     this->scale_ = ctx.scale;
-    layoutRequired |= this->imageScale_ != ctx.imageScale;
     this->imageScale_ = ctx.imageScale;
+    this->emoteScale_ = ctx.emoteScale;
+    this->badgeScale_ = ctx.badgeScale;
+    this->centerBadges_ = ctx.centerBadges;
 
     if (!layoutRequired)
     {
@@ -152,7 +170,8 @@ void MessageLayout::actuallyLayout(const MessageLayoutContext &ctx)
     bool hideReplies = !ctx.flags.has(MessageElementFlag::RepliedMessage);
 
     this->container_.beginLayout(ctx.width, this->scale_, this->imageScale_,
-                                 messageFlags);
+                                 this->emoteScale_, this->badgeScale_,
+                                 this->centerBadges_, messageFlags);
 
     for (const auto &element : this->message_->elements)
     {
@@ -243,8 +262,8 @@ MessagePaintResult MessageLayout::paint(const MessagePaintContext &ctx)
     ctx.painter.drawPixmap(QPoint{0, ctx.y}, *pixmap);
 
     // draw gif emotes
-    result.hasAnimatedElements =
-        this->container_.paintAnimatedElements(ctx.painter, ctx.y);
+    result.hasAnimatedElements = this->container_.paintAnimatedElements(
+        ctx.painter, ctx.y, ctx.isCollapsed);
 
     // draw disabled
     if (this->message_->flags.has(MessageFlag::Disabled))
@@ -444,6 +463,13 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
             blendColors(backgroundColor,
                         *ctx.colorProvider.color(ColorType::RedeemedHighlight));
     }
+    else if (this->message_->flags.has(MessageFlag::ChatWarning) &&
+             ctx.preferences.enableAutomodHighlight)
+    {
+        backgroundColor =
+            blendColors(backgroundColor,
+                        *ctx.colorProvider.color(ColorType::AutomodHighlight));
+    }
     else if (this->message_->flags.has(MessageFlag::AutoMod) ||
              this->message_->flags.has(MessageFlag::LowTrustUsers))
     {
@@ -464,6 +490,28 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
     else if (this->message_->flags.has(MessageFlag::Debug))
     {
         backgroundColor = QColor("#4A273D");
+    }
+    else if (ctx.preferences.enableClientDetectionHighlight)
+    {
+        switch (this->message_->clientDetection)
+        {
+            case Message::ClientDetectionStatus::Web:
+                backgroundColor = blendColors(
+                    backgroundColor, ctx.preferences.clientDetectionWebColor);
+                break;
+            case Message::ClientDetectionStatus::Android:
+                backgroundColor =
+                    blendColors(backgroundColor,
+                                ctx.preferences.clientDetectionAndroidColor);
+                break;
+            case Message::ClientDetectionStatus::IOS:
+                backgroundColor = blendColors(
+                    backgroundColor, ctx.preferences.clientDetectionIosColor);
+                break;
+            case Message::ClientDetectionStatus::Unknown:
+            case Message::ClientDetectionStatus::Abnormal:
+                break;
+        }
     }
 
     painter.fillRect(buffer->rect(), backgroundColor);

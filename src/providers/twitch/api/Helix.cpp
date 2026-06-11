@@ -3610,7 +3610,8 @@ void Helix::endPrediction(const QString broadcasterID, const QString id,
 
     this->makePatch("predictions", {})
         .json(payload)
-        .onSuccess([successCallback](const NetworkResult &result) {
+        .onSuccess([successCallback,
+                    failureCallback](const NetworkResult &result) {
             if (result.status() != 200)
             {
                 qCWarning(chatterinoTwitch)
@@ -3620,6 +3621,13 @@ void Helix::endPrediction(const QString broadcasterID, const QString id,
 
             const auto response = result.parseJson();
             const auto data = HelixPredictions(response);
+            if (data.predictions.empty())
+            {
+                qCWarning(chatterinoTwitch) << "Prediction end response did "
+                                               "not contain any predictions";
+                failureCallback("Twitch API Error: empty prediction response");
+                return;
+            }
             successCallback(data.predictions.front());
         })
         .onError([failureCallback](const NetworkResult &result) -> void {

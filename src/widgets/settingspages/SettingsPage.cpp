@@ -9,6 +9,7 @@
 #include "util/FunctionEventFilter.hpp"
 #include "util/RapidJsonSerializeQString.hpp"
 
+#include <QCheckBox>
 #include <QDebug>
 
 namespace chatterino {

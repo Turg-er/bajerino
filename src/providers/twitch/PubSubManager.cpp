@@ -5,18 +5,53 @@
 #include "providers/twitch/PubSubManager.hpp"
 
 #include "Application.hpp"
+#include "common/Env.hpp"
 #include "common/QLogging.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
+#include "providers/NetworkConfigurationProvider.hpp"
 #include "providers/twitch/PubSubClient.hpp"
 
 #include <QJsonArray>
+#include <QStringList>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 using namespace std::chrono_literals;
 
 namespace chatterino {
+
+namespace {
+
+QString authenticatedTopicUserID(const QString &topic)
+{
+    const QStringList prefixes{
+        QStringLiteral("predictions-user-v1."),
+        QStringLiteral("community-points-user-v1."),
+        QStringLiteral("chatrooms-user-v1."),
+    };
+
+    for (const auto &prefix : prefixes)
+    {
+        if (topic.startsWith(prefix))
+        {
+            return topic.mid(prefix.size());
+        }
+    }
+
+    return {};
+}
+
+std::optional<WebSocketProxyOptions> twitchPubSubProxyOptions()
+{
+    // PubSub is an authenticated Twitch connection, so it is proxied in every
+    // proxy mode (global, BAJERINO_PROXY_TWITCH, BAJERINO_PROXY_TWITCH_API_ONLY).
+    return NetworkConfigurationProvider::webSocketProxyFromEnv(
+        Env::get(), ProxyConnection::AuthedTwitch);
+}
+
+}  // namespace
 
 class PubSubManagerPrivate
     : public BasicPubSubManager<PubSubManagerPrivate, PubSubClient>
@@ -52,7 +87,7 @@ public:
 
 PubSubManagerPrivate::PubSubManagerPrivate(
     PubSub &parent, QString host, std::chrono::milliseconds heartbeatInterval)
-    : BasicPubSubManager(std::move(host), "PubSub")
+    : BasicPubSubManager(std::move(host), "PubSub", twitchPubSubProxyOptions())
     , heartbeatInterval(heartbeatInterval)
     , parent(parent)
 {
@@ -108,6 +143,134 @@ void PubSub::listenToChannelPointRewards(const QString &channelID)
 
     qCDebug(chatterinoPubSub) << "Listen to topic" << topic;
     this->private_->subscribe(TopicData{.topic = std::move(topic)});
+}
+
+void PubSub::listenToPinnedChatUpdates(const QString &channelID)
+{
+    static const QString topicFormat("pinned-chat-updates-v1.%1");
+    assert(!channelID.isEmpty());
+    auto topic = topicFormat.arg(channelID);
+    qCDebug(chatterinoPubSub)
+        << "Request pinned chat PubSub subscription" << topic;
+    this->private_->subscribe(TopicData{.topic = std::move(topic)});
+}
+
+void PubSub::listenToPredictions(const QString &channelID)
+{
+    static const QString topicFormat("predictions-channel-v1.%1");
+    assert(!channelID.isEmpty());
+    auto topic = topicFormat.arg(channelID);
+    qCDebug(chatterinoPubSub) << "Listen to topic" << topic;
+    this->private_->subscribe(TopicData{.topic = std::move(topic)});
+}
+
+void PubSub::listenToPolls(const QString &channelID)
+{
+    static const QString topicFormat("polls.%1");
+    assert(!channelID.isEmpty());
+    auto topic = topicFormat.arg(channelID);
+    qCDebug(chatterinoPubSub) << "Listen to topic" << topic;
+    this->private_->subscribe(TopicData{.topic = std::move(topic)});
+}
+
+void PubSub::listenToRaids(const QString &channelID)
+{
+    static const QString topicFormat("raid.%1");
+    assert(!channelID.isEmpty());
+    auto topic = topicFormat.arg(channelID);
+    qCDebug(chatterinoPubSub) << "Listen to topic" << topic;
+    this->private_->subscribe(TopicData{.topic = std::move(topic)});
+}
+
+void PubSub::listenToChatWarnings(const QString &userID,
+                                  const QString &authToken)
+{
+    this->listenToAuthenticatedTopic("chatrooms-user-v1." + userID, authToken);
+}
+
+void PubSub::listenToUserPredictions(const QString &userID,
+                                     const QString &authToken)
+{
+    this->listenToAuthenticatedTopic("predictions-user-v1." + userID,
+                                     authToken);
+}
+
+void PubSub::listenToUserChannelPoints(const QString &userID,
+                                       const QString &authToken)
+{
+    this->listenToAuthenticatedTopic("community-points-user-v1." + userID,
+                                     authToken);
+}
+
+void PubSub::listenToAuthenticatedTopic(QString topic, const QString &authToken)
+{
+    assert(!topic.isEmpty());
+    if (authToken.isEmpty())
+    {
+        return;
+    }
+
+    auto it = this->authenticatedTopicTokens_.find(topic);
+    if (it != this->authenticatedTopicTokens_.end())
+    {
+        if (it->second == authToken)
+        {
+            return;
+        }
+        this->private_->unsubscribe(TopicData{.topic = topic});
+        it->second = authToken;
+    }
+    else
+    {
+        this->authenticatedTopicTokens_.emplace(topic, authToken);
+    }
+
+    qCDebug(chatterinoPubSub) << "Listen to authenticated topic" << topic;
+    this->private_->subscribe(
+        TopicData{.topic = std::move(topic), .authToken = authToken});
+}
+
+void PubSub::forgetUserAuthenticatedTopics(const QString &userID)
+{
+    QStringList topics;
+    for (const auto &[topic, token] : this->authenticatedTopicTokens_)
+    {
+        (void)token;
+        if (userID.isEmpty() || authenticatedTopicUserID(topic) == userID)
+        {
+            topics.push_back(topic);
+        }
+    }
+
+    for (const auto &topic : topics)
+    {
+        qCDebug(chatterinoPubSub)
+            << "Unlisten from authenticated topic" << topic;
+        this->private_->unsubscribe(TopicData{.topic = topic});
+        this->authenticatedTopicTokens_.erase(topic);
+    }
+}
+
+void PubSub::forgetOtherUserAuthenticatedTopics(const QString &userID)
+{
+    QStringList topics;
+    for (const auto &[topic, token] : this->authenticatedTopicTokens_)
+    {
+        (void)token;
+        const auto topicUserID = authenticatedTopicUserID(topic);
+        if (userID.isEmpty() || topicUserID != userID)
+        {
+            topics.push_back(topic);
+        }
+    }
+
+    for (const auto &topic : topics)
+    {
+        qCDebug(chatterinoPubSub)
+            << "Unlisten from authenticated topic" << topic;
+        this->private_->unsubscribe(TopicData{.topic = topic});
+        this->authenticatedTopicTokens_.erase(topic);
+    }
 }
 
 void PubSub::reconnect()

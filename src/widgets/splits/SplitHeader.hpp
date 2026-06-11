@@ -64,6 +64,7 @@ private:
     void resetThumbnail();
 
     void handleChannelChanged();
+    void toggleFollow();
 
     Split *const split_{};
     QString tooltipText_{};
@@ -85,6 +86,7 @@ private:
     QAction *modeActionSetR9k{};
     QAction *modeActionSetFollowers{};
 
+    SvgButton *followButton_{};
     SvgButton *moderationButton_{};
     SvgButton *chattersButton_{};
     DrawnButton *addButton_{};

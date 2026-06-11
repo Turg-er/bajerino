@@ -103,6 +103,7 @@ Args::Args(const QApplication &app, const Paths &paths)
 
     // Used internally by app to restart after unexpected crashes
     auto crashRecoveryOption = hiddenOption("crash-recovery");
+    auto remoteRestartOption = hiddenOption("remote-restart");
     auto exceptionCodeOption = hiddenOption("cr-exception-code", "", "code");
     auto exceptionMessageOption =
         hiddenOption("cr-exception-message", "", "message");
@@ -116,6 +117,12 @@ Args::Args(const QApplication &app, const Paths &paths)
     auto verboseOption = QCommandLineOption(
         QStringList{"v", "verbose"}, "Attaches to the Console on windows, "
                                      "allowing you to see debug output.");
+
+    QCommandLineOption newInstanceOption(
+        "new-instance",
+        "Starts a separate Bajerino instance instead of activating an already "
+        "running one.");
+
     // Safe mode
     QCommandLineOption safeModeOption(
         "safe-mode", "Starts Bajerino without loading Plugins and always "
@@ -160,11 +167,13 @@ Args::Args(const QApplication &app, const Paths &paths)
     parser.addOptions({
         {{"V", "version"}, "Displays version information."},
         crashRecoveryOption,
+        remoteRestartOption,
         exceptionCodeOption,
         exceptionMessageOption,
         parentWindowOption,
         parentWindowIdOption,
         verboseOption,
+        newInstanceOption,
         safeModeOption,
         loginOption,
         channelLayout,
@@ -199,10 +208,12 @@ Args::Args(const QApplication &app, const Paths &paths)
     }
 
     this->verbose = parser.isSet(verboseOption);
+    this->newInstance = parser.isSet(newInstanceOption);
 
     this->printVersion = parser.isSet("V");
 
     this->crashRecovery = parser.isSet(crashRecoveryOption);
+    this->remoteRestart = parser.isSet(remoteRestartOption);
     if (parser.isSet(exceptionCodeOption))
     {
         this->exceptionCode =
@@ -251,6 +262,7 @@ Args::Args(const QApplication &app, const Paths &paths)
 
     this->currentArguments_ = extractCommandLine(parser, {
                                                              verboseOption,
+                                                             newInstanceOption,
                                                              safeModeOption,
                                                              loginOption,
                                                              channelLayout,

@@ -73,21 +73,83 @@ std::optional<QNetworkProxy> NetworkConfigurationProvider::proxyFromEnv(
     return proxyFromUrl(*env.proxyUrl);
 }
 
+bool NetworkConfigurationProvider::shouldProxy(const Env &env,
+                                               ProxyConnection connection)
+{
+    switch (connection)
+    {
+        case ProxyConnection::AuthedTwitch:
+            // Authenticated Twitch connections are proxied in every mode.
+            return true;
+
+        case ProxyConnection::Twitch:
+            // Other Twitch connections are proxied in global and
+            // BAJERINO_PROXY_TWITCH modes, but not in authed-only mode.
+            return !env.proxyTwitchApiOnly;
+
+        case ProxyConnection::ThirdParty:
+            // Third-party connections are only proxied in global mode.
+            return !env.proxyTwitchApiOnly && !env.proxyTwitch;
+    }
+
+    return false;
+}
+
+std::optional<WebSocketProxyOptions>
+    NetworkConfigurationProvider::webSocketProxyFromEnv(
+        const Env &env, ProxyConnection connection)
+{
+    if (!NetworkConfigurationProvider::shouldProxy(env, connection))
+    {
+        return std::nullopt;
+    }
+
+    const auto proxy = NetworkConfigurationProvider::proxyFromEnv(env);
+    if (!proxy)
+    {
+        return std::nullopt;
+    }
+
+    WebSocketProxyOptions options;
+    switch (proxy->type())
+    {
+        case QNetworkProxy::HttpProxy:
+            options.type = WebSocketProxyType::Http;
+            break;
+
+        case QNetworkProxy::Socks5Proxy:
+            options.type = WebSocketProxyType::Socks5;
+            break;
+
+        default:
+            qCWarning(chatterinoNetwork)
+                << "Unsupported proxy type for WebSocket connection" << *proxy;
+            return std::nullopt;
+    }
+
+    options.host = proxy->hostName();
+    options.port = proxy->port();
+    options.user = proxy->user();
+    options.password = proxy->password();
+    return options;
+}
+
 void NetworkConfigurationProvider::applyFromEnv(const Env &env)
 {
-    if (env.proxyTwitchApiOnly)
+    if (env.proxyTwitchApiOnly || env.proxyTwitch)
     {
         if (!env.proxyUrl)
         {
             qCWarning(chatterinoNetwork)
-                << "BAJERINO_PROXY_TWITCH_API_ONLY is enabled but "
-                   "CHATTERINO2_PROXY_URL is not set; Twitch API requests "
-                   "will be made directly";
+                << "Selective proxying (BAJERINO_PROXY_TWITCH or "
+                   "BAJERINO_PROXY_TWITCH_API_ONLY) is enabled but "
+                   "CHATTERINO2_PROXY_URL is not set; requests will be made "
+                   "directly";
         }
         else
         {
             qCDebug(chatterinoNetwork)
-                << "Selective Twitch API proxying enabled; skipping global "
+                << "Selective Twitch proxying enabled; skipping global "
                    "application proxy";
         }
         return;

@@ -17,6 +17,7 @@
 
 #include <controllers/commands/builtin/twitch/Pin.hpp>
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QProcess>
 
 namespace {
@@ -70,6 +71,17 @@ void sendPinnedMessage(const std::shared_ptr<TwitchChannel> &chan,
             // Default duration, no need to update it once more.
             if (duration == SEND_CHAT_MESSAGE_PIN_DURATION)
             {
+                TwitchChannel::PinnedMessage pin;
+                pin.messageId = res.id;
+                pin.text = origText;
+                pin.authorId = moderator->getUserId();
+                pin.authorName = moderator->getUserName();
+                pin.authorLogin = moderator->getUserName();
+                pin.pinnerName = moderator->getUserName();
+                pin.pinnerLogin = moderator->getUserName();
+                pin.pinnedAt = QDateTime::currentDateTimeUtc();
+                pin.endsAt = pin.pinnedAt->addSecs(duration->count());
+                chan->setPinnedMessage(std::move(pin));
                 chan->addMessage(
                     MessageBuilder::makePinSuccessMessage(origText, res.id),
                     MessageContext::Original);

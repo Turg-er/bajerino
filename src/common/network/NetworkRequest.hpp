@@ -68,6 +68,8 @@ public:
                           const QByteArray &value) &&;
     NetworkRequest header(QNetworkRequest::KnownHeaders header,
                           const QVariant &value) &&;
+    NetworkRequest attribute(QNetworkRequest::Attribute attribute,
+                             const QVariant &value) &&;
     NetworkRequest headerList(
         const std::vector<std::pair<QByteArray, QByteArray>> &headers) &&;
     NetworkRequest timeout(int ms) &&;

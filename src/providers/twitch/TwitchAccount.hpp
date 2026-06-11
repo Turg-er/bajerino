@@ -50,7 +50,7 @@ public:
     const QString &getUserId() const;
 
     /**
-     * The Seventv user-id of the current user. 
+     * The Seventv user-id of the current user.
      * Empty if there's no associated Seventv user with this twitch user.
      */
     const QString &getSeventvUserID() const;

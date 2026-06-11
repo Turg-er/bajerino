@@ -106,7 +106,9 @@ QString sendShoutout(const CommandContext &ctx)
         [channel, target] {
             // Equivalent error from IRC
             channel->addSystemMessage(
-                QString("Invalid username: %1").arg(target));
+                QString("Could not look up user: %1. Check the username or log "
+                        "in again.")
+                    .arg(target));
         });
 
     return "";

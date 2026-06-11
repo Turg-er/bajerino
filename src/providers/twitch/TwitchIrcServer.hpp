@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 
 namespace chatterino {
@@ -44,10 +45,23 @@ public:
 
     virtual void connect() = 0;
 
+    virtual void sendMessage(const QString &channelName,
+                             const QString &message) = 0;
     virtual void sendRawMessage(const QString &rawMessage) = 0;
 
-    virtual ChannelPtr getOrAddChannel(const QString &dirtyChannelName) = 0;
+    virtual ChannelPtr getOrAddChannel(
+        const QString &dirtyChannelName,
+        std::optional<bool> anonymousOverride = std::nullopt) = 0;
+    virtual ChannelPtr getOrAddAnonymousChannel(
+        const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) = 0;
+    virtual ChannelPtr getAnonymousChannelOrEmpty(
+        const QString &dirtyChannelName) = 0;
+    virtual void reconnectAnonymousChannels() = 0;
+    /// Re-evaluates every open Twitch channel's effective anonymity and
+    /// re-homes it between the authed and anonymous connections, reconnecting
+    /// as needed.
+    virtual void reevaluateChannelRouting() = 0;
 
     virtual void addFakeMessage(const QString &data) = 0;
 
@@ -86,6 +100,7 @@ public:
     enum class ConnectionType {
         Read,
         Write,
+        AnonymousRead,
     };
 
     TwitchIrcServer();
@@ -136,12 +151,21 @@ public:
     void connect() override;
     void disconnect();
 
-    void sendMessage(const QString &channelName, const QString &message);
+    void sendMessage(const QString &channelName,
+                     const QString &message) override;
     void sendRawMessage(const QString &rawMessage) override;
 
-    ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override;
+    ChannelPtr getOrAddChannel(
+        const QString &dirtyChannelName,
+        std::optional<bool> anonymousOverride = std::nullopt) override;
+    ChannelPtr getOrAddAnonymousChannel(
+        const QString &dirtyChannelName) override;
 
     ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) override;
+    ChannelPtr getAnonymousChannelOrEmpty(
+        const QString &dirtyChannelName) override;
+    void reconnectAnonymousChannels() override;
+    void reevaluateChannelRouting() override;
 
     void open(ConnectionType type);
 
@@ -170,16 +194,30 @@ public:
 
 protected:
     void initializeConnection(IrcConnection *connection, ConnectionType type);
-    std::shared_ptr<Channel> createChannel(const QString &channelName);
+    std::shared_ptr<Channel> createChannel(
+        const QString &channelName, std::optional<bool> anonymousOverride);
 
-    void privateMessageReceived(Communi::IrcPrivateMessage *message);
-    void readConnectionMessageReceived(Communi::IrcMessage *message);
+    void privateMessageReceived(Communi::IrcPrivateMessage *message,
+                                bool anonymous = false);
+    void readConnectionMessageReceived(Communi::IrcMessage *message,
+                                       bool anonymous = false);
     void writeConnectionMessageReceived(Communi::IrcMessage *message);
 
     void onReadConnected(IrcConnection *connection);
+    void onAnonymousReadConnected(IrcConnection *connection);
     void onWriteConnected(IrcConnection *connection);
     void onDisconnected();
+    void onAnonymousDisconnected();
     void markChannelsConnected();
+    void markAnonymousChannelsConnected();
+    /// Opens the authed read/write connections if they are not already up.
+    void ensureReadConnection();
+    void ensureAnonymousReadConnection();
+    /// Whether any open Twitch channel is effectively authenticated (non-anon).
+    bool hasAuthedChannels();
+    /// Removes a destroyed channel from both maps, parts it, and tears down the
+    /// relevant connection if it became idle.
+    void onChannelDestroyed(const QString &channelName);
 
     std::shared_ptr<Channel> getCustomChannel(const QString &channelname);
 
@@ -193,14 +231,19 @@ private:
     bool prepareToSend(const std::shared_ptr<TwitchChannel> &channel);
 
     QMap<QString, std::weak_ptr<Channel>> channels;
+    QMap<QString, std::weak_ptr<Channel>> anonymousChannels;
     std::mutex channelMutex;
 
     QObjectPtr<IrcConnection> writeConnection_ = nullptr;
     QObjectPtr<IrcConnection> readConnection_ = nullptr;
+    QObjectPtr<IrcConnection> anonymousReadConnection_ = nullptr;
+    bool readConnectionStarted_ = false;
+    bool anonymousReadConnectionStarted_ = false;
 
     // Our rate limiting bucket for the Twitch join rate limits
     // https://dev.twitch.tv/docs/irc/guide#rate-limits
     QObjectPtr<RatelimitBucket> joinBucket_;
+    QObjectPtr<RatelimitBucket> anonymousJoinBucket_;
 
     QTimer reconnectTimer_;
     int falloffCounter_ = 1;

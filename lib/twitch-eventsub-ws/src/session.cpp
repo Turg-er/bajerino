@@ -8,6 +8,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
@@ -16,6 +17,7 @@
 
 #include <chrono>
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 
 #if __cpp_lib_format >= 201907L && !defined(__APPLE__)
@@ -257,15 +259,26 @@ Session::Session(boost::asio::io_context &ioc, boost::asio::ssl::context &ctx,
 void Session::run(std::string _host, std::string _port, std::string _path,
                   std::string _userAgent)
 {
+    this->run(std::move(_host), std::move(_port), std::move(_path),
+              std::move(_userAgent), std::nullopt);
+}
+
+void Session::run(std::string _host, std::string _port, std::string _path,
+                  std::string _userAgent, std::optional<ProxyOptions> _proxy)
+{
     // Save these for later
     this->host = std::move(_host);
     this->port = std::move(_port);
+    this->hostHeader = this->host + ':' + this->port;
     this->path = std::move(_path);
     this->userAgent = std::move(_userAgent);
+    this->proxy = std::move(_proxy);
 
     // Look up the domain name
+    const auto &resolveHost = this->proxy ? this->proxy->host : this->host;
+    const auto &resolvePort = this->proxy ? this->proxy->port : this->port;
     this->resolver.async_resolve(
-        this->host, this->port,
+        resolveHost, resolvePort,
         beast::bind_front_handler(&Session::onResolve, shared_from_this()));
 }
 
@@ -336,20 +349,51 @@ void Session::onConnect(
     // Set a timeout on the operation
     beast::get_lowest_layer(this->ws).expires_after(std::chrono::seconds(30));
 
+    if (this->proxy)
+    {
+        // The proxy handshake runs on the lowest layer (the raw TCP stream).
+        // It keeps itself alive for the duration of the operation; the
+        // completion handler keeps this Session alive.
+        auto handshake = std::make_shared<ProxyHandshake>(
+            beast::get_lowest_layer(this->ws), *this->proxy, this->host,
+            this->port, [self = shared_from_this()](const ProxyError &err) {
+                if (err)
+                {
+                    if (err.ec)
+                    {
+                        self->fail(err.ec, err.op);
+                    }
+                    else
+                    {
+                        self->fail(err.message, err.op);
+                    }
+                    return;
+                }
+
+                self->startSSLHandshake();
+            });
+        handshake->run();
+        return;
+    }
+
+    this->hostHeader = this->host + ':' + std::to_string(ep.port());
+    this->startSSLHandshake();
+}
+
+void Session::startSSLHandshake()
+{
+    // Set a timeout on the operation
+    beast::get_lowest_layer(this->ws).expires_after(std::chrono::seconds(30));
+
     // Set SNI Hostname (many hosts need this to handshake successfully)
     if (!SSL_set_tlsext_host_name(this->ws.next_layer().native_handle(),
                                   this->host.c_str()))
     {
-        ec = beast::error_code(static_cast<int>(::ERR_get_error()),
-                               boost::asio::error::get_ssl_category());
+        auto ec = beast::error_code(static_cast<int>(::ERR_get_error()),
+                                    boost::asio::error::get_ssl_category());
         this->fail(ec, "connect");
         return;
     }
-
-    // Update the host_ string. This will provide the value of the
-    // Host HTTP header during the WebSocket handshake.
-    // See https://tools.ietf.org/html/rfc7230#section-5.4
-    host += ':' + std::to_string(ep.port());
 
     // Perform the SSL handshake
     this->ws.next_layer().async_handshake(
@@ -382,7 +426,7 @@ void Session::onSSLHandshake(beast::error_code ec)
 
     // Perform the websocket handshake
     this->ws.async_handshake(
-        this->host, this->path,
+        this->hostHeader, this->path,
         beast::bind_front_handler(&Session::onHandshake, shared_from_this()));
 }
 
@@ -457,6 +501,21 @@ void Session::fail(beast::error_code ec, std::string_view op)
 {
     this->log->warn(c2fmt::format("{}: {} ({})", op, ec.message(),
                                   ec.location().to_string()));
+    if (!this->ws.is_open() && this->listener)
+    {
+        if (this->keepaliveTimer)
+        {
+            this->keepaliveTimer.reset();
+        }
+        this->closeTimeout.cancel();
+
+        this->listener->onClose(std::move(this->listener), {});
+    }
+}
+
+void Session::fail(std::string_view message, std::string_view op)
+{
+    this->log->warn(c2fmt::format("{}: {}", op, message));
     if (!this->ws.is_open() && this->listener)
     {
         if (this->keepaliveTimer)

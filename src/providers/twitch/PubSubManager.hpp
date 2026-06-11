@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <unordered_map>
 
 #if __has_include(<gtest/gtest_prod.h>)
 #    include <gtest/gtest_prod.h>
@@ -49,6 +50,31 @@ public:
         Signal<const QJsonObject &> redeemed;
     } pointReward;
 
+    struct {
+        Signal<const QJsonObject &> updated;
+    } pinnedChat;
+
+    struct {
+        Signal<const QJsonObject &> updated;
+        Signal<const QJsonObject &> userResult;
+    } prediction;
+
+    struct {
+        Signal<const QJsonObject &> updated;
+    } poll;
+
+    struct {
+        Signal<const QJsonObject &> updated;
+    } userPoints;
+
+    struct {
+        Signal<const QJsonObject &> updated;
+    } chatWarning;
+
+    struct {
+        Signal<const QJsonObject &> updated;
+    } raid;
+
     /**
      * Listen to incoming channel point redemptions in the given channel.
      * This topic is relevant for everyone.
@@ -56,6 +82,17 @@ public:
      * PubSub topic: community-points-channel-v1.{channelID}
      */
     void listenToChannelPointRewards(const QString &channelID);
+    void listenToPinnedChatUpdates(const QString &channelID);
+    void listenToPredictions(const QString &channelID);
+    void listenToPolls(const QString &channelID);
+    void listenToRaids(const QString &channelID);
+    void listenToChatWarnings(const QString &userID, const QString &authToken);
+    void listenToUserPredictions(const QString &userID,
+                                 const QString &authToken);
+    void listenToUserChannelPoints(const QString &userID,
+                                   const QString &authToken);
+    void forgetUserAuthenticatedTopics(const QString &userID);
+    void forgetOtherUserAuthenticatedTopics(const QString &userID);
 
     void reconnect();
 
@@ -74,8 +111,10 @@ public:
 
 private:
     void stop();
+    void listenToAuthenticatedTopic(QString topic, const QString &authToken);
 
     std::unique_ptr<PubSubManagerPrivate> private_;
+    std::unordered_map<QString, QString> authenticatedTopicTokens_;
 
 #ifdef FRIEND_TEST
     friend class FTest;

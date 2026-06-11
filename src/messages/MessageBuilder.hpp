@@ -178,6 +178,9 @@ public:
 
     static void triggerHighlights(const Channel *channel,
                                   const HighlightAlert &alert);
+    static void triggerHighlights(const Channel *channel,
+                                  const MessagePtr &message,
+                                  const HighlightAlert &alert);
 
     void appendChannelPointRewardMessage(const ChannelPointReward &reward,
                                          bool isMod, bool isBroadcaster);
@@ -338,6 +341,8 @@ private:
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
     void appendBttvBadges(const QString &userID);
     void appendSeventvBadges(const QString &userID);
+    void appendHomiesBadges(const QString &userID);
+    void appendMoltorinoBadges(const QString &userID);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,
                                         const QString &userID,

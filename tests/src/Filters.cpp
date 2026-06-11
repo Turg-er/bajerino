@@ -24,6 +24,7 @@
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
 #include "Test.hpp"
 
 #include <QColor>
@@ -172,6 +173,7 @@ TEST(Filters, Validity)
         {R".("abc" + 123 == "abc123").", true},
         {R".(123 + "abc" == "hello").", false},
         {R".(flags.reply && flags.automod).", true},
+        {R".(flags.repeated_message || flags.repeated_messages).", true},
         {R".(unknown.identifier).", false},
         {R".(10 startswith 1).", false},
         {R".(10 startswith "").", false},
@@ -183,6 +185,10 @@ TEST(Filters, Validity)
         {R".(1 match r"1").", false},
         {
             R".(channel.name == "forsen" && author.badges contains "moderator").",
+            true,
+        },
+        {
+            R".(flags.webchat_detected && moltorino.client_detection == "Web").",
             true,
         },
         {R".({(1+""), 2}).", false},
@@ -228,6 +234,10 @@ TEST(Filters, TypeSynthesis)
         {R".(author.badges).", T::StringList},
         {R".(channel.name == "forsen" && author.badges contains "moderator").", T::Bool},
         {R".(message.content match {r"(\d\d)/(\d\d)/(\d\d\d\d)", 3}).", T::String},
+        {R".(flags.webchat_detected).", T::Bool},
+        {R".(flags.repeated_message).", T::Bool},
+        {R".(flags.repeated_messages).", T::Bool},
+        {R".(moltorino.client_detection).", T::String},
     };
     // clang-format on
 
@@ -345,6 +355,48 @@ TEST(Filters, Identifier)
         ASSERT_TRUE(isWellTyped(expr->synthesizeType()))
             << "the identifier '" << identifier
             << "' must create a well typed expression";
+    }
+}
+
+TEST_F(FiltersF, ClientDetectionContextChecks)
+{
+    MockChannel channel("pajlada");
+
+    struct TestCase {
+        QByteArray nonce;
+        QString expectedDetection;
+        bool expectedWebFlag;
+    };
+
+    std::vector<TestCase> tests{
+        {"0123456789abcdef0123456789abcdef", "Web", true},
+        {"550e8400-e29b-41d4-a716-446655440000", "Android", false},
+        {"550E8400-E29B-41D4-A716-446655440000", "iOS", false},
+        {"550e8400-E29B-41d4-a716-446655440000", "Abnormal", false},
+        {"", "Abnormal", false},
+    };
+
+    for (const auto &test : tests)
+    {
+        QByteArray message =
+            "@client-nonce=" + test.nonce +
+            R"(;badge-info=;badges=;color=#CC44FF;display-name=pajlada;emote-only=1;emotes=25:0-4;first-msg=0;flags=;id=90ef1e46-8baa-4bf2-9c54-272f39d6fa11;mod=0;returning-chatter=0;room-id=11148817;subscriber=0;tmi-sent-ts=1662206235860;turbo=0;user-id=11148817;user-type= :pajlada!pajlada@pajlada.tmi.twitch.tv PRIVMSG #pajlada :Kappa)";
+
+        auto *privmsg = dynamic_cast<Communi::IrcPrivateMessage *>(
+            Communi::IrcPrivateMessage::fromData(message, nullptr));
+        ASSERT_NE(privmsg, nullptr);
+
+        auto [msg, alert] = MessageBuilder::makeIrcMessage(
+            &channel, privmsg, MessageParseArgs{}, privmsg->content(), 0);
+        ASSERT_NE(msg.get(), nullptr);
+
+        auto contextMap = buildContextMap(msg, &channel);
+        EXPECT_EQ(contextMap["moltorino.client_detection"].toString(),
+                  test.expectedDetection);
+        EXPECT_EQ(contextMap["flags.webchat_detected"].toBool(),
+                  test.expectedWebFlag);
+
+        delete privmsg;
     }
 }
 

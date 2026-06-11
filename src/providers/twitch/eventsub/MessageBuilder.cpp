@@ -344,21 +344,18 @@ void makeModerateMessage(
     builder->flags.set(MessageFlag::DoNotTriggerNotification,
                        MessageFlag::ModerationAction);
 
+    (void)event;
+    builder->loginName.clear();
     QString text;
-    bool isShared = event.isFromSharedChat();
-
-    builder.appendUser(event.moderatorUserName, event.moderatorUserLogin, text);
-    builder.emplaceSystemTextAndUpdate("deleted message from", text);
-    builder.appendUser(action.userName, action.userLogin, text);
-
-    if (isShared)
-    {
-        builder.emplaceSystemTextAndUpdate("in", text);
-        builder.appendUser(*event.sourceBroadcasterUserName,
-                           *event.sourceBroadcasterUserLogin, text);
-    }
-
-    builder.emplaceSystemTextAndUpdate("saying:", text);
+    builder.emplace<TextElement>("A message from", MessageElementFlag::Text,
+                                 MessageColor::System);
+    builder
+        .emplace<TextElement>(action.userName.qt(),
+                              MessageElementFlag::Username,
+                              MessageColor::System, FontStyle::ChatMediumBold)
+        ->setLink({Link::UserInfo, action.userLogin.qt()});
+    builder.emplace<TextElement>("was deleted:", MessageElementFlag::Text,
+                                 MessageColor::System);
 
     auto limit = getSettings()->deletedMessageLengthLimit.getValue();
     if (limit > 0 && action.messageBody.view().length() > limit)
@@ -380,6 +377,8 @@ void makeModerateMessage(
         text.append(action.messageBody.qt());
     }
 
+    text = QString("A message from %1 was deleted: %2")
+               .arg(action.userLogin.qt(), text);
     builder.setMessageAndSearchText(text);
     builder->timeoutUser = action.userLogin.qt();
 }
@@ -566,7 +565,6 @@ void makeModerateMessage(EventSubMessageBuilder &builder,
     builder.appendUser(event.moderatorUserName, event.moderatorUserLogin, text);
     builder.emplaceSystemTextAndUpdate("initiated a raid to", text);
     builder.appendUser(action.userName, action.userLogin, text, false);
-    builder.emplaceSystemTextAndUpdate(".", text);
 
     builder.setMessageAndSearchText(text);
 }
@@ -581,7 +579,6 @@ void makeModerateMessage(
     builder.appendUser(event.moderatorUserName, event.moderatorUserLogin, text);
     builder.emplaceSystemTextAndUpdate("canceled the raid to", text);
     builder.appendUser(action.userName, action.userLogin, text, false);
-    builder.emplaceSystemTextAndUpdate(".", text);
 
     builder.setMessageAndSearchText(text);
 }

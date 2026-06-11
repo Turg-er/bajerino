@@ -20,10 +20,12 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 namespace chatterino {
 
 class Image;
+class ImageExpirationPool;
 
 }  // namespace chatterino
 
@@ -55,6 +57,8 @@ public:
     std::optional<QPixmap> first() const;
 
 private:
+    friend class chatterino::ImageExpirationPool;
+
     int64_t memoryUsage() const;
     void processOffset();
     QList<Frame> items_;
@@ -106,6 +110,7 @@ public:
     int height() const;
     QSizeF size() const;
     bool animated() const;
+    void setFrameCacheLifetime(std::chrono::milliseconds lifetime);
 
     bool operator==(const Image &image) = delete;
 
@@ -140,6 +145,7 @@ private:
     std::optional<uint16_t> autoScale_;
 
     mutable std::chrono::time_point<std::chrono::steady_clock> lastUsed_;
+    std::atomic<int64_t> frameCacheLifetimeMs_{0};
 
     // gui thread only
     std::unique_ptr<detail::Frames> frames_;
@@ -157,6 +163,13 @@ ImagePtr getEmptyImagePtr();
 class ImageExpirationPool
 {
 public:
+    struct ProviderUsage {
+        QString provider;
+        int64_t bytes = 0;
+        size_t images = 0;
+        size_t animatedImages = 0;
+    };
+
     ImageExpirationPool();
     static ImageExpirationPool &instance();
 
@@ -165,11 +178,13 @@ public:
 
     /**
      * @brief Frees frame data for all images that ImagePool deems to have expired.
-     * 
+     *
      * Expiration is based on last accessed time of the Image, stored in Image::lastUsed_.
      * Must be ran in the GUI thread.
      */
     void freeOld();
+
+    std::vector<ProviderUsage> getProviderUsageSnapshot();
 
     /*
      * Debug function that unloads all images in the pool. This is intended to

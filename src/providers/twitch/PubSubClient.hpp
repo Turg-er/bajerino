@@ -17,6 +17,7 @@ namespace chatterino {
 
 struct TopicData {
     QString topic;
+    QString authToken;
 
     bool operator==(const TopicData &other) const
     {

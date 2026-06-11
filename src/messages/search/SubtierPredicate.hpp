@@ -14,8 +14,8 @@ namespace chatterino {
 /**
  * @brief MessagePredicate checking for the badges of a message.
  *
- * This predicate will only allow messages that are sent by a subscribed user 
- * who has a specified subtier (i.e. 1,2,3..) 
+ * This predicate will only allow messages that are sent by a subscribed user
+ * who has a specified subtier (i.e. 1,2,3..)
  */
 class SubtierPredicate : public MessagePredicate
 {

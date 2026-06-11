@@ -41,6 +41,11 @@ public:
         Timeout,
 
         /**
+         * /pin <message/user>
+         */
+        Pin,
+
+        /**
          * Anything not matching the action types above
          */
         Custom,

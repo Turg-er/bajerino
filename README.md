@@ -12,7 +12,18 @@ Chatterino7 is a fork of Chatterino 2. This fork mainly contains features that a
 
 - Anon Mode: the `Join Twitch IRC anonymously` setting reconnects Twitch IRC as an anonymous user while keeping your signed-in account for Helix API actions. This is useful if you want to read chat without exposing your logged-in IRC identity, but it forces chat sending over Helix and disables Twitch EventSub features.
 
-- Selective Twitch API proxying: `CHATTERINO2_PROXY_URL` works as the normal proxy setting, and `BAJERINO_PROXY_TWITCH_API_ONLY=1` limits proxy use to authenticated Twitch API HTTP requests only. Twitch images, IRC, and third-party services stay direct, so it pairs well with Anon Mode.
+- Selective Twitch proxying: `CHATTERINO2_PROXY_URL` is the proxy, applied to all Qt network traffic by default. `BAJERINO_PROXY_TWITCH=1` limits the proxy to Twitch connections (Helix, Twitch GraphQL, PubSub, EventSub, and IRC) while third-party services stay direct. `BAJERINO_PROXY_TWITCH_API_ONLY=1` narrows it further to only authenticated Twitch connections (Helix, Twitch GraphQL, PubSub); IRC and EventSub stay direct, so it pairs well with Anon Mode.
+
+### Bajerino changes
+
+A summary of notable Bajerino changes on top of Chatterino 7. The full history, including dev and upstream-merge commits, lives in the git log.
+
+- Selective Twitch proxying via `CHATTERINO2_PROXY_URL`, `BAJERINO_PROXY_TWITCH`, and `BAJERINO_PROXY_TWITCH_API_ONLY` (see [Proxying](#proxying)).
+- Anon Mode: join Twitch IRC as a logged-out user while keeping your signed-in account for API actions. (`6f85d48f`)
+- Per-channel message encryption: a toggle in the split input, an encryption hotkey, and a decrypt indicator. Uses AES-CBC with a password, encoding ciphertext as CJK characters. (`1b4f806f`, `143e49d7`, `8264e58a`)
+- Option to store settings in the Chatterino directory. (`d13986b8`)
+- Bajerino branding: rename `chatterino` → `bajerino` in the GUI, a custom app icon, and custom badges. (`6cff983e`, `59365670`, `a4cf35e4`)
+- Rebased onto Chatterino 7.
 
 ### Features of Chatterino7
 
@@ -51,26 +62,20 @@ When building Chatterino 7, you might not have access to a static build of `liba
 
 ### Proxying
 
-If you set `CHATTERINO2_PROXY_URL`, Bajerino proxies Qt network traffic by default.
+If you set `CHATTERINO2_PROXY_URL`, Bajerino proxies all network traffic by default — Qt traffic via the Qt application proxy, and the asio-based connections (EventSub, PubSub, 7TV/BTTV/Kick live updates) explicitly.
 
-If you also set `BAJERINO_PROXY_TWITCH_API_ONLY=1`, Bajerino only uses that proxy for authenticated Twitch API HTTP requests. Twitch images, IRC, and requests to other services stay direct.
+Two environment variables narrow that scope:
 
-This is intended to pair well with the `Join Twitch IRC anonymously` setting when you want Twitch API traffic proxied without proxying IRC.
+- `BAJERINO_PROXY_TWITCH=1` proxies only Twitch connections — Helix, Twitch GraphQL, PubSub, EventSub, and IRC. Twitch images and third-party services (7TV, BTTV, Kick) stay direct.
+- `BAJERINO_PROXY_TWITCH_API_ONLY=1` is narrower still: it proxies only authenticated Twitch connections — Helix, Twitch GraphQL, and PubSub. IRC and EventSub stay direct. (If both are set, this one wins.)
+
+`BAJERINO_PROXY_TWITCH_API_ONLY` should be used in tandem with the `Join Twitch IRC anonymously` setting. It proxies your account/API traffic, while IRC and EventSub stay direct. If you enable it **without** anonymous IRC, your authenticated account still connects to Twitch IRC directly, unproxied — leaking exactly the authenticated connection you were trying to keep behind the proxy. With anonymous IRC enabled, IRC connects as a logged-out user (so there is nothing to leak) and EventSub does not connect at all. PubSub is included in the proxied set because, unlike EventSub, its subscriptions do not make your account appear as joined in chat.
 
 ## Original Chatterino 2 Readme
 
 Chatterino 2 is a chat client for [Twitch.tv](https://twitch.tv).
 The Chatterino 2 wiki can be found [here](https://wiki.chatterino.com).
 Contribution guidelines can be found [here](https://wiki.chatterino.com/Contributing%20for%20Developers).
-
-## Download
-
-Current releases are available at [https://chatterino.com](https://chatterino.com).
-Windows users can also install Chatterino [from Chocolatey](https://chocolatey.org/packages/chatterino).
-
-## Nightly build
-
-You can download the latest Chatterino 2 build over [here](https://github.com/Chatterino/chatterino2/releases/tag/nightly-build)
 
 You might also need to install the [VC++ Redistributables](https://aka.ms/vs/17/release/vc_redist.x64.exe) from Microsoft if you do not have it installed already.
 If you still receive an error about `MSVCR120.dll missing`, then you should install the [VC++ 2013 Restributable](https://download.microsoft.com/download/2/E/6/2E61CFA4-993B-4DD4-91DA-3737CD5CD6E3/vcredist_x64.exe).

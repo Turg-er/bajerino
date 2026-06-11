@@ -10,7 +10,11 @@
 #include <boost/asio/ssl/context.hpp>
 #include <boost/asio/ssl/stream.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/websocket/stream.hpp>
+
+#include <array>
+#include <optional>
 
 namespace chatterino::ws::detail {
 
@@ -73,7 +77,29 @@ private:
     void tryConnect(std::optional<BalancedResolverResults::Entry> entry);
     void onTcpHandshake(const BalancedResolverResults::Entry &entry,
                         boost::system::error_code ec);
+    void doHttpProxyHandshake();
+    void onHttpProxyWrite(boost::system::error_code ec, size_t bytesWritten);
+    void onHttpProxyRead(boost::system::error_code ec, size_t bytesRead);
+    void doSocksProxyHandshake();
+    void onSocksGreetingWrite(boost::system::error_code ec,
+                              size_t bytesWritten);
+    void onSocksGreetingRead(boost::system::error_code ec, size_t bytesRead);
+    void doSocksAuth();
+    void onSocksAuthWrite(boost::system::error_code ec, size_t bytesWritten);
+    void onSocksAuthRead(boost::system::error_code ec, size_t bytesRead);
+    void doSocksConnect();
+    void onSocksConnectWrite(boost::system::error_code ec, size_t bytesWritten);
+    void onSocksConnectHeaderRead(boost::system::error_code ec,
+                                  size_t bytesRead);
+    void onSocksConnectDomainLengthRead(boost::system::error_code ec,
+                                        size_t bytesRead);
+    void onSocksConnectAddressRead(boost::system::error_code ec,
+                                   size_t bytesRead);
     void onWsHandshake(boost::system::error_code ec);
+
+    std::string targetHost() const;
+    std::string targetPort() const;
+    std::string targetHostAndPort() const;
 
     void onReadDone(boost::system::error_code ec, size_t bytesRead);
     void onWriteDone(boost::system::error_code ec, size_t bytesWritten);
@@ -85,6 +111,14 @@ private:
     /// When we successfully resolve the host, we try to connect by
     /// iterating over these results.
     BalancedResolverResults resolvedEndpoints;
+    boost::beast::flat_buffer proxyBuffer;
+    boost::beast::http::request<boost::beast::http::empty_body>
+        proxyConnectRequest;
+    std::optional<
+        boost::beast::http::response_parser<boost::beast::http::empty_body>>
+        proxyConnectResponseParser;
+    QByteArray proxyWriteBuffer;
+    std::array<char, 512> proxyReadBuffer{};
 };
 
 /// A WebSocket connection over TLS (wss://).

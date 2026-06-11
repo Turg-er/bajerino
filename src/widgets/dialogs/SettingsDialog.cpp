@@ -23,6 +23,7 @@
 #include "widgets/settingspages/IgnoresPage.hpp"
 #include "widgets/settingspages/KeyboardSettingsPage.hpp"
 #include "widgets/settingspages/ModerationPage.hpp"
+#include "widgets/settingspages/MoltorinoPage.hpp"
 #include "widgets/settingspages/NicknamesPage.hpp"
 #include "widgets/settingspages/NotificationPage.hpp"
 #include "widgets/settingspages/PluginsPage.hpp"
@@ -243,6 +244,7 @@ void SettingsDialog::addTabs()
 
     // clang-format off
     this->addTab([]{return new GeneralPage;},          "General",        ":/settings/about.svg", SettingsTabId::General);
+    this->addTab([]{return new MoltorinoPage;},        "Moltorino",      ":/settings/moltorino.svg", SettingsTabId::Moltorino);
     this->ui_.tabContainer->addSpacing(16);
     this->addTab([]{return new AccountsPage;},         "Accounts",       ":/settings/accounts.svg", SettingsTabId::Accounts);
     this->addTab([]{return new NicknamesPage;},        "Nicknames",      ":/settings/accounts.svg");
@@ -389,6 +391,16 @@ void SettingsDialog::showDialog(QWidget *parent,
         default:;
     }
 
+    if (instance->isMinimized())
+    {
+        instance->setWindowState(
+            (instance->windowState() & ~Qt::WindowMinimized) |
+            Qt::WindowActive);
+    }
+    if (instance->width() < 200 || instance->height() < 120)
+    {
+        instance->resize(915, 600);
+    }
     instance->show();
     if (preferredTab == SettingsDialogPreference::StreamerMode)
     {
@@ -402,10 +414,15 @@ void SettingsDialog::showDialog(QWidget *parent,
 
 void SettingsDialog::refresh()
 {
-    // Updates tabs.
+    // Update tabs that have already been opened. Calling page() here would
+    // construct every settings page on repeated opens, which is rough during
+    // startup and defeats the lazy loading above.
     for (auto *tab : this->tabs_)
     {
-        tab->page()->onShow();
+        if (auto *page = tab->createdPage())
+        {
+            page->onShow();
+        }
     }
 }
 

@@ -8,6 +8,7 @@
 #include "debug/AssertInGuiThread.hpp"
 #include "messages/Image.hpp"
 #include "singletons/Resources.hpp"
+#include "singletons/Theme.hpp"
 
 #include <QRegularExpression>
 #include <QUrl>
@@ -93,9 +94,13 @@ ModerationAction::ModerationAction(const QString &action, const QUrl &iconPath)
     {
         this->type_ = Type::Ban;
     }
-    else if (action.startsWith("/delete "))
+    else if (action == "/delete" || action.startsWith("/delete "))
     {
         this->type_ = Type::Delete;
+    }
+    else if (action == "/pin" || action.startsWith("/pin "))
+    {
+        this->type_ = Type::Pin;
     }
     else
     {
@@ -145,6 +150,19 @@ const std::optional<ImagePtr> &ModerationAction::getImage() const
     {
         this->image_ =
             Image::fromResourcePixmap(getResources().buttons.trashCan);
+    }
+    else if (this->type_ == Type::Pin)
+    {
+        if (getTheme()->isLightTheme())
+        {
+            this->image_ = Image::fromResourcePixmap(
+                getResources().buttons.pinModActionLight);
+        }
+        else
+        {
+            this->image_ = Image::fromResourcePixmap(
+                getResources().buttons.pinModActionDark);
+        }
     }
 
     return this->image_;

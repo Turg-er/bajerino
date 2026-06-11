@@ -1,13 +1,17 @@
 #pragma once
 
 #include "twitch-eventsub-ws/logger.hpp"
+#include "twitch-eventsub-ws/proxy.hpp"
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 #include <boost/json.hpp>
+
+#include <optional>
 
 namespace chatterino::eventsub::lib::messages {
 
@@ -31,6 +35,8 @@ public:
     // Start the asynchronous operation
     void run(std::string _host, std::string _port, std::string _path,
              std::string _userAgent);
+    void run(std::string _host, std::string _port, std::string _path,
+             std::string _userAgent, std::optional<ProxyOptions> _proxy);
 
     void close();
 
@@ -48,6 +54,8 @@ private:
         boost::beast::error_code ec,
         const boost::asio::ip::tcp::resolver::results_type::endpoint_type &ep);
 
+    void startSSLHandshake();
+
     void onSSLHandshake(boost::beast::error_code ec);
 
     void onHandshake(boost::beast::error_code ec);
@@ -57,6 +65,7 @@ private:
     void onClose(boost::beast::error_code ec);
 
     void fail(boost::beast::error_code ec, std::string_view op);
+    void fail(std::string_view message, std::string_view op);
 
     boost::system::error_code onSessionWelcome(
         const messages::Metadata &metadata, const boost::json::value &jv);
@@ -74,8 +83,10 @@ private:
     boost::beast::flat_buffer buffer;
     std::string host;
     std::string port;
+    std::string hostHeader;
     std::string path;
     std::string userAgent;
+    std::optional<ProxyOptions> proxy;
     std::unique_ptr<Listener> listener;
 
     std::chrono::seconds keepaliveTimeout{0};

@@ -6,6 +6,7 @@
 
 #include "Application.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/commands/builtin/twitch/ModVipActions.hpp"
 #include "controllers/commands/CommandContext.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
@@ -45,18 +46,18 @@ QString addModerator(const CommandContext &ctx)
     auto target = ctx.words.at(1);
     stripChannelName(target);
 
+    if (tryRunModVipActionWithLeadModGql(ctx, target,
+                                         ModVipAction::AddModerator))
+    {
+        return "";
+    }
+
     getHelix()->getUserByName(
         target,
         [twitchChannel{ctx.twitchChannel},
          channel{ctx.channel}](const HelixUser &targetUser) {
             getHelix()->addChannelModerator(
-                twitchChannel->roomId(), targetUser.id,
-                [channel, targetUser] {
-                    channel->addSystemMessage(
-                        QString("You have added %1 as a moderator of this "
-                                "channel.")
-                            .arg(targetUser.displayName));
-                },
+                twitchChannel->roomId(), targetUser.id, [] {},
                 [channel, targetUser](auto error, auto message) {
                     QString errorMessage =
                         QString("Failed to add channel moderator - ");
@@ -122,7 +123,9 @@ QString addModerator(const CommandContext &ctx)
         [channel{ctx.channel}, target] {
             // Equivalent error from IRC
             channel->addSystemMessage(
-                QString("Invalid username: %1").arg(target));
+                QString("Could not look up user: %1. Check the username or log "
+                        "in again.")
+                    .arg(target));
         });
 
     return "";

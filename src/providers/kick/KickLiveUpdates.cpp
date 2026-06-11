@@ -1,10 +1,12 @@
 #include "providers/kick/KickLiveUpdates.hpp"
 
 #include "Application.hpp"
+#include "common/Env.hpp"
 #include "common/QLogging.hpp"
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/liveupdates/BasicPubSubClient.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
+#include "providers/NetworkConfigurationProvider.hpp"
 #include "util/BoostJsonWrap.hpp"
 
 #include <boost/json.hpp>
@@ -266,7 +268,9 @@ private:
 };
 
 KickLiveUpdatesPrivate::KickLiveUpdatesPrivate()
-    : BasicPubSubManager(WS_URL, "kick")
+    : BasicPubSubManager(WS_URL, "kick",
+                         NetworkConfigurationProvider::webSocketProxyFromEnv(
+                             Env::get(), ProxyConnection::ThirdParty))
 {
     QObject::connect(&this->heartbeatTimer, &QTimer::timeout, this,
                      &KickLiveUpdatesPrivate::checkHeartbeats);

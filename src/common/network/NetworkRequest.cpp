@@ -116,6 +116,13 @@ NetworkRequest NetworkRequest::header(QNetworkRequest::KnownHeaders header,
     return std::move(*this);
 }
 
+NetworkRequest NetworkRequest::attribute(QNetworkRequest::Attribute attribute,
+                                         const QVariant &value) &&
+{
+    this->data->request.setAttribute(attribute, value);
+    return std::move(*this);
+}
+
 NetworkRequest NetworkRequest::header(const QByteArray &headerName,
                                       const QByteArray &value) &&
 {

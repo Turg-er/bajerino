@@ -36,6 +36,7 @@ enum class SettingsDialogPreference {
     Highlights,
     ModerationActions,
     About,
+    Moltorino,
 };
 
 class SettingsDialog : public BaseWindow

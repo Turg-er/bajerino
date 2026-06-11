@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QString>
 
+#include <atomic>
 #include <functional>
 #include <optional>
 #include <shared_mutex>
@@ -31,10 +32,13 @@ public:
 
 private:
     void loadAvailablePronouns();
+    void scheduleAvailablePronounsRetry();
 
     std::shared_mutex mutex;
     /// Maps alejo.io pronoun IDs to human readable representation like `they/them` or `other`
     std::unordered_map<QString, QString> pronouns;
+    std::atomic_bool pronounsLoadInFlight_{false};
+    std::atomic_int pronounsLoadRetryCount_{0};
 
     /// Parse a pronoun definition from the /users endpoint into a finished UserPronouns
     UserPronouns parsePronoun(const QJsonObject &object);

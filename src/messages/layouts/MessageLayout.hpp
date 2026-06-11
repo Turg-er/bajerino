@@ -59,7 +59,9 @@ public:
     /// In contrast to other metrics, the height and width are integers because
     /// this is how the backing pixmap is measured - it needs whole integers.
     int getHeight() const;
+    int getFirstLineHeight() const;
     int getWidth() const;
+    size_t getLineCount() const;
 
     MessageLayoutFlags flags;
 
@@ -134,6 +136,9 @@ private:
     int layoutState_ = -1;
     float scale_ = -1;
     float imageScale_ = -1.F;
+    float emoteScale_ = -1.F;
+    float badgeScale_ = -1.F;
+    bool centerBadges_ = false;
     MessageElementFlags currentWordFlags_;
 
 #ifdef FOURTF

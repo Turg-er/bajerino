@@ -5,7 +5,9 @@
 #include "providers/seventv/SeventvEventAPI.hpp"
 
 #include "Application.hpp"
+#include "common/Env.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
+#include "providers/NetworkConfigurationProvider.hpp"
 #include "providers/seventv/eventapi/Client.hpp"
 
 #include <QJsonArray>
@@ -53,7 +55,9 @@ public:
 SeventvEventAPIPrivate::SeventvEventAPIPrivate(
     SeventvEventAPI &parent, QString host,
     std::chrono::milliseconds defaultHeartbeatInterval)
-    : BasicPubSubManager(std::move(host), u"7TV"_s)
+    : BasicPubSubManager(std::move(host), u"7TV"_s,
+                         NetworkConfigurationProvider::webSocketProxyFromEnv(
+                             Env::get(), ProxyConnection::ThirdParty))
     , heartbeatInterval(defaultHeartbeatInterval)
     , parent(parent)
 {
@@ -80,7 +84,11 @@ void SeventvEventAPIPrivate::checkHeartbeats()
     for (const auto &[id, client] : this->clients())
     {
         client->checkHeartbeat();
-        minInterval = std::min(minInterval, client->heartbeatInterval());
+        const auto interval = client->heartbeatInterval();
+        if (interval > std::chrono::milliseconds::zero())
+        {
+            minInterval = std::min(minInterval, interval);
+        }
     }
     if (minInterval != std::chrono::milliseconds::max())
     {

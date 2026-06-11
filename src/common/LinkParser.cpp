@@ -95,7 +95,7 @@ bool isValidIpv4(QStringView host)
 
 /**
  * @brief Checks if the string starts with a port number.
- * 
+ *
  * The value of the port number isn't checked. A port in this implementation
  * can be in the range 0..100'000.
  */

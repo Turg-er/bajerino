@@ -9,7 +9,7 @@ namespace {
 /**
  * Resizes a pixmap to a desired size.
  * Does nothing if the target pixmap is already sized correctly.
- * 
+ *
  * @param target The target pixmap.
  * @param source The unscaled pixmap.
  * @param size The desired device independent size.

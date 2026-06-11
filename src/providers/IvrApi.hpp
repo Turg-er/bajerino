@@ -5,11 +5,13 @@
 #pragma once
 
 #include "common/network/NetworkRequest.hpp"
+#include "providers/twitch/api/Helix.hpp"
 
 #include <QJsonArray>
 #include <QJsonObject>
 
 #include <functional>
+#include <optional>
 
 namespace chatterino {
 
@@ -35,6 +37,39 @@ struct IvrSubage {
     }
 };
 
+struct IvrUserProfile {
+    bool banned = false;
+    std::optional<int> chatterCount;
+    QString chatColor;
+    bool isAffiliate = false;
+    bool isPartner = false;
+    bool isStaff = false;
+    QString lastBroadcastStartedAt;
+    QString lastBroadcastTitle;
+
+    IvrUserProfile() = default;
+    explicit IvrUserProfile(const QJsonObject &root)
+        : banned(root.value("banned").toBool())
+        , chatColor(root.value("chatColor").toString())
+    {
+        const auto chatterCountValue = root.value("chatterCount");
+        if (!chatterCountValue.isNull() && !chatterCountValue.isUndefined())
+        {
+            this->chatterCount = chatterCountValue.toInt();
+        }
+
+        const auto roles = root.value("roles").toObject();
+        this->isAffiliate = roles.value("isAffiliate").toBool();
+        this->isPartner = roles.value("isPartner").toBool();
+        this->isStaff = roles.value("isStaff").toBool();
+
+        const auto lastBroadcast = root.value("lastBroadcast").toObject();
+        this->lastBroadcastStartedAt =
+            lastBroadcast.value("startedAt").toString();
+        this->lastBroadcastTitle = lastBroadcast.value("title").toString();
+    }
+};
+
 class IvrApi final
 {
 public:
@@ -42,6 +77,20 @@ public:
     void getSubage(QString userName, QString channelName,
                    ResultCallback<IvrSubage> resultCallback,
                    IvrFailureCallback failureCallback);
+    // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/modvip/{channel}
+    void getModVip(
+        QString channelName,
+        ResultCallback<std::vector<HelixModerator>, std::vector<HelixVip>>
+            resultCallback,
+        IvrFailureCallback failureCallback);
+    // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/founders/{login}
+    void getFounders(QString channelName,
+                     ResultCallback<std::vector<HelixModerator>> resultCallback,
+                     IvrFailureCallback failureCallback);
+    // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/user
+    void getUser(QString userName,
+                 ResultCallback<IvrUserProfile> resultCallback,
+                 IvrFailureCallback failureCallback);
 
     static void initialize();
 

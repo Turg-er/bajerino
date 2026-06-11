@@ -7,6 +7,7 @@
 #include "widgets/BaseWindow.hpp"
 
 #include <pajlada/signals/signal.hpp>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QFocusEvent>
 #include <QLabel>
@@ -53,6 +54,10 @@ public:
     IndirectChannel getSelectedChannel() const;
     bool hasSeletedChannel() const;
 
+    /// Sets the per-channel anonymity controls from an override (nullopt means
+    /// "follow the global default").
+    void setAnonymousOverrideUi(std::optional<bool> anonymousOverride);
+
     pajlada::Signals::NoArgSignal closed;
 
 protected:
@@ -74,6 +79,8 @@ private:
         detail::AutoCheckedRadioButton *channel;
         QLabel *channelLabel;
         QLineEdit *channelName;
+        QCheckBox *channelAnonymousOverride;
+        QCheckBox *channelAnonymous;
 
         detail::AutoCheckedRadioButton *whispers;
         QLabel *whispersLabel;

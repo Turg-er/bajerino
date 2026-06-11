@@ -460,6 +460,11 @@ void Channel::clearMessages()
 
 MessagePtr Channel::findMessageByID(QStringView messageID)
 {
+    if (messageID.isEmpty())
+    {
+        return nullptr;
+    }
+
     MessagePtr res;
 
     if (auto msg = this->messages_.rfind([messageID](const MessagePtr &msg) {

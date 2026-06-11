@@ -19,6 +19,10 @@
 #include "util/WindowsHelper.hpp"
 
 #include <pajlada/signals/scoped-connection.hpp>
+#include <QStringList>
+#include <rapidjson/pointer.h>
+
+#include <optional>
 
 namespace {
 
@@ -40,6 +44,52 @@ void initializeSignalVector(pajlada::Signals::SignalHolder &signalHolder,
     signalHolder.managedConnect(vec.delayedItemsChanged, [&] {
         setting.setValue(vec.raw());
     });
+}
+
+struct OutgoingTranslationChannelSettings {
+    QString channel;
+    QString mode;
+    QString targetLanguage;
+};
+
+QString normalizedOutgoingTranslationChannel(QString channelName)
+{
+    channelName = channelName.trimmed().toLower();
+    if (channelName.startsWith('#'))
+    {
+        channelName.remove(0, 1);
+    }
+
+    return channelName;
+}
+
+std::optional<OutgoingTranslationChannelSettings>
+    parseOutgoingTranslationChannelSettings(const QString &entry)
+{
+    const auto parts = entry.split('\t');
+    if (parts.size() < 3)
+    {
+        return std::nullopt;
+    }
+
+    auto channel = normalizedOutgoingTranslationChannel(parts.at(0));
+    if (channel.isEmpty())
+    {
+        return std::nullopt;
+    }
+
+    return OutgoingTranslationChannelSettings{
+        .channel = channel,
+        .mode = parts.at(1).trimmed(),
+        .targetLanguage = parts.at(2).trimmed(),
+    };
+}
+
+QString formatOutgoingTranslationChannelSettings(
+    const OutgoingTranslationChannelSettings &settings)
+{
+    return QStringList{settings.channel, settings.mode, settings.targetLanguage}
+        .join(QLatin1Char('\t'));
 }
 
 }  // namespace
@@ -98,6 +148,20 @@ bool Settings::isMutedChannel(const QString &channelName)
     return false;
 }
 
+bool Settings::isAutoTranslateChannel(const QString &channelName)
+{
+    auto items = this->autoTranslateChannels.readOnly();
+
+    for (const auto &channel : *items)
+    {
+        if (channelName.compare(channel, Qt::CaseInsensitive) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::optional<QString> Settings::matchNickname(const QString &usernameText)
 {
     auto nicknames = this->nicknames.readOnly();
@@ -134,6 +198,28 @@ void Settings::unmute(const QString &channelName)
     }
 }
 
+void Settings::enableAutoTranslateChannel(const QString &channelName)
+{
+    if (!this->isAutoTranslateChannel(channelName))
+    {
+        this->autoTranslateChannels.append(channelName);
+    }
+}
+
+void Settings::disableAutoTranslateChannel(const QString &channelName)
+{
+    for (std::vector<int>::size_type i = 0;
+         i != this->autoTranslateChannels.raw().size(); i++)
+    {
+        if (this->autoTranslateChannels.raw()[i].compare(
+                channelName, Qt::CaseInsensitive) == 0)
+        {
+            this->autoTranslateChannels.removeAt(i);
+            i--;
+        }
+    }
+}
+
 bool Settings::toggleMutedChannel(const QString &channelName)
 {
     if (this->isMutedChannel(channelName))
@@ -146,6 +232,165 @@ bool Settings::toggleMutedChannel(const QString &channelName)
         this->mutedChannels.append(channelName);
         return true;
     }
+}
+
+bool Settings::toggleAutoTranslateChannel(const QString &channelName)
+{
+    if (this->isAutoTranslateChannel(channelName))
+    {
+        this->disableAutoTranslateChannel(channelName);
+        return false;
+    }
+
+    this->autoTranslateChannels.append(channelName);
+    return true;
+}
+
+QString Settings::outgoingTranslationModeForChannel(const QString &channelName)
+{
+    const auto channel = normalizedOutgoingTranslationChannel(channelName);
+    if (channel.isEmpty())
+    {
+        return this->outgoingTranslationMode.getValue();
+    }
+
+    for (const auto &entry :
+         this->outgoingTranslationChannelSettingsSetting.getValue())
+    {
+        const auto parsed = parseOutgoingTranslationChannelSettings(entry);
+        if (parsed.has_value() && parsed->channel == channel &&
+            !parsed->mode.isEmpty())
+        {
+            return parsed->mode;
+        }
+    }
+
+    return this->outgoingTranslationMode.getValue();
+}
+
+QString Settings::outgoingTranslationTargetLanguageForChannel(
+    const QString &channelName)
+{
+    const auto channel = normalizedOutgoingTranslationChannel(channelName);
+    if (channel.isEmpty())
+    {
+        return this->outgoingTranslationTargetLanguage.getValue();
+    }
+
+    for (const auto &entry :
+         this->outgoingTranslationChannelSettingsSetting.getValue())
+    {
+        const auto parsed = parseOutgoingTranslationChannelSettings(entry);
+        if (parsed.has_value() && parsed->channel == channel &&
+            !parsed->targetLanguage.isEmpty())
+        {
+            return parsed->targetLanguage;
+        }
+    }
+
+    return this->outgoingTranslationTargetLanguage.getValue();
+}
+
+void Settings::setOutgoingTranslationModeForChannel(const QString &channelName,
+                                                    const QString &mode)
+{
+    const auto channel = normalizedOutgoingTranslationChannel(channelName);
+    if (channel.isEmpty())
+    {
+        this->outgoingTranslationMode.setValue(mode);
+        return;
+    }
+
+    auto entries = this->outgoingTranslationChannelSettingsSetting.getValue();
+    std::vector<QString> cleaned;
+    cleaned.reserve(entries.size() + 1);
+    bool updated = false;
+    for (const auto &entry : entries)
+    {
+        auto parsed = parseOutgoingTranslationChannelSettings(entry);
+        if (!parsed.has_value())
+        {
+            continue;
+        }
+
+        if (parsed->channel == channel)
+        {
+            if (updated)
+            {
+                continue;
+            }
+
+            parsed->mode = mode;
+            if (parsed->targetLanguage.isEmpty())
+            {
+                parsed->targetLanguage =
+                    this->outgoingTranslationTargetLanguage.getValue();
+            }
+            updated = true;
+        }
+
+        cleaned.push_back(formatOutgoingTranslationChannelSettings(*parsed));
+    }
+
+    if (!updated)
+    {
+        cleaned.push_back(formatOutgoingTranslationChannelSettings({
+            .channel = channel,
+            .mode = mode,
+            .targetLanguage =
+                this->outgoingTranslationTargetLanguage.getValue(),
+        }));
+    }
+
+    this->outgoingTranslationChannelSettingsSetting.setValue(cleaned);
+}
+
+void Settings::setOutgoingTranslationTargetLanguageForChannel(
+    const QString &channelName, const QString &targetLanguage)
+{
+    const auto channel = normalizedOutgoingTranslationChannel(channelName);
+    if (channel.isEmpty())
+    {
+        this->outgoingTranslationTargetLanguage.setValue(targetLanguage);
+        return;
+    }
+
+    auto entries = this->outgoingTranslationChannelSettingsSetting.getValue();
+    std::vector<QString> cleaned;
+    cleaned.reserve(entries.size() + 1);
+    bool updated = false;
+    for (const auto &entry : entries)
+    {
+        auto parsed = parseOutgoingTranslationChannelSettings(entry);
+        if (!parsed.has_value())
+        {
+            continue;
+        }
+
+        if (parsed->channel == channel)
+        {
+            if (updated)
+            {
+                continue;
+            }
+
+            parsed->targetLanguage = targetLanguage;
+            updated = true;
+        }
+
+        cleaned.push_back(formatOutgoingTranslationChannelSettings(*parsed));
+    }
+
+    if (!updated)
+    {
+        cleaned.push_back(formatOutgoingTranslationChannelSettings({
+            .channel = channel,
+            .mode = this->outgoingTranslationMode.getValue(),
+            .targetLanguage = targetLanguage,
+        }));
+    }
+
+    this->outgoingTranslationChannelSettingsSetting.setValue(cleaned);
 }
 
 Settings *Settings::instance_ = nullptr;
@@ -219,6 +464,9 @@ Settings::Settings(const Args &args, const QString &settingsDirectory,
                            this->ignoredMessages);
     initializeSignalVector(this->signalHolder, this->mutedChannelsSetting,
                            this->mutedChannels);
+    initializeSignalVector(this->signalHolder,
+                           this->autoTranslateChannelsSetting,
+                           this->autoTranslateChannels);
     initializeSignalVector(this->signalHolder, this->filterRecordsSetting,
                            this->filterRecords);
     initializeSignalVector(this->signalHolder, this->nicknamesSetting,
@@ -340,11 +588,9 @@ void Settings::disableSave()
 
 bool Settings::shouldSendHelixChat() const
 {
-    if (this->twitchIrcJoinAsAnonymous)
-    {
-        return true;
-    }
-
+    // Note: anonymous channels are forced to send via Helix at the call site
+    // (TwitchChannel::isAnonymous), so this reflects only the user's preferred
+    // protocol for authenticated channels.
     switch (this->chatSendProtocol.getEnum())
     {
         case ChatSendProtocol::Helix:

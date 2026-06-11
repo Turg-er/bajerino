@@ -34,14 +34,29 @@ public:
     {
     }
 
+    void sendMessage(const QString &channelName,
+                     const QString &message) override
+    {
+        (void)channelName;
+        (void)message;
+    }
+
     void sendRawMessage(const QString &rawMessage) override
     {
     }
 
-    ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override
+    ChannelPtr getOrAddChannel(
+        const QString &dirtyChannelName,
+        std::optional<bool> anonymousOverride = std::nullopt) override
     {
         assert(false && "unimplemented getOrAddChannel in mock irc server");
         return {};
+    }
+
+    ChannelPtr getOrAddAnonymousChannel(
+        const QString &dirtyChannelName) override
+    {
+        return this->getOrAddChannel(dirtyChannelName);
     }
 
     ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) override
@@ -59,6 +74,20 @@ public:
             return Channel::getEmpty();
         }
         return chan;
+    }
+
+    ChannelPtr getAnonymousChannelOrEmpty(
+        const QString &dirtyChannelName) override
+    {
+        return this->getChannelOrEmpty(dirtyChannelName);
+    }
+
+    void reconnectAnonymousChannels() override
+    {
+    }
+
+    void reevaluateChannelRouting() override
+    {
     }
 
     void addFakeMessage(const QString &data) override

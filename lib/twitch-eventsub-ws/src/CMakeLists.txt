@@ -28,6 +28,7 @@ generate_json_impls(
 
 set(SOURCE_FILES
     session.cpp
+    proxy.cpp
 
     chrono.cpp
 

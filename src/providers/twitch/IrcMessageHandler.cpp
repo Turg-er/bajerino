@@ -37,6 +37,7 @@
 #include <QLocale>
 #include <QStringBuilder>
 
+#include <algorithm>
 #include <memory>
 
 using namespace chatterino::literals;
@@ -59,6 +60,67 @@ const QSet<QString> SPECIAL_MESSAGE_TYPES{
 };
 
 const QString ANONYMOUS_GIFTER_ID = "274598607";
+
+bool isAnonymousIrcNick(const QString &nick)
+{
+    if (nick.compare(ANONYMOUS_USERNAME, Qt::CaseInsensitive) == 0)
+    {
+        return true;
+    }
+
+    constexpr auto prefixSize = 9;
+    if (!nick.startsWith(QStringLiteral("justinfan"), Qt::CaseInsensitive) ||
+        nick.size() <= prefixSize)
+    {
+        return false;
+    }
+
+    return std::all_of(nick.cbegin() + prefixSize, nick.cend(), [](QChar c) {
+        return c.isDigit();
+    });
+}
+
+bool isOwnAnonymousIrcNick(const QString &nick, TwitchChannel *channel)
+{
+    if (!isAnonymousIrcNick(nick))
+    {
+        return false;
+    }
+
+    const auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
+    return currentAccount->isAnon() ||
+           (channel != nullptr && channel->isAnonymous());
+}
+
+bool deleteActionTargetsMessage(const MessagePtr &message,
+                                const QString &messageID)
+{
+    if (!message || messageID.isEmpty() ||
+        !message->flags.has(MessageFlag::ModerationAction))
+    {
+        return false;
+    }
+
+    return std::any_of(message->elements.cbegin(), message->elements.cend(),
+                       [&](const auto &element) {
+                           const auto link = element->getLink();
+                           return link.type == Link::JumpToMessage &&
+                                  link.value == messageID;
+                       });
+}
+
+bool hasDeleteActionForMessage(Channel *channel, const QString &messageID)
+{
+    if (messageID.isEmpty())
+    {
+        return false;
+    }
+
+    const auto messages = channel->getMessageSnapshot();
+    return std::any_of(messages.cbegin(), messages.cend(), [&](const auto &m) {
+        return deleteActionTargetsMessage(m, messageID);
+    });
+}
 
 MessagePtr generateBannedMessage(bool confirmedBan)
 {
@@ -288,6 +350,26 @@ MessagePtr parseNoticeMessage(Communi::IrcNoticeMessage *message)
                              calculateMessageTime(message).time());
 }
 
+bool isWarningAcknowledgeNotice(const QString &text)
+{
+    return text.startsWith(
+               "You received a Warning from a moderator in this channel.",
+               Qt::CaseInsensitive) ||
+           text.contains("Acknowledge the Warning at", Qt::CaseInsensitive);
+}
+
+bool isRaidCanceledNoticeText(const QString &text)
+{
+    const auto content = parseTagString(text).trimmed();
+    return content.contains("raid has been canceled", Qt::CaseInsensitive) ||
+           content.contains("raid has been cancelled", Qt::CaseInsensitive);
+}
+
+bool isRaidCanceledNotice(Communi::IrcNoticeMessage *message)
+{
+    return message != nullptr && isRaidCanceledNoticeText(message->content());
+}
+
 }  // namespace
 
 namespace chatterino {
@@ -318,9 +400,32 @@ void IrcMessageHandler::parseMessageInto(Communi::IrcMessage *message,
 
     if (command == u"NOTICE"_s)
     {
-        sink.addMessage(parseNoticeMessage(
-                            dynamic_cast<Communi::IrcNoticeMessage *>(message)),
-                        MessageContext::Original);
+        auto *notice = dynamic_cast<Communi::IrcNoticeMessage *>(message);
+        if (isRaidCanceledNotice(notice))
+        {
+            if (channel != nullptr)
+            {
+                channel->clearActiveRaid();
+            }
+            return;
+        }
+        if (notice != nullptr && channel != nullptr &&
+            isWarningAcknowledgeNotice(notice->content()))
+        {
+            channel->handleChatWarningNotice();
+            return;
+        }
+
+        auto parsed = parseNoticeMessage(notice);
+        if (parsed && isRaidCanceledNoticeText(parsed->messageText))
+        {
+            if (channel != nullptr)
+            {
+                channel->clearActiveRaid();
+            }
+            return;
+        }
+        sink.addMessage(parsed, MessageContext::Original);
     }
 
     if (command == u"CLEARCHAT"_s)
@@ -601,7 +706,8 @@ void IrcMessageHandler::handleClearMessageMessage(Communi::IrcMessage *message)
 
     msg->flags.set(MessageFlag::Disabled);
     msg->flags.set(MessageFlag::InvalidReplyTarget);
-    if (!getSettings()->hideDeletionActions)
+    if (!getSettings()->hideDeletionActions &&
+        !hasDeleteActionForMessage(chan.get(), targetID))
     {
         chan->addMessage(MessageBuilder::makeDeletionMessageFromIRC(msg),
                          MessageContext::Original);
@@ -666,6 +772,20 @@ void IrcMessageHandler::handleUserStateMessage(Communi::IrcMessage *message)
         {
             tc->setSendWait(0);
         }
+        else
+        {
+            // USERSTATE reflects the current ability to chat for the
+            // logged-in user. Recompute the send-wait timer from the
+            // current room state instead of keeping an old timeout value
+            // that may have already been removed by an untimeout/unban.
+            tc->setSendWait(0);
+
+            auto roomModes = *tc->accessRoomModes();
+            if (roomModes.slowMode > 0)
+            {
+                tc->setSendWait(roomModes.slowMode);
+            }
+        }
     }
 }
 
@@ -686,7 +806,7 @@ void IrcMessageHandler::handleWhisperMessage(Communi::IrcMessage *ircMessage)
     }
 
     message->flags.set(MessageFlag::Whisper);
-    MessageBuilder::triggerHighlights(c, alert);
+    MessageBuilder::triggerHighlights(c, message, alert);
 
     getApp()->getTwitch()->setLastUserThatWhisperedMe(message->loginName);
 
@@ -928,6 +1048,15 @@ void IrcMessageHandler::parseUserNoticeMessageInto(Communi::IrcMessage *message,
                              })
                              .value_or(MessageColor::System);
 
+        if (isRaidCanceledNoticeText(messageText))
+        {
+            if (channel != nullptr)
+            {
+                channel->clearActiveRaid();
+            }
+            return;
+        }
+
         auto msg = MessageBuilder::makeSystemMessageWithUser(
             parseTagString(messageText), login, displayName, userColor,
             calculateMessageTime(message).time());
@@ -965,11 +1094,19 @@ void IrcMessageHandler::parseUserNoticeMessageInto(Communi::IrcMessage *message,
 void IrcMessageHandler::handleNoticeMessage(Communi::IrcNoticeMessage *message)
 {
     auto msg = parseNoticeMessage(message);
+    const auto isRaidCancelNotice =
+        isRaidCanceledNotice(message) ||
+        (msg && isRaidCanceledNoticeText(msg->messageText));
 
     QString channelName;
     if (!trimChannelName(message->target(), channelName) ||
         channelName == "jtv")
     {
+        if (isRaidCancelNotice)
+        {
+            return;
+        }
+
         // Notice wasn't targeted at a single channel, send to all twitch
         // channels
         getApp()->getTwitch()->forEachChannelAndSpecialChannels(
@@ -987,6 +1124,24 @@ void IrcMessageHandler::handleNoticeMessage(Communi::IrcNoticeMessage *message)
         qCDebug(chatterinoTwitch)
             << "[IrcManager:handleNoticeMessage] Channel" << channelName
             << "not found in channel manager";
+        return;
+    }
+
+    if (isRaidCancelNotice)
+    {
+        if (auto *tc = dynamic_cast<TwitchChannel *>(channel.get()))
+        {
+            tc->clearActiveRaid();
+        }
+        return;
+    }
+
+    if (isWarningAcknowledgeNotice(message->content()))
+    {
+        if (auto *tc = dynamic_cast<TwitchChannel *>(channel.get()))
+        {
+            tc->handleChatWarningNotice();
+        }
         return;
     }
 
@@ -1097,17 +1252,20 @@ void IrcMessageHandler::handleJoinMessage(Communi::IrcMessage *message)
         return;
     }
 
-    if (message->nick() ==
-            getApp()->getAccounts()->twitch.getCurrent()->getUserName() ||
-        (getSettings()->twitchIrcJoinAsAnonymous &&
-         message->nick().compare(ANONYMOUS_USERNAME, Qt::CaseInsensitive) == 0))
+    const auto nick = message->nick();
+    if (nick == getApp()->getAccounts()->twitch.getCurrent()->getUserName() ||
+        isOwnAnonymousIrcNick(nick, twitchChannel))
     {
         twitchChannel->addSystemMessage("joined channel");
         twitchChannel->joined.invoke();
     }
+    else if (isAnonymousIrcNick(nick))
+    {
+        return;
+    }
     else if (getSettings()->showJoins.getValue())
     {
-        twitchChannel->addJoinedUser(message->nick(), twitchChannel->isMod(),
+        twitchChannel->addJoinedUser(nick, twitchChannel->isMod(),
                                      twitchChannel->isBroadcaster());
     }
 }
@@ -1123,18 +1281,23 @@ void IrcMessageHandler::handlePartMessage(Communi::IrcMessage *message)
         return;
     }
 
+    const auto nick = message->nick();
     const auto selfAccountName =
         getApp()->getAccounts()->twitch.getCurrent()->getUserName();
-    if (message->nick() != selfAccountName &&
-        getSettings()->showParts.getValue())
+    const auto isOwnNick =
+        nick == selfAccountName || isOwnAnonymousIrcNick(nick, twitchChannel);
+    if (!isOwnNick && isAnonymousIrcNick(nick))
     {
-        twitchChannel->addPartedUser(message->nick(), twitchChannel->isMod(),
+        return;
+    }
+
+    if (!isOwnNick && getSettings()->showParts.getValue())
+    {
+        twitchChannel->addPartedUser(nick, twitchChannel->isMod(),
                                      twitchChannel->isBroadcaster());
     }
 
-    if (message->nick() == selfAccountName ||
-        (getSettings()->twitchIrcJoinAsAnonymous &&
-         message->nick().compare(ANONYMOUS_USERNAME, Qt::CaseInsensitive) == 0))
+    if (isOwnNick)
     {
         channel->addMessage(generateBannedMessage(false),
                             MessageContext::Original);
@@ -1177,6 +1340,27 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
             rewardId = msgId;
         }
     }
+    if (!rewardId.isEmpty() &&
+        sink.sinkTraits().has(
+            MessageSinkTrait::RequiresKnownChannelPointReward))
+    {
+        const auto messageId = tags.value("id").toString();
+        if (!messageId.isEmpty())
+        {
+            auto roomId = tags.value("room-id").toString();
+            if (roomId.isEmpty())
+            {
+                roomId = chan->roomId();
+            }
+
+            if (!chan->markChannelPointRedemptionSeen(u"irc:" % roomId % u':' %
+                                                      messageId))
+            {
+                return;
+            }
+        }
+    }
+
     if (!rewardId.isEmpty() &&
         sink.sinkTraits().has(
             MessageSinkTrait::RequiresKnownChannelPointReward) &&
@@ -1303,7 +1487,7 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
             (!getSettings()->hideSimilar &&
              getSettings()->shownSimilarTriggerHighlights))
         {
-            MessageBuilder::triggerHighlights(chan, alert);
+            MessageBuilder::triggerHighlights(chan, msg, alert);
         }
 
         const auto highlighted = msg->flags.has(MessageFlag::Highlighted);

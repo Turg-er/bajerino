@@ -28,15 +28,22 @@ void NetworkManager::init()
     NetworkManager::workerThread->setObjectName("NetworkWorker");
     NetworkManager::workerThread->start();
 
+    // In a selective proxying mode no global application proxy is set, so the
+    // default manager is pinned to NoProxy and a separate proxied manager
+    // carries the proxy for requests that opt in via NetworkRequest::useProxy
+    // (the Twitch HTTP API). In global mode all requests use the default
+    // manager, which honors the application proxy.
+    const bool selectiveProxy = env.proxyTwitchApiOnly || env.proxyTwitch;
+
     NetworkManager::accessManager = new QNetworkAccessManager;
-    if (env.proxyTwitchApiOnly)
+    if (selectiveProxy)
     {
         NetworkManager::accessManager->setProxy(
             QNetworkProxy(QNetworkProxy::NoProxy));
     }
     NetworkManager::accessManager->moveToThread(NetworkManager::workerThread);
 
-    if (env.proxyTwitchApiOnly)
+    if (selectiveProxy)
     {
         if (const auto proxy = NetworkConfigurationProvider::proxyFromEnv(env))
         {

@@ -19,10 +19,13 @@
 #include "widgets/helper/IconDelegate.hpp"
 #include "widgets/settingspages/SettingWidget.hpp"
 
+#include <QCheckBox>
+#include <QComboBox>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPixmap>
 #include <QPushButton>
 #include <QTableView>
@@ -311,6 +314,13 @@ ModerationPage::ModerationPage()
             getSettings()->moderationActions.append(
                 ModerationAction("/timeout {user.name} 300"));
         });
+
+        auto *addPin = new QPushButton("Add Pin");
+        view->addCustomButton(addPin);
+        QObject::connect(addPin, &QPushButton::clicked, [] {
+            getSettings()->moderationActions.append(
+                ModerationAction("/pin {msg.id}"));
+        });
     }
 
     this->addModerationButtonSettings(tabs.getElement());
@@ -341,11 +351,21 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
     texts->setSizeConstraint(QLayout::SetMaximumSize);
 
     const auto valueChanged = [=, this] {
-        const auto index = QObject::sender()->objectName().toInt();
+        bool ok = false;
+        const auto index = QObject::sender()->objectName().toInt(&ok);
+        if (!ok || index < 0 ||
+            index >= static_cast<int>(this->durationInputs_.size()))
+        {
+            return;
+        }
 
         auto *const line = this->durationInputs_[index];
         const auto duration = line->text().toInt();
         const auto unit = this->unitInputs_[index]->currentText();
+        if (duration <= 0)
+        {
+            return;
+        }
 
         // safety mechanism for setting days and weeks
         if (unit == "d" && duration > 14)
@@ -360,15 +380,45 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
         }
 
         auto timeouts = getSettings()->timeoutButtons.getValue();
+        if (index >= static_cast<int>(timeouts.size()))
+        {
+            return;
+        }
         timeouts[index] = TimeoutButton{unit, duration};
         getSettings()->timeoutButtons.setValue(timeouts);
     };
 
-    // build one line for each customizable button
+    const auto reasonChanged = [=, this] {
+        bool ok = false;
+        const auto index = QObject::sender()->objectName().toInt(&ok);
+        if (!ok || index < 0 ||
+            index >= static_cast<int>(this->reasonInputs_.size()))
+        {
+            return;
+        }
+
+        auto reasons = getSettings()->timeoutButtonReasons.getValue();
+        const auto timeoutCount =
+            getSettings()->timeoutButtons.getValue().size();
+        if (reasons.size() < timeoutCount)
+        {
+            reasons.resize(timeoutCount);
+        }
+
+        reasons[index] = this->reasonInputs_[index]->text();
+        while (!reasons.empty() && reasons.back().trimmed().isEmpty())
+        {
+            reasons.pop_back();
+        }
+        getSettings()->timeoutButtonReasons.setValue(reasons);
+    };
+
     auto i = 0;
+    const auto reasons = getSettings()->timeoutButtonReasons.getValue();
     for (const auto &tButton : getSettings()->timeoutButtons.getValue())
     {
         const auto buttonNumber = QString::number(i);
+        const auto index = i;
         auto timeout = timeoutLayout.emplace<QHBoxLayout>().withoutMargin();
 
         auto buttonLabel = timeout.emplace<QLabel>();
@@ -388,20 +438,117 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
         timeoutDurationUnit->setCurrentText(tButton.first);
         timeout.append(timeoutDurationUnit);
 
+        auto reasonLabel = timeout.emplace<QLabel>();
+        reasonLabel->setText("Reason:");
+
+        auto *lineEditReasonInput = new QLineEdit();
+        lineEditReasonInput->setObjectName(buttonNumber);
+        lineEditReasonInput->setPlaceholderText("optional timeout reason");
+        if (index < static_cast<int>(reasons.size()))
+        {
+            lineEditReasonInput->setText(reasons[index]);
+        }
+        lineEditReasonInput->setMinimumWidth(220);
+        lineEditReasonInput->setMaximumWidth(360);
+        timeout.append(lineEditReasonInput);
+
         QObject::connect(lineEditDurationInput, &QLineEdit::textChanged, this,
                          valueChanged);
 
         QObject::connect(timeoutDurationUnit, &QComboBox::currentTextChanged,
                          this, valueChanged);
 
+        QObject::connect(lineEditReasonInput, &QLineEdit::textChanged, this,
+                         reasonChanged);
+
         timeout->addStretch();
 
         this->durationInputs_.push_back(lineEditDurationInput);
         this->unitInputs_.push_back(timeoutDurationUnit);
+        this->reasonInputs_.push_back(lineEditReasonInput);
 
         timeout->setContentsMargins(40, 0, 0, 0);
         timeout->setSizeConstraint(QLayout::SetMaximumSize);
     }
+
+    auto banReason = timeoutLayout.emplace<QHBoxLayout>().withoutMargin();
+    {
+        auto label = banReason.emplace<QLabel>();
+        label->setText("Ban reason:");
+
+        auto *input = new QLineEdit();
+        input->setPlaceholderText("optional ban reason");
+        input->setText(getSettings()->timeoutBanReason.getValue());
+        input->setMinimumWidth(220);
+        input->setMaximumWidth(360);
+        banReason.append(input);
+        banReason->addStretch();
+        banReason->setContentsMargins(40, 8, 0, 0);
+        banReason->setSizeConstraint(QLayout::SetMaximumSize);
+
+        QObject::connect(input, &QLineEdit::textChanged, this,
+                         [](const QString &text) {
+                             getSettings()->timeoutBanReason = text;
+                         });
+    }
+
+    auto promptOptions = timeoutLayout.emplace<QVBoxLayout>().withoutMargin();
+    {
+        auto promptLabel = promptOptions.emplace<QLabel>();
+        promptLabel->setText(
+            "Saved reasons are sent with normal timeout and ban clicks. Use "
+            "the reason prompt when you want to edit the reason first.");
+        promptLabel->setWordWrap(true);
+        promptLabel->setStyleSheet("color: #bbb");
+
+        auto *rightClickPrompt = this->createCheckBox(
+            "Open the reason prompt on right-click",
+            getSettings()->timeoutReasonPromptOnRightClick,
+            "Right-click a timeout or ban button in a usercard to edit the "
+            "reason before sending.");
+        promptOptions.append(rightClickPrompt);
+
+        auto modifierRow = promptOptions.emplace<QHBoxLayout>().withoutMargin();
+        auto *modifierPrompt = this->createCheckBox(
+            "Open the reason prompt while holding",
+            getSettings()->timeoutReasonPromptOnModifier,
+            "Hold this modifier while clicking a timeout or ban button to edit "
+            "the reason before sending.");
+        modifierRow.append(modifierPrompt);
+
+        auto *modifierKey =
+            this->createComboBox({"Shift", "Ctrl", "Alt"},
+                                 getSettings()->timeoutReasonPromptModifier);
+        modifierKey->setMaximumWidth(120);
+        modifierRow.append(modifierKey);
+        modifierRow->addStretch();
+
+        auto updateModifierEnabled = [modifierPrompt, modifierKey] {
+            modifierKey->setEnabled(modifierPrompt->isChecked());
+        };
+        QObject::connect(modifierPrompt, &QCheckBox::toggled, this,
+                         [updateModifierEnabled](bool) {
+                             updateModifierEnabled();
+                         });
+        updateModifierEnabled();
+
+        auto *showSendButton = this->createCheckBox(
+            "Show a Send button in the reason prompt",
+            getSettings()->timeoutReasonPromptShowSendButton,
+            "When this is off, press Enter to send the prompt. Esc or clicking "
+            "away cancels it.");
+        promptOptions.append(showSendButton);
+
+        auto *prefillSavedReason = this->createCheckBox(
+            "Prefill the reason prompt with the saved reason",
+            getSettings()->timeoutReasonPromptPrefillSavedReason,
+            "When this is on, right-click and modifier prompts start with the "
+            "saved timeout or ban reason selected for quick editing.");
+        promptOptions.append(prefillSavedReason);
+    }
+    promptOptions->setContentsMargins(40, 12, 0, 15);
+    promptOptions->setSizeConstraint(QLayout::SetMaximumSize);
+
     timeoutLayout->addStretch();
 }
 

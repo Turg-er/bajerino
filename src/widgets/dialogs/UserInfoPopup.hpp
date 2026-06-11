@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "providers/twitch/TwitchNameHistory.hpp"
 #include "singletons/Paths.hpp"
 #include "widgets/BaseWindow.hpp"
 #include "widgets/DraggablePopup.hpp"
@@ -12,22 +13,34 @@
 #include <pajlada/signals/signal.hpp>
 #include <QPixmap>
 #include <QPointer>
+#include <QString>
 
 #include <chrono>
+#include <functional>
+#include <map>
+#include <utility>
+#include <vector>
 
 class QCheckBox;
+class QKeyEvent;
+class QLabel;
+class QMenu;
 class QMovie;
+class QWidget;
 
 namespace chatterino {
 
 class Channel;
 using ChannelPtr = std::shared_ptr<Channel>;
+struct Message;
+using MessagePtr = std::shared_ptr<const Message>;
 class Label;
 class MarkdownLabel;
 class EditUserNotesDialog;
 class ChannelView;
 class Split;
 struct HelixUser;
+struct IvrUserProfile;
 class LabelButton;
 class PixmapButton;
 class LiveIndicator;
@@ -51,17 +64,41 @@ protected:
     void themeChangedEvent() override;
     void scaleChangedEvent(float scale) override;
     void windowDeactivationEvent() override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private:
+    void registerMnemonicButton(LabelButton *button, int key,
+                                std::function<void()> action);
+
     void installEvents();
     void updateUserData();
     void updateLatestMessages();
+    void updateUsercardMessagesVisibility();
+    void resetUsercardMessageLoader();
+    void updateLoadMoreMessagesButton();
+    bool canLoadMoreUsercardMessages() const;
+    void maybeStartUsercardMessageAutoLoad();
+    void requestMoreUsercardMessages(bool enableLazyLoadOnSuccess);
+    void maybeLoadMoreUsercardMessagesFromScroll();
+    void fetchMoreUsercardMessages(int emptyPageSkipsLeft,
+                                   bool enableLazyLoadOnSuccess);
     void updateNotes();
+    void refreshSevenTVUserButtonVisibility();
+    void resetNameHistory();
+    bool applyCachedNameHistory();
+    void updateNameHistoryButton();
+    void showNameHistoryMenu();
+    void openNameHistoryMenu(const QString &statusText = {});
+    void requestNameHistory();
+    void updateUsercardStatusIcons();
+    void resetUsercardInfoRows();
+    void applyIvrUserProfile(const IvrUserProfile &profile);
 
     void loadAvatar(const QString &userID, const QString &pictureURL,
                     bool isKick);
 
-    void loadSevenTVAvatar(const QString &userID, bool isKick);
+    void loadSevenTVAvatar(const QString &userID, bool isKick,
+                           bool allowAvatarDownload = true);
     void setSevenTVAvatar(const QString &filename, const QByteArray &format);
 
     void saveCacheAvatar(const QByteArray &avatar,
@@ -71,10 +108,32 @@ private:
 
     void updateKickUserData();
     void onKickProfilePictureClick(Qt::MouseButton button);
+    QString showProfilePictureContextMenu();
+    bool canShowRoleManagementMenu() const;
+    void showRoleManagementMenu();
+    void runRoleManagementCommand(const QString &command,
+                                  const QString &actionText);
 
     QStringView platformName() const;
 
     void appendCommonProfileActions(QMenu *menu);
+    void refreshTargetModerationStatus();
+    bool updateTargetModerationStatusFromMessage(const MessagePtr &message);
+    bool shouldShowModerationActions() const;
+
+    enum class UsercardModerationAction { Ban, Unban, Timeout };
+
+    struct UsercardModerationRequest {
+        UsercardModerationAction action{};
+        int durationSeconds = -1;
+        QString reason;
+        bool promptForReason = false;
+    };
+
+    void executeUsercardModerationAction(
+        const UsercardModerationRequest &request);
+    void showUsercardModerationReasonPopup(
+        const UsercardModerationRequest &request);
 
     bool isMod_{};
     bool isBroadcaster_{};
@@ -83,10 +142,20 @@ private:
 
     QString userName_;
     QString userId_;
+    uint64_t userDataRequestGeneration_ = 0;
     QString avatarUrl_;
     QString helixAvatarUrl_;
     QString seventvAvatarUrl_;
     QString seventvUserID_;
+    uint64_t seventvUserRequestGeneration_ = 0;
+    bool seventvUserLookupInFlight_ = false;
+    bool seventvUserLookupFinished_ = false;
+    QString nameHistoryLogin_;
+    std::vector<TwitchNameHistoryEntry> nameHistoryEntries_;
+    QPointer<QMenu> nameHistoryMenu_;
+    uint64_t nameHistoryRequestGeneration_ = 0;
+    bool nameHistoryLoading_ = false;
+    bool nameHistoryLoaded_ = false;
 
     QString kickUserSlug_;
 
@@ -100,7 +169,12 @@ private:
 
     std::unique_ptr<pajlada::Signals::ScopedConnection> refreshConnection_;
     std::unique_ptr<pajlada::Signals::ScopedConnection>
+        twitchUserStateConnection_;
+    std::unique_ptr<pajlada::Signals::ScopedConnection>
         userDataUpdatedConnection_;
+    std::unique_ptr<pajlada::Signals::ScopedConnection>
+        usercardScrollConnection_;
+    pajlada::Signals::Connection currentUserChangedConnection_;
 
     // If we should close the dialog automatically if the user clicks out
     // Set based on the "Automatically close usercard when it loses focus" setting
@@ -113,13 +187,25 @@ private:
         PixmapButton *localizedNameCopyButton = nullptr;
 
         Label *nameLabel = nullptr;
+        LabelButton *nameHistoryButton = nullptr;
         Label *localizedNameLabel = nullptr;
         Label *pronounsLabel = nullptr;
         Label *followerCountLabel = nullptr;
         Label *createdDateLabel = nullptr;
         Label *userIDLabel = nullptr;
+        QLabel *bannedAvatarLabel = nullptr;
+        QWidget *followageRow = nullptr;
+        QLabel *followageIcon = nullptr;
         Label *followageLabel = nullptr;
+        QWidget *subageRow = nullptr;
+        QLabel *subageIcon = nullptr;
         Label *subageLabel = nullptr;
+        Label *chatterCountLabel = nullptr;
+        Label *lastLiveLabel = nullptr;
+        QWidget *userColorRow = nullptr;
+        QWidget *userColorSwatch = nullptr;
+        Label *userColorLabel = nullptr;
+        Label *statusLabel = nullptr;
 
         LiveIndicator *liveIndicator = nullptr;
 
@@ -130,8 +216,12 @@ private:
 
         Label *noMessagesLabel = nullptr;
         ChannelView *latestMessages = nullptr;
+        LabelButton *loadMoreMessages = nullptr;
 
         LabelButton *usercardLabel = nullptr;
+        LabelButton *userlogsLabel = nullptr;
+        LabelButton *sevenTVUserLabel = nullptr;
+        LabelButton *rolesLabel = nullptr;
         LabelButton *switchAvatars = nullptr;
 
         TimeoutWidget *timeoutWidget = nullptr;
@@ -141,6 +231,16 @@ private:
     bool isTwitchAvatarShown_ = true;
     QPixmap avatarPixmap_;
     QPointer<EditUserNotesDialog> editUserNotesDialog_;
+    std::map<int, std::pair<std::function<void()>, std::function<bool()>>>
+        mnemonicActions_;
+
+    ChannelPtr usercardMessagesChannel_;
+    QString usercardMessagesCursor_;
+    QString usercardMessagesError_;
+    uint64_t usercardMessagesRequestGeneration_ = 0;
+    bool usercardMessagesLoading_ = false;
+    bool usercardMessagesHasNextPage_ = true;
+    bool usercardMessagesLazyLoadEnabled_ = false;
 
     bool isKick_ = false;
     uint64_t kickUserID_ = 0;
@@ -148,11 +248,9 @@ private:
     class TimeoutWidget : public BaseWidget
     {
     public:
-        enum Action { Ban, Unban, Timeout };
-
         TimeoutWidget();
 
-        pajlada::Signals::Signal<std::pair<Action, int>> buttonClicked;
+        pajlada::Signals::Signal<UsercardModerationRequest> buttonClicked;
 
         void setMinTimeout(int minSecs);
 

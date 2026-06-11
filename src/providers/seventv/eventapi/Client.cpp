@@ -18,6 +18,12 @@
 
 namespace chatterino::seventv::eventapi {
 
+namespace {
+
+constexpr int MIN_HEARTBEAT_INTERVAL_MS = 1000;
+
+}  // namespace
+
 Client::Client(SeventvEventAPI &manager,
                std::chrono::milliseconds heartbeatInterval)
     : BasicPubSubClient(100)
@@ -48,9 +54,17 @@ void Client::onMessage(const QByteArray &msg)
     switch (message.op)
     {
         case Opcode::Hello: {
+            auto heartbeatIntervalMs =
+                message.data["heartbeat_interval"].toInt();
+            if (heartbeatIntervalMs < MIN_HEARTBEAT_INTERVAL_MS)
+            {
+                qCDebug(chatterinoSeventvEventAPI)
+                    << "Ignoring malformed heartbeat interval"
+                    << heartbeatIntervalMs;
+                return;
+            }
             this->heartbeatInterval_.store(
-                std::chrono::milliseconds{
-                    message.data["heartbeat_interval"].toInt()},
+                std::chrono::milliseconds{heartbeatIntervalMs},
                 std::memory_order::relaxed);
         }
         break;

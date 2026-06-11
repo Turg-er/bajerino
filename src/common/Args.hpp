@@ -49,6 +49,9 @@ public:
     bool printVersion{};
 
     bool crashRecovery{};
+    bool remoteRestart{};
+    bool newInstance{};
+
     /// Native, platform-specific exception code from crashpad
     std::optional<uint32_t> exceptionCode{};
     /// Text version of the exception code. Potentially contains more context.

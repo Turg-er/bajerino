@@ -7,8 +7,11 @@
 #include "common/QLogging.hpp"
 #include "common/Version.hpp"
 
+#include <boost/asio/read.hpp>
 #include <boost/asio/strand.hpp>
+#include <boost/asio/write.hpp>
 #include <boost/beast/core/bind_handler.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 
 using namespace std::literals::string_view_literals;
@@ -40,7 +43,7 @@ void WebSocketConnectionHelper<Derived, Inner>::post(auto &&fn)
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::run()
 {
-    auto host = this->options.url.host(QUrl::FullyEncoded).toStdString();
+    auto host = this->targetHost();
     if constexpr (requires { this->derived()->setupStream(host); })
     {
         if (!this->derived()->setupStream(host))
@@ -49,8 +52,16 @@ void WebSocketConnectionHelper<Derived, Inner>::run()
         }
     }
 
+    auto resolveHost = host;
+    auto resolvePort = this->targetPort();
+    if (this->options.proxy)
+    {
+        resolveHost = this->options.proxy->host.toStdString();
+        resolvePort = std::to_string(this->options.proxy->port);
+    }
+
     this->resolver.async_resolve(
-        host, std::to_string(this->options.url.port(Derived::DEFAULT_PORT)),
+        resolveHost, resolvePort,
         beast::bind_front_handler(&WebSocketConnectionHelper::onResolve,
                                   this->shared_from_this()));
 }
@@ -154,11 +165,400 @@ void WebSocketConnectionHelper<Derived, Inner>::onTcpHandshake(
 
     qCDebug(chatterinoWebsocket)
         << *this << "TCP handshake done" << ep.address().to_string();
-    this->options.url.setPort(ep.port());
 
-    // We are done with the endpoints, we can clear the range.
     this->resolvedEndpoints = {};
 
+    if (this->options.proxy)
+    {
+        switch (this->options.proxy->type)
+        {
+            case WebSocketProxyType::Http:
+                this->doHttpProxyHandshake();
+                return;
+
+            case WebSocketProxyType::Socks5:
+                this->doSocksProxyHandshake();
+                return;
+        }
+    }
+
+    this->options.url.setPort(ep.port());
+    this->derived()->afterTcpHandshake();
+}
+
+template <typename Derived, typename Inner>
+std::string WebSocketConnectionHelper<Derived, Inner>::targetHost() const
+{
+    return this->options.url.host(QUrl::FullyEncoded).toStdString();
+}
+
+template <typename Derived, typename Inner>
+std::string WebSocketConnectionHelper<Derived, Inner>::targetPort() const
+{
+    return std::to_string(this->options.url.port(Derived::DEFAULT_PORT));
+}
+
+template <typename Derived, typename Inner>
+std::string WebSocketConnectionHelper<Derived, Inner>::targetHostAndPort() const
+{
+    return this->targetHost() + ':' + this->targetPort();
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::doHttpProxyHandshake()
+{
+    const auto target = this->targetHostAndPort();
+
+    this->proxyBuffer.clear();
+    this->proxyConnectResponseParser.emplace();
+    this->proxyConnectResponseParser->skip(true);
+    this->proxyConnectRequest = {};
+    this->proxyConnectRequest.version(11);
+    this->proxyConnectRequest.method(beast::http::verb::connect);
+    this->proxyConnectRequest.target(target);
+    this->proxyConnectRequest.set(beast::http::field::host, target);
+
+    if (!this->options.proxy->user.isEmpty() ||
+        !this->options.proxy->password.isEmpty())
+    {
+        const auto auth =
+            this->options.proxy->user + ':' + this->options.proxy->password;
+        const auto base64 = auth.toUtf8().toBase64().toStdString();
+        this->proxyConnectRequest.set(beast::http::field::proxy_authorization,
+                                      "Basic " + base64);
+    }
+
+    beast::get_lowest_layer(this->stream)
+        .expires_after(std::chrono::seconds{30});
+    beast::http::async_write(
+        beast::get_lowest_layer(this->stream), this->proxyConnectRequest,
+        beast::bind_front_handler(&WebSocketConnectionHelper::onHttpProxyWrite,
+                                  this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onHttpProxyWrite(
+    boost::system::error_code ec, size_t /*bytesWritten*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"HTTP proxy CONNECT write");
+        return;
+    }
+
+    assert(this->proxyConnectResponseParser.has_value());
+    beast::http::async_read_header(
+        beast::get_lowest_layer(this->stream), this->proxyBuffer,
+        *this->proxyConnectResponseParser,
+        beast::bind_front_handler(&WebSocketConnectionHelper::onHttpProxyRead,
+                                  this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onHttpProxyRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"HTTP proxy CONNECT read");
+        return;
+    }
+
+    assert(this->proxyConnectResponseParser.has_value());
+    const auto &response = this->proxyConnectResponseParser->get();
+    if (response.result() != beast::http::status::ok)
+    {
+        this->fail(std::string("HTTP proxy CONNECT returned ") +
+                       std::to_string(response.result_int()),
+                   u"HTTP proxy CONNECT");
+        return;
+    }
+
+    qCDebug(chatterinoWebsocket) << *this << "HTTP proxy CONNECT done";
+    this->derived()->afterTcpHandshake();
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::doSocksProxyHandshake()
+{
+    this->proxyWriteBuffer.clear();
+    this->proxyWriteBuffer.append(char(0x05));
+    if (!this->options.proxy->user.isEmpty() ||
+        !this->options.proxy->password.isEmpty())
+    {
+        this->proxyWriteBuffer.append(char(0x02));
+        this->proxyWriteBuffer.append(char(0x00));
+        this->proxyWriteBuffer.append(char(0x02));
+    }
+    else
+    {
+        this->proxyWriteBuffer.append(char(0x01));
+        this->proxyWriteBuffer.append(char(0x00));
+    }
+
+    beast::get_lowest_layer(this->stream)
+        .expires_after(std::chrono::seconds{30});
+    boost::asio::async_write(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyWriteBuffer.constData(),
+                            this->proxyWriteBuffer.size()),
+        beast::bind_front_handler(
+            &WebSocketConnectionHelper::onSocksGreetingWrite,
+            this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksGreetingWrite(
+    boost::system::error_code ec, size_t /*bytesWritten*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 greeting write");
+        return;
+    }
+
+    boost::asio::async_read(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyReadBuffer.data(), 2),
+        beast::bind_front_handler(
+            &WebSocketConnectionHelper::onSocksGreetingRead,
+            this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksGreetingRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 greeting read");
+        return;
+    }
+
+    if (this->proxyReadBuffer[0] != char(0x05))
+    {
+        this->fail("Invalid SOCKS5 greeting version", u"SOCKS5 greeting");
+        return;
+    }
+
+    const auto method = static_cast<unsigned char>(this->proxyReadBuffer[1]);
+    if (method == 0x00)
+    {
+        this->doSocksConnect();
+        return;
+    }
+    if (method == 0x02)
+    {
+        this->doSocksAuth();
+        return;
+    }
+
+    this->fail("SOCKS5 proxy rejected authentication methods",
+               u"SOCKS5 greeting");
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::doSocksAuth()
+{
+    const auto user = this->options.proxy->user.toUtf8();
+    const auto password = this->options.proxy->password.toUtf8();
+    if (user.size() > 255 || password.size() > 255)
+    {
+        this->fail("SOCKS5 username/password is too long", u"SOCKS5 auth");
+        return;
+    }
+
+    this->proxyWriteBuffer.clear();
+    this->proxyWriteBuffer.append(char(0x01));
+    this->proxyWriteBuffer.append(char(user.size()));
+    this->proxyWriteBuffer.append(user);
+    this->proxyWriteBuffer.append(char(password.size()));
+    this->proxyWriteBuffer.append(password);
+
+    boost::asio::async_write(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyWriteBuffer.constData(),
+                            this->proxyWriteBuffer.size()),
+        beast::bind_front_handler(&WebSocketConnectionHelper::onSocksAuthWrite,
+                                  this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksAuthWrite(
+    boost::system::error_code ec, size_t /*bytesWritten*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 auth write");
+        return;
+    }
+
+    boost::asio::async_read(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyReadBuffer.data(), 2),
+        beast::bind_front_handler(&WebSocketConnectionHelper::onSocksAuthRead,
+                                  this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksAuthRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 auth read");
+        return;
+    }
+
+    if (this->proxyReadBuffer[0] != char(0x01) ||
+        this->proxyReadBuffer[1] != char(0x00))
+    {
+        this->fail("SOCKS5 username/password authentication failed",
+                   u"SOCKS5 auth");
+        return;
+    }
+
+    this->doSocksConnect();
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::doSocksConnect()
+{
+    const auto host = this->targetHost();
+    const auto port = this->options.url.port(Derived::DEFAULT_PORT);
+    if (host.size() > 255)
+    {
+        this->fail("SOCKS5 target host is too long", u"SOCKS5 connect");
+        return;
+    }
+
+    this->proxyWriteBuffer.clear();
+    this->proxyWriteBuffer.append(char(0x05));
+    this->proxyWriteBuffer.append(char(0x01));
+    this->proxyWriteBuffer.append(char(0x00));
+    this->proxyWriteBuffer.append(char(0x03));
+    this->proxyWriteBuffer.append(char(host.size()));
+    this->proxyWriteBuffer.append(host.data(), qsizetype(host.size()));
+    this->proxyWriteBuffer.append(char((port >> 8) & 0xff));
+    this->proxyWriteBuffer.append(char(port & 0xff));
+
+    boost::asio::async_write(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyWriteBuffer.constData(),
+                            this->proxyWriteBuffer.size()),
+        beast::bind_front_handler(
+            &WebSocketConnectionHelper::onSocksConnectWrite,
+            this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksConnectWrite(
+    boost::system::error_code ec, size_t /*bytesWritten*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 connect write");
+        return;
+    }
+
+    boost::asio::async_read(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyReadBuffer.data(), 4),
+        beast::bind_front_handler(
+            &WebSocketConnectionHelper::onSocksConnectHeaderRead,
+            this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksConnectHeaderRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 connect header read");
+        return;
+    }
+
+    if (this->proxyReadBuffer[0] != char(0x05))
+    {
+        this->fail("Invalid SOCKS5 connect response version",
+                   u"SOCKS5 connect");
+        return;
+    }
+    if (this->proxyReadBuffer[1] != char(0x00))
+    {
+        this->fail("SOCKS5 proxy failed to connect to target",
+                   u"SOCKS5 connect");
+        return;
+    }
+
+    const auto addressType =
+        static_cast<unsigned char>(this->proxyReadBuffer[3]);
+    if (addressType == 0x01)
+    {
+        boost::asio::async_read(
+            beast::get_lowest_layer(this->stream),
+            boost::asio::buffer(this->proxyReadBuffer.data(), 6),
+            beast::bind_front_handler(
+                &WebSocketConnectionHelper::onSocksConnectAddressRead,
+                this->shared_from_this()));
+        return;
+    }
+    if (addressType == 0x04)
+    {
+        boost::asio::async_read(
+            beast::get_lowest_layer(this->stream),
+            boost::asio::buffer(this->proxyReadBuffer.data(), 18),
+            beast::bind_front_handler(
+                &WebSocketConnectionHelper::onSocksConnectAddressRead,
+                this->shared_from_this()));
+        return;
+    }
+    if (addressType == 0x03)
+    {
+        boost::asio::async_read(
+            beast::get_lowest_layer(this->stream),
+            boost::asio::buffer(this->proxyReadBuffer.data(), 1),
+            beast::bind_front_handler(
+                &WebSocketConnectionHelper::onSocksConnectDomainLengthRead,
+                this->shared_from_this()));
+        return;
+    }
+
+    this->fail("Unsupported SOCKS5 connect address type", u"SOCKS5 connect");
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksConnectDomainLengthRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 connect domain length read");
+        return;
+    }
+
+    const auto domainLength =
+        static_cast<unsigned char>(this->proxyReadBuffer[0]);
+    boost::asio::async_read(
+        beast::get_lowest_layer(this->stream),
+        boost::asio::buffer(this->proxyReadBuffer.data(), domainLength + 2),
+        beast::bind_front_handler(
+            &WebSocketConnectionHelper::onSocksConnectAddressRead,
+            this->shared_from_this()));
+}
+
+template <typename Derived, typename Inner>
+void WebSocketConnectionHelper<Derived, Inner>::onSocksConnectAddressRead(
+    boost::system::error_code ec, size_t /*bytesRead*/)
+{
+    if (ec)
+    {
+        this->fail(ec, u"SOCKS5 connect address read");
+        return;
+    }
+
+    qCDebug(chatterinoWebsocket) << *this << "SOCKS5 proxy connect done";
     this->derived()->afterTcpHandshake();
 }
 

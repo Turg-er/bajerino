@@ -130,17 +130,24 @@ int main(int argc, char **argv)
             << "Bajerino Qt SSL library version:"
             << QSslSocket::sslLibraryVersionString();
         qCInfo(chatterinoApp).noquote()
-            << "Bajerino Qt SSL active backend:"
-            << QSslSocket::activeBackend() << "of"
-            << QSslSocket::availableBackends().join(", ");
-#    if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
+            << "Bajerino Qt SSL active backend:" << QSslSocket::activeBackend()
+            << "of" << QSslSocket::availableBackends().join(", ");
+#if QT_VERSION >= QT_VERSION_CHECK(6, 7, 0)
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend features:"
                               << QSslSocket::supportedFeatures();
-#    endif
+#endif
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend protocols:"
                               << QSslSocket::supportedProtocols();
 
         Settings settings(args, paths->settingsDirectory);
+#ifndef Q_OS_MACOS
+        if (!args.newInstance && !args.remoteRestart &&
+            !args.isFramelessEmbed && settings.trayHideOnClose.getValue() &&
+            activateExistingGuiInstance(*paths))
+        {
+            return 0;
+        }
+#endif
 
         Updates updates(*paths, settings);
 

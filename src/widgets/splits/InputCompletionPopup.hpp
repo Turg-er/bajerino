@@ -36,6 +36,7 @@ public:
     void setInputAction(ActionCallback callback);
 
     bool eventFilter(QObject *watched, QEvent *event) override;
+    bool hasResults() const;
 
 protected:
     void showEvent(QShowEvent *event) override;

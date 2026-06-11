@@ -542,6 +542,26 @@ void EmotePopup::reloadEmotes()
             addEmotes(*subChannel, *map, "7TV (Personal)");
         }
     }
+    if (this->kickChannel_)
+    {
+        addEmotes(*globalChannel,
+                  *getApp()->getKickChatServer()->globalEmotes(), "Kick");
+
+        if (Settings::instance().enableSevenTVChannelEmotes)
+        {
+            addEmotes(*channelChannel, *this->kickChannel_->seventvEmotes(),
+                      "7TV");
+        }
+
+        const auto personalEmotes =
+            getApp()->getSeventvPersonalEmotes()->getEmoteSetsForKickUser(
+                getApp()->getAccounts()->kick.current()->userID());
+        for (const auto &map : personalEmotes)
+        {
+            addEmotes(*subChannel, *map, "7TV (Personal)");
+        }
+    }
+
     // global
     if (Settings::instance().enableBTTVGlobalEmotes)
     {

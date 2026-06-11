@@ -26,6 +26,7 @@
 #include <QNetworkRequest>
 #include <QThreadPool>
 #include <QTimer>
+#include <QUrl>
 
 #include <algorithm>
 #include <atomic>
@@ -506,6 +507,12 @@ bool Image::animated() const
     return this->frames_->animated();
 }
 
+void Image::setFrameCacheLifetime(std::chrono::milliseconds lifetime)
+{
+    this->frameCacheLifetimeMs_.store(std::max<int64_t>(0, lifetime.count()),
+                                      std::memory_order_relaxed);
+}
+
 int Image::width() const
 {
     assertInGuiThread();
@@ -761,9 +768,16 @@ void ImageExpirationPool::freeOld()
 
         ++eligible;
 
-        // Check if image has expired and, if so, expire its frame data
-        auto diff = now - img->lastUsed_;
-        if (diff > IMAGE_POOL_IMAGE_LIFETIME)
+        const auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - img->lastUsed_);
+        const auto customLifetimeMs =
+            img->frameCacheLifetimeMs_.load(std::memory_order_relaxed);
+        const auto lifetime =
+            customLifetimeMs > 0
+                ? std::chrono::milliseconds{customLifetimeMs}
+                : std::chrono::duration_cast<std::chrono::milliseconds>(
+                      IMAGE_POOL_IMAGE_LIFETIME);
+        if (diff > lifetime)
         {
             ++numExpired;
             img->expireFrames();
@@ -782,6 +796,125 @@ void ImageExpirationPool::freeOld()
     DebugCount::set(DebugObject::LastImageGcExpired, numExpired);
     DebugCount::set(DebugObject::LastImageGcEligible, eligible);
     DebugCount::set(DebugObject::LastImageGcLeft, this->allImages_.size());
+}
+
+std::vector<ImageExpirationPool::ProviderUsage>
+    ImageExpirationPool::getProviderUsageSnapshot()
+{
+    const auto providerForUrl = [](const QString &url) {
+        if (url.isEmpty())
+        {
+            return QStringLiteral("internal");
+        }
+        if (url.startsWith(u":/"))
+        {
+            return QStringLiteral("resources");
+        }
+
+        const QUrl parsed(url);
+        const auto host = parsed.host().toLower();
+        const auto path = parsed.path().toLower();
+        if (host.isEmpty())
+        {
+            return QStringLiteral("unknown");
+        }
+
+        if (host.contains(u"chatterinohomies.com") ||
+            host == u"itzalex.github.io")
+        {
+            return QStringLiteral("Homies");
+        }
+        if (host.contains(u"7tv"))
+        {
+            if (path.contains(u"/emote/"))
+            {
+                return QStringLiteral("7TV emotes");
+            }
+            if (path.contains(u"/paint/"))
+            {
+                return QStringLiteral("7TV paints");
+            }
+            if (path.contains(u"/badge/"))
+            {
+                return QStringLiteral("7TV badges");
+            }
+            if (path.contains(u"/cosmetic/"))
+            {
+                return QStringLiteral("7TV cosmetics");
+            }
+            return QStringLiteral("7TV");
+        }
+        if (host.contains(u"jtvnw.net") || host.contains(u"ttvnw.net") ||
+            host.contains(u"twitch.tv"))
+        {
+            return QStringLiteral("Twitch");
+        }
+        if (host.contains(u"betterttv") || host.contains(u"bttv"))
+        {
+            return QStringLiteral("BTTV");
+        }
+        if (host.contains(u"frankerfacez") || host.contains(u"ffzap"))
+        {
+            return QStringLiteral("FFZ");
+        }
+        if (host.contains(u"chatterino"))
+        {
+            return QStringLiteral("Chatterino");
+        }
+
+        return host;
+    };
+
+    std::map<QString, ProviderUsage> providers;
+
+    std::lock_guard<std::mutex> lock(this->mutex_);
+    for (auto it = this->allImages_.begin(); it != this->allImages_.end();)
+    {
+        auto img = it->second.lock();
+        if (!img)
+        {
+            it = this->allImages_.erase(it);
+            continue;
+        }
+
+        if (img->frames_->empty())
+        {
+            ++it;
+            continue;
+        }
+
+        const auto bytes = img->frames_->memoryUsage();
+        if (bytes <= 0)
+        {
+            ++it;
+            continue;
+        }
+
+        const auto provider = providerForUrl(img->url_.string);
+        auto &usage = providers[provider];
+        usage.provider = provider;
+        usage.bytes += bytes;
+        usage.images += 1;
+        if (img->frames_->animated())
+        {
+            usage.animatedImages += 1;
+        }
+
+        ++it;
+    }
+
+    std::vector<ProviderUsage> result;
+    result.reserve(providers.size());
+    for (auto &[_, usage] : providers)
+    {
+        result.push_back(std::move(usage));
+    }
+
+    std::ranges::sort(result, [](const auto &a, const auto &b) {
+        return a.bytes > b.bytes;
+    });
+
+    return result;
 }
 
 #endif

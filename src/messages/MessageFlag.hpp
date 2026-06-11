@@ -78,6 +78,8 @@ enum class MessageFlag : std::int64_t {
     InvalidReplyTarget = (1LL << 42),
     WatchStreak = (1LL << 43),
     Announcement = (1LL << 44),
+    RepeatedMessage = (1LL << 45),
+    ChatWarning = (1LL << 46),
     /// Message is possibly encrypted but could not be decrypted
     MaybeEncrypted = (1LL << 62),
     /// Message was encrypted and successfully decrypted

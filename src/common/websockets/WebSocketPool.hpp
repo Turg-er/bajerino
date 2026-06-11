@@ -9,6 +9,7 @@
 #include <QUrl>
 
 #include <memory>
+#include <optional>
 
 namespace chatterino::ws::detail {
 class WebSocketPoolImpl;
@@ -71,9 +72,20 @@ struct WebSocketListener {
     virtual void onClose(std::unique_ptr<WebSocketListener> self) = 0;
 };
 
+enum class WebSocketProxyType : std::uint8_t { Http, Socks5 };
+
+struct WebSocketProxyOptions {
+    WebSocketProxyType type = WebSocketProxyType::Http;
+    QString host;
+    int port = 0;
+    QString user;
+    QString password;
+};
+
 struct WebSocketOptions {
     QUrl url;
     std::vector<std::pair<std::string, std::string>> headers;
+    std::optional<WebSocketProxyOptions> proxy;
 };
 
 class WebSocketPool

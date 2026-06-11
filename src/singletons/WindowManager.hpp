@@ -9,6 +9,7 @@
 #include "widgets/splits/SplitContainer.hpp"
 
 #include <pajlada/settings/settinglistener.hpp>
+#include <QJsonArray>
 #include <QObject>
 #include <QPoint>
 #include <QTimer>
@@ -34,6 +35,7 @@ using MessagePtr = std::shared_ptr<const Message>;
 class WindowLayout;
 class Theme;
 class Fonts;
+class TrayController;
 
 enum class MessageElementFlag : int64_t;
 using MessageElementFlags = FlagsEnum<MessageElementFlag>;
@@ -113,6 +115,12 @@ public:
      * @param message Message to scroll to.
      */
     void scrollToMessage(const MessagePtr &message);
+    void openChannelOrMessageFromTray(const QString &channelName,
+                                      const QString &messageId);
+    void showMainWindow();
+    bool hideMainWindowToTray();
+    void notifyTrayHighlight(const Channel *channel, const MessagePtr &message,
+                             bool playSound);
 
     QRect emotePopupBounds() const;
     void setEmotePopupBounds(QRect bounds);
@@ -142,6 +150,7 @@ public:
     void toggleAllOverlayInertia();
 
     std::set<QString> getVisibleChannelNames() const;
+    QJsonArray getOpenTabSnapshot() const;
 
     std::span<Window *const> windows() const;
 
@@ -181,8 +190,12 @@ private:
     std::atomic<int> generation_{0};
 
     std::vector<Window *> windows_;
+    std::vector<Window *> trayHiddenWindows_;
 
     std::unique_ptr<FramelessEmbedWindow> framelessEmbedWindow_;
+#ifndef Q_OS_MACOS
+    std::unique_ptr<TrayController> trayController_;
+#endif
     Window *mainWindow_{};
     Window *selectedWindow_{};
 

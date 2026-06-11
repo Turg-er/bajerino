@@ -38,4 +38,9 @@ void handleModerateMessage(
     const lib::payload::channel_moderate::v2::Event &event,
     const lib::payload::channel_moderate::v2::Ban &action);
 
+void handleModerateMessage(
+    TwitchChannel *chan, const QDateTime &time,
+    const lib::payload::channel_moderate::v2::Event &event,
+    const lib::payload::channel_moderate::v2::Unraid &action);
+
 }  // namespace chatterino::eventsub

@@ -86,6 +86,7 @@ struct Message {
     // The root of the thread does not have replyThread set.
     std::shared_ptr<MessageThread> replyThread;
     MessagePtr replyParent;
+    MessagePtr translatedFrom;
     enum class ReplyStatus : std::uint8_t {
         /// message has no reply thread, and message is not replyable
         ///
@@ -109,6 +110,15 @@ struct Message {
         NotReplyableDueToThread,
     };
     ReplyStatus isReplyable() const;
+    enum class ClientDetectionStatus : std::uint8_t {
+        Unknown = 0,
+        Web,
+        Android,
+        IOS,
+        Abnormal,
+    };
+    static QString clientDetectionStatusToString(ClientDetectionStatus status);
+
     uint32_t count = 1;
 
     /// Can this message be modified?
@@ -123,6 +133,7 @@ struct Message {
     MessagePlatform platform = MessagePlatform::AnyOrTwitch;
 
     std::vector<std::unique_ptr<MessageElement>> elements;
+    ClientDetectionStatus clientDetection = ClientDetectionStatus::Unknown;
 
     ScrollbarHighlight getScrollBarHighlight() const;
 

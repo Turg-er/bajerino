@@ -17,6 +17,7 @@ public:
     ResizingTextEdit();
 
     QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
 
     bool hasHeightForWidth() const override;
     bool isFirstWord() const;
@@ -37,6 +38,7 @@ public:
 protected:
     int heightForWidth(int) const override;
     void keyPressEvent(QKeyEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
@@ -47,6 +49,9 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
+    qreal documentHeightForWidth(int width) const;
+    void invalidateAncestorLayouts();
+
     // hadSpace is set to true in case the "textUnderCursor" word was after a
     // space
     QString textUnderCursor(bool *hadSpace = nullptr) const;

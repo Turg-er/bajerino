@@ -26,12 +26,14 @@ class QJsonObject;
 
 namespace chatterino {
 class Channel;
+class ModerationAction;
 struct MessageLayoutContainer;
 class MessageLayoutElement;
 struct MessageLayoutContext;
 
 class Image;
 using ImagePtr = std::shared_ptr<Image>;
+class ModerationAction;
 
 struct Emote;
 using EmotePtr = std::shared_ptr<const Emote>;
@@ -49,7 +51,11 @@ enum class MessageElementFlag : int64_t {
     EmoteText = (1LL << 5),
     Emote = EmoteImage | EmoteText,
 
-    // unused: (1LL << 7),
+    // Homies and Molterino
+    BadgeHomiesSupporter = (1LL << 7),
+    BadgeHomiesCustom = (1LL << 9),
+    BadgeHomies = BadgeHomiesSupporter | BadgeHomiesCustom,
+    BadgeMoltorino = (1LL << 10),
 
     ChannelPointReward = (1LL << 8),
     ChannelPointRewardImage = ChannelPointReward | EmoteImage,
@@ -125,7 +131,8 @@ enum class MessageElementFlag : int64_t {
 
     Badges = BadgeGlobalAuthority | BadgePredictions | BadgeChannelAuthority |
              BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
-             BadgeFfz | BadgeSharedChannel | BadgeBttv | BadgeDecrypted,
+             BadgeFfz | BadgeSharedChannel | BadgeBttv | BadgeHomies |
+             BadgeMoltorino | BadgeDecrypted,
 
     ChannelName = (1LL << 20),
 
@@ -146,7 +153,8 @@ enum class MessageElementFlag : int64_t {
     // A mention of a username that isn't the author of the message
     Mention = (1LL << 27),
 
-    // Unused = (1LL << 28),
+    // Repeated Message Counter
+    RepeatedMessageCounter = (1LL << 28),
 
     // used to check if links should be lowercased
     LowercaseLinks = (1LL << 29),
@@ -295,6 +303,9 @@ public:
     static constexpr CloneTag CLONE{};
 
     TextElement(const QString &text, MessageElementFlags flags,
+                const MessageColor &color = MessageColor::Text,
+                FontStyle style = FontStyle::ChatMedium);
+    TextElement(QStringList &&words, MessageElementFlags flags,
                 const MessageColor &color = MessageColor::Text,
                 FontStyle style = FontStyle::ChatMedium);
 
@@ -727,7 +738,9 @@ class TwitchModerationElement : public MessageElement
 public:
     static constexpr std::string_view TYPE = "twitch-moderation";
 
-    TwitchModerationElement();
+    TwitchModerationElement(bool canModerateUser = true,
+                            bool targetIsModOrBroadcaster = false,
+                            bool targetIsCurrentUser = false);
 
     void addToContainer(MessageLayoutContainer &container,
                         const MessageLayoutContext &ctx) override;
@@ -735,6 +748,14 @@ public:
     QJsonObject toJson() const override;
     std::string_view type() const override;
     std::unique_ptr<MessageElement> clone() const override;
+
+private:
+    bool shouldShowAction(const ModerationAction &action, bool inModerationMode,
+                          int selfDeleteMode, int pinOnModeratorsMode) const;
+
+    bool canModerateUser_ = true;
+    bool targetIsModOrBroadcaster_ = false;
+    bool targetIsCurrentUser_ = false;
 };
 
 // Forces a linebreak

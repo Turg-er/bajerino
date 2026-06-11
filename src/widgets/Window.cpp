@@ -46,6 +46,7 @@
 #endif
 
 #include <QApplication>
+#include <QCloseEvent>
 #include <QDesktopServices>
 #include <QHeaderView>
 #include <QMenuBar>
@@ -155,7 +156,7 @@ bool Window::event(QEvent *event)
     return BaseWindow::event(event);
 }
 
-void Window::closeEvent(QCloseEvent *)
+void Window::closeEvent(QCloseEvent *event)
 {
     if (isAppAboutToQuit())
     {
@@ -165,6 +166,13 @@ void Window::closeEvent(QCloseEvent *)
     }
 
     auto *app = getApp();
+
+    if (this->type_ == WindowType::Main &&
+        app->getWindows()->hideMainWindowToTray())
+    {
+        event->ignore();
+        return;
+    }
 
     if (this->type_ == WindowType::Main)
     {

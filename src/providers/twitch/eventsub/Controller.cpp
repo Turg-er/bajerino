@@ -6,8 +6,10 @@
 
 #include "Application.hpp"
 #include "common/Args.hpp"
+#include "common/Env.hpp"
 #include "common/QLogging.hpp"
 #include "common/Version.hpp"
+#include "providers/NetworkConfigurationProvider.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/eventsub/Connection.hpp"
 #include "util/QMagicEnum.hpp"
@@ -17,9 +19,11 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/verify_mode.hpp>
 #include <boost/certify/https_verification.hpp>
+#include <QNetworkProxy>
 #include <twitch-eventsub-ws/session.hpp>
 
 #include <memory>
+#include <optional>
 #include <utility>
 
 namespace {
@@ -40,6 +44,56 @@ std::tuple<std::string, std::string, std::string> getEventSubHost()
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 const auto &LOG = chatterinoTwitchEventSub;
+
+std::optional<chatterino::eventsub::lib::ProxyOptions> eventSubProxyOptions(
+    const std::string &host)
+{
+    if (host == "localhost" || host == "127.0.0.1" || host == "::1")
+    {
+        return std::nullopt;
+    }
+
+    // EventSub is a Twitch connection that requires auth, so it is proxied in
+    // global and BAJERINO_PROXY_TWITCH modes, but not in authed-only mode
+    // (where the user connects anonymously and EventSub does not connect). The
+    // eventsub lib uses asio sockets that ignore the global Qt application
+    // proxy, so the proxy must be passed explicitly.
+    const auto &env = Env::get();
+    if (!NetworkConfigurationProvider::shouldProxy(env,
+                                                   ProxyConnection::Twitch))
+    {
+        return std::nullopt;
+    }
+
+    const auto proxy = NetworkConfigurationProvider::proxyFromEnv(env);
+    if (!proxy)
+    {
+        return std::nullopt;
+    }
+
+    chatterino::eventsub::lib::ProxyOptions options;
+    switch (proxy->type())
+    {
+        case QNetworkProxy::HttpProxy:
+            options.type = chatterino::eventsub::lib::ProxyType::Http;
+            break;
+
+        case QNetworkProxy::Socks5Proxy:
+            options.type = chatterino::eventsub::lib::ProxyType::Socks5;
+            break;
+
+        default:
+            qCWarning(LOG) << "Unsupported proxy type for Twitch EventSub"
+                           << *proxy;
+            return std::nullopt;
+    }
+
+    options.host = proxy->hostName().toStdString();
+    options.port = std::to_string(proxy->port());
+    options.user = proxy->user().toStdString();
+    options.password = proxy->password().toStdString();
+    return options;
+}
 
 }  // namespace
 
@@ -171,6 +225,9 @@ void Controller::removeRef(const SubscriptionRequest &request)
                 << "but we had no subscription ID attached - a "
                    "successful subscription was never made. From state "
                 << qmagicenum::enumName(subscription.state);
+            subscription.state = Subscription::State::Unsubscribed;
+            subscription.backoff.reset();
+            this->subscriptions.erase(request);
             return;
         }
 
@@ -436,7 +493,7 @@ void Controller::subscribe(const SubscriptionRequest &request, bool isRetry)
 
                     case Error::Forbidden:
                         qCDebug(LOG) << "Forbidden" << errorString << request;
-                        return;
+                        break;
 
                     case Error::Conflict:
                         // This session ID is already subscribed to this request, some logic of ours is wrong
@@ -565,8 +622,9 @@ void Controller::createConnection(std::string host, std::string port,
 
         this->registerConnection(connection);
 
+        auto proxy = eventSubProxyOptions(host);
         connection->run(std::move(host), std::move(port), std::move(path),
-                        this->userAgent);
+                        this->userAgent, std::move(proxy));
     }
     catch (std::exception &e)
     {
@@ -761,13 +819,6 @@ void Controller::clearConnections()
         auto conn = it.lock();
         return !conn || !conn->getListener();
     });
-}
-
-void DummyController::reconnectConnection(
-    std::unique_ptr<lib::Listener> /* connection */,
-    const std::optional<std::string> & /* reconnectURL */,
-    const std::unordered_set<SubscriptionRequest> & /* subs */)
-{
 }
 
 }  // namespace chatterino::eventsub

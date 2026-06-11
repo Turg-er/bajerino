@@ -234,6 +234,24 @@ QJsonObject Message::toJson() const
     return msg;
 }
 
+QString Message::clientDetectionStatusToString(ClientDetectionStatus status)
+{
+    switch (status)
+    {
+        case ClientDetectionStatus::Web:
+            return QStringLiteral("Web");
+        case ClientDetectionStatus::Android:
+            return QStringLiteral("Android");
+        case ClientDetectionStatus::IOS:
+            return QStringLiteral("iOS");
+        case ClientDetectionStatus::Abnormal:
+            return QStringLiteral("Abnormal");
+        case ClientDetectionStatus::Unknown:
+        default:
+            return QStringLiteral("Unknown");
+    }
+}
+
 Message::ReplyStatus Message::isReplyable() const
 {
     if (this->loginName.isEmpty())

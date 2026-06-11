@@ -43,6 +43,7 @@ struct MessageLayoutContainer {
      * until the accompanying end function has been called
      */
     void beginLayout(qreal width, float scale, float imageScale,
+                     float emoteScale, float badgeScale, bool centerBadges,
                      MessageFlags flags);
 
     /**
@@ -64,6 +65,11 @@ struct MessageLayoutContainer {
     void addElementNoLineBreak(MessageLayoutElement *element);
 
     /**
+     * Ensures that there is a single space before the next element
+     */
+    void ensureSingleSpaceBeforeNextElement();
+
+    /**
      * Break the current line
      */
     void breakLine();
@@ -77,7 +83,8 @@ struct MessageLayoutContainer {
      * Paint the animated elements in this message
      * @returns true if this container contains at least one animated element
      */
-    bool paintAnimatedElements(QPainter &painter, qreal yOffset) const;
+    bool paintAnimatedElements(QPainter &painter, qreal yOffset,
+                               bool isCollapsed = false) const;
 
     /**
      * Paint the selection for this container
@@ -153,6 +160,11 @@ struct MessageLayoutContainer {
     qreal getHeight() const;
 
     /**
+     * Returns the first line height of this message
+     */
+    int getFirstLineHeight() const;
+
+    /**
      * Returns the scale of this message
      */
     float getScale() const;
@@ -163,9 +175,24 @@ struct MessageLayoutContainer {
     float getImageScale() const;
 
     /**
+     * Returns the emote scale
+     */
+    float getEmoteScale() const;
+
+    /**
+     * Returns the badge scale
+     */
+    float getBadgeScale() const;
+
+    /**
      * Returns true if this message is collapsed
      */
     bool isCollapsed() const;
+
+    /**
+     * Get number of lines
+     */
+    size_t getLineCount() const;
 
     /**
      * Return true if we are at the start of a new line
@@ -289,10 +316,10 @@ private:
      * Paint the selection start
      *
      * @returns A line index if the selection ends within this message but start
-     *          and end are on different lines. The returned index is the index 
+     *          and end are on different lines. The returned index is the index
      *          of the first line where the selection starts at the beginning of
      *          the line. This index should be passed to paintSelectionEnd().
-     *          If `std::nullopt` is returned, no further call to 
+     *          If `std::nullopt` is returned, no further call to
      *          paintSelectionEnd() is necessary.
      */
     std::optional<size_t> paintSelectionStart(QPainter &painter,
@@ -335,7 +362,14 @@ private:
      * Scale factor for images
      */
     float imageScale_ = 1.F;
+
+    float emoteScale_ = 1.F;
+
+    float badgeScale_ = 1.F;
+
+    bool centerBadges_ = false;
     qreal width_ = 0;
+    float descent_ = 0.F;
     MessageFlags flags_{};
     /**
      * line_ is the current line index we are adding

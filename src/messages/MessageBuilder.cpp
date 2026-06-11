@@ -28,7 +28,10 @@
 #include "providers/emoji/Emojis.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
+#include "providers/homies/HomiesBadges.hpp"
 #include "providers/links/LinkResolver.hpp"
+#include "providers/moltorino/MoltorinoSupporterBadges.hpp"
+#include "providers/repetitions/RepeatedMessageDetector.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
 #include "providers/seventv/SeventvPersonalEmotes.hpp"
@@ -87,6 +90,92 @@ const QRegularExpression allUsernamesMentionRegex("^" + regexHelpString);
 
 const QRegularExpression SPACE_REGEX("\\s");
 
+bool isDigit(QChar c)
+{
+    const auto value = c.unicode();
+    return value >= '0' && value <= '9';
+}
+
+bool isLowerHexLetter(QChar c)
+{
+    const auto value = c.unicode();
+    return value >= 'a' && value <= 'f';
+}
+
+bool isUpperHexLetter(QChar c)
+{
+    const auto value = c.unicode();
+    return value >= 'A' && value <= 'F';
+}
+
+Message::ClientDetectionStatus performClientDetection(const QString &nonce)
+{
+    using Status = Message::ClientDetectionStatus;
+
+    if (nonce.isEmpty())
+    {
+        return Status::Abnormal;
+    }
+
+    if (nonce.size() == 32)
+    {
+        const bool web = std::all_of(nonce.cbegin(), nonce.cend(), [](QChar c) {
+            return isDigit(c) || isLowerHexLetter(c);
+        });
+        return web ? Status::Web : Status::Abnormal;
+    }
+
+    if (nonce.size() == 36)
+    {
+        if (nonce.at(8) != QLatin1Char('-') ||
+            nonce.at(13) != QLatin1Char('-') ||
+            nonce.at(18) != QLatin1Char('-') ||
+            nonce.at(23) != QLatin1Char('-') ||
+            nonce.at(14) != QLatin1Char('4'))
+        {
+            return Status::Abnormal;
+        }
+
+        bool sawLower = false;
+        bool sawUpper = false;
+        for (const auto c : nonce)
+        {
+            if (c == QLatin1Char('-'))
+            {
+                continue;
+            }
+            if (isDigit(c))
+            {
+                continue;
+            }
+            if (isLowerHexLetter(c))
+            {
+                sawLower = true;
+                continue;
+            }
+            if (isUpperHexLetter(c))
+            {
+                sawUpper = true;
+                continue;
+            }
+
+            return Status::Abnormal;
+        }
+
+        if (sawLower && sawUpper)
+        {
+            return Status::Abnormal;
+        }
+        if (sawUpper)
+        {
+            return Status::IOS;
+        }
+        return Status::Android;
+    }
+
+    return Status::Abnormal;
+}
+
 struct HypeChatPaidLevel {
     std::chrono::seconds duration;
     uint8_t numeric;
@@ -99,6 +188,123 @@ const std::unordered_map<QString, HypeChatPaidLevel> HYPE_CHAT_PAID_LEVEL{
     {u"SEVEN"_s, {2h, 7}},   {u"EIGHT"_s, {3h, 8}},
     {u"NINE"_s, {4h, 9}},    {u"TEN"_s, {5h, 10}},
 };
+
+bool hasBadge(const QString &badges, const QString &badgeName)
+{
+    const auto prefix = badgeName % u"/"_s;
+    for (const auto &badge : badges.split(u',', Qt::SkipEmptyParts))
+    {
+        if (badge.startsWith(prefix))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+char32_t codePointBefore(const QString &text, qsizetype end, qsizetype &start)
+{
+    start = end - 1;
+    const auto last = text.at(start).unicode();
+    if (QChar::isLowSurrogate(last) && start > 0)
+    {
+        const auto previous = text.at(start - 1).unicode();
+        if (QChar::isHighSurrogate(previous))
+        {
+            --start;
+            return QChar::surrogateToUcs4(previous, last);
+        }
+    }
+
+    return last;
+}
+
+bool isDuplicateBypassCodePoint(char32_t codePoint)
+{
+    // U+034F is Chatterino's own duplicate-message bypass character.
+    // U+E0000..U+E007F are Unicode tag characters used by some extensions for
+    // the same invisible suffix trick.
+    return codePoint == 0x034F ||
+           (codePoint >= 0xE0000 && codePoint <= 0xE007F);
+}
+
+QString stripTrailingDuplicateBypassSuffix(const QString &content)
+{
+    qsizetype scan = content.size();
+    bool foundBypassCharacter = false;
+
+    while (scan > 0)
+    {
+        qsizetype start = scan - 1;
+        const auto codePoint = codePointBefore(content, scan, start);
+        if (isDuplicateBypassCodePoint(codePoint))
+        {
+            foundBypassCharacter = true;
+            scan = start;
+            continue;
+        }
+        if (start == scan - 1 && content.at(start).isSpace())
+        {
+            scan = start;
+            continue;
+        }
+        break;
+    }
+
+    if (!foundBypassCharacter)
+    {
+        return content;
+    }
+
+    return content.left(scan);
+}
+
+void appendRepeatedMessageCounter(MessageBuilder &builder, Channel *channel,
+                                  const QVariantMap &tags,
+                                  const QString &content,
+                                  bool senderIsBroadcaster)
+{
+    auto *detector = getApp()->getRepeatedMessageDetector();
+    if (detector == nullptr)
+    {
+        return;
+    }
+
+    const auto badges = tags.value("badges").toString();
+    const RepeatedMessageCheck check{
+        .channelID = tags.value("room-id").toString(),
+        .userID = tags.value("user-id").toString(),
+        .messageID = tags.value("id").toString(),
+        .message = content,
+        .historical = tags.contains("historical"),
+        .channelCanModerate = channel->hasModRights(),
+        .senderIsModerator = tags.value("user-type").toString() == u"mod"_s ||
+                             hasBadge(badges, u"moderator"_s),
+        .senderIsBroadcaster =
+            senderIsBroadcaster || hasBadge(badges, u"broadcaster"_s),
+        .senderIsVip = hasBadge(badges, u"vip"_s),
+    };
+
+    auto count = detector->check(check);
+    if (!count)
+    {
+        return;
+    }
+
+    builder.message().flags.set(MessageFlag::RepeatedMessage);
+
+    QColor color(getSettings()->repeatedMessagesCounterColor.getValue());
+    if (!color.isValid())
+    {
+        color = QColor("#ff3b3b");
+    }
+
+    builder
+        .emplace<TextElement>(QStringLiteral("x%1").arg(*count),
+                              MessageElementFlag::RepeatedMessageCounter,
+                              MessageColor(color), FontStyle::ChatMedium)
+        ->setTrailingSpace(false);
+}
 
 QString formatUpdatedEmoteList(const QString &platform,
                                const std::vector<QString> &emoteNames,
@@ -160,19 +366,6 @@ QUrl getFallbackHighlightSound()
 void actuallyTriggerHighlights(const QString &channelName, bool playSound,
                                const QUrl &customSoundUrl, bool windowAlert)
 {
-    if (getApp()->getStreamerMode()->isEnabled() &&
-        getSettings()->streamerModeMuteMentions)
-    {
-        // We are in streamer mode with muting mention sounds enabled. Do nothing.
-        return;
-    }
-
-    if (getSettings()->isMutedChannel(channelName))
-    {
-        // Do nothing. Pings are muted in this channel.
-        return;
-    }
-
     const bool hasFocus = (QApplication::focusWidget() != nullptr);
     const bool resolveFocus =
         !hasFocus || getSettings()->highlightAlwaysPlaySound;
@@ -191,6 +384,24 @@ void actuallyTriggerHighlights(const QString &channelName, bool playSound,
     {
         getApp()->getWindows()->sendAlert();
     }
+}
+
+bool shouldSuppressHighlightAlert(const QString &channelName)
+{
+    if (getApp()->getStreamerMode()->isEnabled() &&
+        getSettings()->streamerModeMuteMentions)
+    {
+        // We are in streamer mode with muting mention sounds enabled. Do nothing.
+        return true;
+    }
+
+    if (getSettings()->isMutedChannel(channelName))
+    {
+        // Do nothing. Pings are muted in this channel.
+        return true;
+    }
+
+    return false;
 }
 
 QString stylizeUsername(const QString &username, const Message &message)
@@ -1136,12 +1347,36 @@ void MessageBuilder::appendOrEmplaceSystemTextAndUpdate(const QString &text,
 void MessageBuilder::triggerHighlights(const Channel *channel,
                                        const HighlightAlert &alert)
 {
+    MessageBuilder::triggerHighlights(channel, nullptr, alert);
+}
+
+void MessageBuilder::triggerHighlights(const Channel *channel,
+                                       const MessagePtr &message,
+                                       const HighlightAlert &alert)
+{
     if (!alert.windowAlert && !alert.playSound)
     {
         return;
     }
-    actuallyTriggerHighlights(channel->getName(), alert.playSound,
-                              alert.customSound, alert.windowAlert);
+
+    if (channel == nullptr)
+    {
+        return;
+    }
+
+    const auto &channelName = channel->getName();
+    if (shouldSuppressHighlightAlert(channelName))
+    {
+        return;
+    }
+
+    actuallyTriggerHighlights(channelName, alert.playSound, alert.customSound,
+                              alert.windowAlert);
+
+    if (alert.playSound)
+    {
+        getApp()->getWindows()->notifyTrayHighlight(channel, message, true);
+    }
 }
 
 void MessageBuilder::appendChannelPointRewardMessage(
@@ -1353,7 +1588,7 @@ MessagePtr MessageBuilder::makeDeletionMessageFromIRC(
         .emplace<TextElement>(deletedMessageText, MessageElementFlag::Text,
                               MessageColor::Text)
         ->setLink({Link::JumpToMessage, originalMessage->id});
-    builder.message().timeoutUser = "msg:" + originalMessage->id;
+    builder.message().timeoutUser = originalMessage->loginName;
 
     const auto deletionText =
         QString("A message from %1 was deleted: %2")
@@ -1692,6 +1927,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     }
 
     auto tags = ircMessage->tags();
+    content = stripTrailingDuplicateBypassSuffix(content);
     if (args.allowIgnore)
     {
         bool ignored = MessageBuilder::isIgnored(
@@ -1755,6 +1991,12 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     builder.appendChannelName(channel);
 
+    if (tags.contains("client-nonce"))
+    {
+        const auto clientNonce = tags.value("client-nonce").toString();
+        builder.message().clientDetection = performClientDetection(clientNonce);
+    }
+
     if (tags.contains("rm-deleted"))
     {
         builder->flags.set(MessageFlag::Disabled);
@@ -1789,15 +2031,27 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder->serverReceivedTime = calculateMessageTime(ircMessage);
     builder.emplace<TimestampElement>(builder->serverReceivedTime.time());
 
-    bool shouldAddModerationElements = [&] {
+    const bool senderIsModerator =
+        tags.value("user-type").toString() == u"mod"_s ||
+        hasBadge(tags.value("badges").toString(), u"moderator"_s) ||
+        hasBadge(tags.value("badges").toString(), u"lead_moderator"_s);
+    const bool senderIsModOrBroadcaster =
+        senderIsModerator || senderIsBroadcaster;
+    const auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
+    const bool senderIsCurrentUser =
+        (currentUser->getUserId().isEmpty()
+             ? builder->loginName.compare(currentUser->getUserName(),
+                                          Qt::CaseInsensitive) == 0
+             : userID == currentUser->getUserId());
+
+    bool canModerateUser = [&] {
         if (senderIsBroadcaster)
         {
             // You cannot timeout the broadcaster
             return false;
         }
 
-        if (tags.value("user-type").toString() == "mod" &&
-            !args.isStaffOrBroadcaster)
+        if (senderIsModerator && !args.isStaffOrBroadcaster)
         {
             // You cannot timeout moderators UNLESS you are Twitch Staff or the broadcaster of the channel
             return false;
@@ -1805,9 +2059,10 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
         return true;
     }();
-    if (shouldAddModerationElements)
+    if (canModerateUser || senderIsModOrBroadcaster || senderIsCurrentUser)
     {
-        builder.emplace<TwitchModerationElement>();
+        builder.emplace<TwitchModerationElement>(
+            canModerateUser, senderIsModOrBroadcaster, senderIsCurrentUser);
     }
 
     builder.appendTwitchBadges(tags, twitchChannel);
@@ -1817,7 +2072,9 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder.appendChatterinoBadges(userID);
     builder.appendFfzBadges(twitchChannel, userID);
     builder.appendBttvBadges(userID);
+    builder.appendMoltorinoBadges(userID);
     builder.appendSeventvBadges(userID);
+    builder.appendHomiesBadges(userID);
 
     if (decrypted)
     {
@@ -1859,6 +2116,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     QStringList splits = content.split(' ');
 
     builder.addWords(splits, twitchEmotes, textState);
+    appendRepeatedMessageCounter(builder, channel, tags, content,
+                                 senderIsBroadcaster);
 
     QString stylizedUsername =
         stylizeUsername(builder->loginName, builder.message());
@@ -2243,7 +2502,7 @@ void MessageBuilder::parseThread(const QString &messageContent,
                     (threadRoot->flags.has(MessageFlag::Action) ? "" : ":"),
                 MessageElementFlag::RepliedMessage, threadRoot->usernameColor,
                 FontStyle::ChatMediumSmall)
-            ->setLink({Link::UserInfo, threadRoot->displayName});
+            ->setLink({Link::UserInfo, threadRoot->loginName});
 
         MessageColor color = MessageColor::Text;
         if (threadRoot->flags.has(MessageFlag::Action))
@@ -2440,7 +2699,7 @@ void MessageBuilder::appendUsername(const QVariantMap &tags,
         this->emplace<TextElement>(usernameText, MessageElementFlag::Username,
                                    this->usernameColor_,
                                    FontStyle::ChatMediumBold)
-            ->setLink({Link::UserInfo, this->message().displayName});
+            ->setLink({Link::UserInfo, this->message().loginName});
     }
 }
 
@@ -2639,7 +2898,7 @@ void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
         const auto appendedBadges = appendSharedChatBadges(
             this, sourceBadges, sourceName, twitchChannel);
 
-        // Dedup mod/vip badges if user is mod/vip in both chats,
+        // Dedup authority badges if user has them in both chats,
         // preferring source channel's badges for the tooltips
         for (const auto &appendedBadge : appendedBadges)
         {
@@ -2722,6 +2981,72 @@ void MessageBuilder::appendSeventvBadges(const QString &userID)
 
         /// e.g. "7tv:NNYS 2024"
         this->message().externalBadges.emplace_back((*badge)->name.string);
+    }
+}
+
+void MessageBuilder::appendHomiesBadges(const QString &userID)
+{
+    const auto *settings = getSettings();
+    const auto showSupporter = settings->showBadgesHomiesSupporter.getValue();
+    const auto showCustom = settings->showBadgesHomiesCustom.getValue();
+    if (!showSupporter && !showCustom)
+    {
+        return;
+    }
+
+    auto homies = getApp()->getHomiesBadges();
+    if (homies == nullptr)
+    {
+        return;
+    }
+
+    const auto badges = homies->getBadges(userID);
+    for (size_t i = 0; i < badges.size(); ++i)
+    {
+        const auto &badge = badges[i];
+        if (!badge)
+        {
+            continue;
+        }
+
+        const auto isSupporterBadge = i != 0;
+        if ((isSupporterBadge && !showSupporter) ||
+            (!isSupporterBadge && !showCustom))
+        {
+            continue;
+        }
+
+        this->emplace<BadgeElement>(
+            badge, isSupporterBadge ? MessageElementFlag::BadgeHomiesSupporter
+                                    : MessageElementFlag::BadgeHomiesCustom);
+        this->message().externalBadges.emplace_back(badge->name.string);
+    }
+}
+
+void MessageBuilder::appendMoltorinoBadges(const QString &userID)
+{
+    if (!getSettings()->showBadgesMoltorino)
+    {
+        return;
+    }
+
+    auto *provider = getApp()->getMoltorinoSupporterBadges();
+    if (provider == nullptr)
+    {
+        return;
+    }
+
+    for (const auto &badge : provider->getBadges(userID))
+    {
+        if (!badge.emote)
+        {
+            continue;
+        }
+
+        this->emplace<BadgeElement>(badge.emote,
+                                    MessageElementFlag::BadgeMoltorino);
+        this->message().externalBadges.emplace_back(badge.emote->name.string);
+        return;
     }
 }
 

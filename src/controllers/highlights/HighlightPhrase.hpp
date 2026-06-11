@@ -51,7 +51,7 @@ public:
      * In distinction from `HighlightPhrase::hasCustomSound`, this method only
      * checks whether or not ANY sound should be played when the phrase is
      * triggered.
-     * 
+     *
      * To check whether a custom sound is set, use
      * `HighlightPhrase::hasCustomSound` instead.
      *

@@ -14,14 +14,20 @@
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Updates.hpp"
+#include "singletons/WindowManager.hpp"
 #include "util/CombinePath.hpp"
 #include "util/SelfCheck.hpp"
 #include "util/UnixSignalHandler.hpp"
 #include "widgets/dialogs/LastRunCrashDialog.hpp"
 
 #include <QApplication>
+#include <QCryptographicHash>
 #include <QFile>
+#include <QGuiApplication>
+#include <QLocalServer>
+#include <QLocalSocket>
 #include <QPalette>
+#include <QSessionManager>
 #include <QStyleFactory>
 #include <Qt>
 #include <QtConcurrent>
@@ -48,6 +54,72 @@ extern void qt_set_sequence_auto_mnemonic(bool b);
 
 namespace chatterino {
 namespace {
+QString guiActivationServerName(const Paths &paths)
+{
+    const auto hash = QCryptographicHash::hash(
+        paths.rootAppDataDirectory.toUtf8(), QCryptographicHash::Sha256);
+    return QStringLiteral("moltorino-gui-activate-%1")
+        .arg(QString::fromLatin1(hash.toHex().left(24)));
+}
+
+void restoreGuiInstance()
+{
+    if (isAppAboutToQuit())
+    {
+        return;
+    }
+
+    auto *app = dynamic_cast<Application *>(tryGetApp());
+    if (app == nullptr || app->getWindows() == nullptr)
+    {
+        return;
+    }
+
+    app->getWindows()->showMainWindow();
+}
+
+std::unique_ptr<QLocalServer> createGuiActivationServer(const Paths &paths)
+{
+    auto server = std::make_unique<QLocalServer>();
+    const auto serverName = guiActivationServerName(paths);
+
+    if (!server->listen(serverName))
+    {
+        QLocalSocket socket;
+        socket.connectToServer(serverName);
+        if (!socket.waitForConnected(100))
+        {
+            QLocalServer::removeServer(serverName);
+            if (!server->listen(serverName))
+            {
+                qCWarning(chatterinoApp)
+                    << "Failed to listen for Moltorino activation requests:"
+                    << server->errorString();
+                return nullptr;
+            }
+        }
+        else
+        {
+            qCDebug(chatterinoApp)
+                << "Moltorino activation server already exists.";
+            return nullptr;
+        }
+    }
+
+    QObject::connect(server.get(), &QLocalServer::newConnection, qApp,
+                     [server = server.get()] {
+                         while (auto *socket = server->nextPendingConnection())
+                         {
+                             socket->deleteLater();
+                         }
+                         restoreGuiInstance();
+                     });
+    QObject::connect(qApp, &QApplication::aboutToQuit, server.get(),
+                     &QLocalServer::close);
+
+    return server;
+}
+
 void installCustomPalette()
 {
     // borrowed from
@@ -189,6 +261,20 @@ void initSignalHandler()
 #endif
 }
 
+#ifndef QT_NO_SESSIONMANAGER
+void saveSessionState(Settings &settings)
+{
+    auto *app = dynamic_cast<Application *>(tryGetApp());
+    if (app == nullptr || app->getWindows() == nullptr)
+    {
+        return;
+    }
+
+    app->getWindows()->save();
+    settings.requestSave();
+}
+#endif
+
 // We delete cache files that haven't been modified in 14 days. This strategy may be
 // improved in the future.
 void clearCache(const QDir &dir)
@@ -242,6 +328,22 @@ void clearCrashes(QDir dir)
 }
 }  // namespace
 
+bool activateExistingGuiInstance(const Paths &paths)
+{
+    QLocalSocket socket;
+    socket.connectToServer(guiActivationServerName(paths));
+    if (!socket.waitForConnected(150))
+    {
+        return false;
+    }
+
+    socket.write("activate\n");
+    socket.flush();
+    socket.waitForBytesWritten(150);
+    socket.disconnectFromServer();
+    return true;
+}
+
 void runGui(QApplication &a, const Paths &paths, Settings &settings,
             const Args &args, Updates &updates)
 {
@@ -257,8 +359,6 @@ void runGui(QApplication &a, const Paths &paths, Settings &settings,
 #endif
 
     selfcheck::checkWebp();
-
-    updates.deleteOldFiles();
 
     // Clear the cache 1 minute after start.
     QTimer::singleShot(60 * 1000, [cachePath = paths.cacheDirectory(),
@@ -276,7 +376,6 @@ void runGui(QApplication &a, const Paths &paths, Settings &settings,
     });
 
     chatterino::NetworkManager::init();
-    updates.checkForUpdates();
 
     QObject::connect(qApp, &QApplication::aboutToQuit, [] {
         auto *app = dynamic_cast<Application *>(tryGetApp());
@@ -291,6 +390,23 @@ void runGui(QApplication &a, const Paths &paths, Settings &settings,
 
     Application app(settings, paths, args, updates);
     app.initialize(settings, paths);
+
+#ifndef QT_NO_SESSIONMANAGER
+    QObject::connect(qApp, &QGuiApplication::commitDataRequest, qApp,
+                     [&settings](QSessionManager &) {
+                         saveSessionState(settings);
+                     });
+    QObject::connect(qApp, &QGuiApplication::saveStateRequest, qApp,
+                     [&settings](QSessionManager &) {
+                         saveSessionState(settings);
+                     });
+#endif
+
+    std::unique_ptr<QLocalServer> activationServer;
+    if (!args.newInstance && !args.isFramelessEmbed)
+    {
+        activationServer = createGuiActivationServer(paths);
+    }
     app.run();
 
     chatterino::NetworkManager::deinit();

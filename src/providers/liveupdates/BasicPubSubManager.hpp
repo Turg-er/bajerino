@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -45,7 +46,7 @@ concept IsClient = requires(Client &client, const QByteArray &msg) {
  * It acts as a pool for connections (see BasicPubSubClient).
  *
  * You **must** implement a method `makeClient()` that returns a shared pointer
- * of the client. 
+ * of the client.
  *
  * You must expose your own subscribe and unsubscribe methods
  * (e.g. [un-]subscribeTopic).
@@ -55,8 +56,8 @@ concept IsClient = requires(Client &client, const QByteArray &msg) {
  * The derived class. Used to dispatch to makeClient().
  *
  * @tparam ClientT
- * The client type. Must confirm to the IsClient above. Use BasicPubSubClient 
- * for a common implementation. Used to dispatch to the correct methods there 
+ * The client type. Must confirm to the IsClient above. Use BasicPubSubClient
+ * for a common implementation. Used to dispatch to the correct methods there
  * and to get the subscription type.
  *
  * @see BasicPubSubClient
@@ -68,9 +69,11 @@ public:
     using Subscription = ClientT::Subscription;
     using Client = ClientT;
 
-    BasicPubSubManager(QString host, QString shortName)
+    BasicPubSubManager(QString host, QString shortName,
+                       std::optional<WebSocketProxyOptions> proxy = {})
         : pool_(std::make_optional<WebSocketPool>(shortName))
         , host_(std::move(host))
+        , proxy_(std::move(proxy))
     {
         // We do this here, because `Derived` needs to be a complete type. If we
         // did it as a requires clause on the class, the type would be
@@ -147,12 +150,20 @@ private:
     {
         assertInGuiThread();
 
+        auto *client = this->resolve(id);
+        if (client == nullptr)
+        {
+            qCWarning(chatterinoLiveupdates)
+                << "Ignoring open event for unknown client:" << id;
+            return;
+        }
+
+        DebugCount::increase(DebugObject::LiveUpdatesConnection);
         this->addingClient_ = false;
         this->diag.connectionsOpened.fetch_add(1, std::memory_order_acq_rel);
 
         this->connectBackoff_.reset();
 
-        auto *client = this->resolve(id);
         client->onOpen();
         auto pendingSubsToTake = std::min(this->pendingSubscriptions_.size(),
                                           client->maxSubscriptions);
@@ -197,15 +208,14 @@ private:
     {
         assertInGuiThread();
 
-        this->addingClient_ = false;
-
         auto it = this->clients_.find(id);
         if (it == this->clients_.end())
         {
             qCWarning(chatterinoLiveupdates) << "Unknown client:" << id;
-            assert(false);
             return;
         }
+
+        this->addingClient_ = false;
 
         DebugCount::decrease(DebugObject::LiveUpdatesConnection);
         qCDebug(chatterinoLiveupdates) << "Connection" << id << "closed";
@@ -273,12 +283,12 @@ private:
             WebSocketOptions{
                 .url = this->host_,
                 .headers = {},
+                .proxy = this->proxy_,
             },
             std::make_unique<BasicPubSubListener<Derived>>(
                 std::weak_ptr{client}, this->derived(), id));
         client->ws_ = std::move(hdl);
         this->clients_.emplace(id, std::move(client));
-        DebugCount::increase(DebugObject::LiveUpdatesConnection);
     }
 
     bool trySubscribe(const Subscription &subscription)
@@ -317,6 +327,7 @@ private:
     std::unordered_map<size_t, std::shared_ptr<Client>> clients_;
 
     const QString host_;
+    const std::optional<WebSocketProxyOptions> proxy_;
 
     size_t nextId_ = 0;
 

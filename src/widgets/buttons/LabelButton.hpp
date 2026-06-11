@@ -46,9 +46,11 @@ public:
     void enableRichText();
 
 protected:
+    void changeEvent(QEvent *event) override;
     void paintContent(QPainter &painter) override;
 
 private:
+    void syncLabelFont();
     void updatePadding();
 
     QHBoxLayout layout_;

@@ -45,6 +45,11 @@ void InputCompletionPopup::updateCompletion(const QString &text,
 
     assert(this->model_.hasSource());
     this->model_.updateResults(text, MAX_ENTRY_COUNT);
+    if (this->model_.rowCount() == 0)
+    {
+        this->hide();
+        return;
+    }
 
     // Move selection to top row
     if (this->model_.rowCount() != 0)
@@ -110,6 +115,11 @@ void InputCompletionPopup::setInputAction(ActionCallback callback)
 bool InputCompletionPopup::eventFilter(QObject *watched, QEvent *event)
 {
     return this->ui_.listView->eventFilter(watched, event);
+}
+
+bool InputCompletionPopup::hasResults() const
+{
+    return this->model_.rowCount() > 0;
 }
 
 void InputCompletionPopup::showEvent(QShowEvent * /*event*/)

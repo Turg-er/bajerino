@@ -24,10 +24,10 @@ using namespace chatterino::literals;
   * Occurrences of \b{\\1}, \b{\\2}, ..., in @a replacement are replaced
   * with the string captured by the corresponding capturing group.
   * This function should only be used if the regex contains capturing groups.
-  * 
+  *
   * Since Qt doesn't provide a way of replacing a single match with some replacement
   * while supporting both capturing groups and lookahead/-behind in the regex,
-  * this is included here. It's essentially the implementation of 
+  * this is included here. It's essentially the implementation of
   * QString::replace(const QRegularExpression &, const QString &).
   * @see https://github.com/qt/qtbase/blob/97bb0ecfe628b5bb78e798563212adf02129c6f6/src/corelib/text/qstring.cpp#L4594-L4703
   */

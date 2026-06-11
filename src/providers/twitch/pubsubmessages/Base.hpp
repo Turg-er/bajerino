@@ -14,7 +14,7 @@
 namespace chatterino {
 
 struct PubSubMessage {
-    enum class Type {
+    enum class Type : std::uint8_t {
         Pong,
         Response,
         Message,

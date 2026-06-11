@@ -53,6 +53,9 @@ struct SplitDescriptor {
     // Twitch Channel name or IRC channel name
     QString channelName_;
 
+    // Per-channel anonymity override; nullopt follows the global default.
+    std::optional<bool> anonymousOverride_;
+
     // IRC server
     int server_{-1};
 
@@ -103,6 +106,7 @@ struct ContainerNodeDescriptor {
 
 struct TabDescriptor {
     QString customTitle_;
+    QString customTabColor_;
     bool selected_{false};
     bool highlightsEnabled_{true};
 

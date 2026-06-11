@@ -47,7 +47,9 @@ $VCRTVersion = (Get-Item "$Env:VCToolsRedistDir\vc_redist.$architecture.exe").Ve
 # Build the installer
 ISCC `
     /DWORKING_DIR="$($pwd.Path)\" `
+    /DSTAGING_DIR_NAME="$stagingDirName" `
     /DINSTALLER_BASE_NAME="$installerBaseName" `
+    /DSETUP_ICON_FILE="$setupIconFile" `
     /DSHIPPED_VCRT_MINOR="$($VCRTVersion.FileMinorPart)" `
     /DSHIPPED_VCRT_VERSION="$($VCRTVersion.FileDescription)" `
     /DVCRT_ARCH="$architecture" `

@@ -26,7 +26,10 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QTextLayout>
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <utility>
 
@@ -85,6 +88,24 @@ EmotePtr getTwitchBadge()
         .tooltip = Tooltip{},
     });
     return ptr;
+}
+
+QSizeF textElementSize(const QString &text, const QFontMetricsF &metrics,
+                       const QFont *layoutFont)
+{
+    if (layoutFont != nullptr)
+    {
+        QTextLayout layout(text, *layoutFont);
+        layout.beginLayout();
+        const auto line = layout.createLine();
+        layout.endLayout();
+        if (line.isValid())
+        {
+            return {line.naturalTextWidth(), metrics.height()};
+        }
+    }
+
+    return {metrics.horizontalAdvance(text), metrics.height()};
 }
 
 }  // namespace
@@ -225,6 +246,11 @@ void CircularImageElement::addToContainer(MessageLayoutContainer &container,
 {
     if (ctx.flags.hasAny(this->getFlags()))
     {
+        if (this->getFlags().has(MessageElementFlag::ReplyButton))
+        {
+            container.ensureSingleSpaceBeforeNextElement();
+        }
+
         auto imgSize = QSize(this->image_->width(), this->image_->height()) *
                        container.getScale();
 
@@ -291,9 +317,11 @@ void EmoteElement::addToContainer(MessageLayoutContainer &container,
         }
         else
         {
+            bool isBadge = this->getFlags().hasAny(MessageElementFlag::Badges);
+            auto scale =
+                isBadge ? container.getBadgeScale() : container.getEmoteScale();
             auto emoteScale = getSettings()->emoteScale.getValue();
-
-            auto size = image->size() * container.getScale() * emoteScale;
+            auto size = image->size() * scale * emoteScale;
 
             container.addElement(this->makeImageLayoutElement(image, size));
             return;
@@ -388,14 +416,16 @@ void LayeredEmoteElement::addToContainer(MessageLayoutContainer &container,
             }
 
             auto emoteScale = getSettings()->emoteScale.getValue();
-            float overallScale = emoteScale * container.getScale();
+            bool isBadge = this->getFlags().hasAny(MessageElementFlag::Badges);
+            auto scale =
+                isBadge ? container.getBadgeScale() : container.getEmoteScale();
 
-            auto largestSize = getBoundingBoxSize(images) * overallScale;
+            auto largestSize = getBoundingBoxSize(images) * scale * emoteScale;
             std::vector<QSizeF> individualSizes;
             individualSizes.reserve(this->emotes_.size());
             for (const auto &img : images)
             {
-                individualSizes.push_back(img->size() * overallScale);
+                individualSizes.push_back(img->size() * scale * emoteScale);
             }
 
             container.addElement(this->makeImageLayoutElement(
@@ -583,18 +613,50 @@ BadgeElement::BadgeElement(const EmotePtr &emote, MessageElementFlags flags)
 void BadgeElement::addToContainer(MessageLayoutContainer &container,
                                   const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    const auto elementFlags = this->getFlags();
+    const auto rawFlags =
+        static_cast<MessageElementFlags::Int>(elementFlags.value());
+    constexpr auto HOMIES_SUPPORTER_FLAG =
+        static_cast<MessageElementFlags::Int>(
+            MessageElementFlag::BadgeHomiesSupporter);
+    constexpr auto HOMIES_CUSTOM_FLAG = static_cast<MessageElementFlags::Int>(
+        MessageElementFlag::BadgeHomiesCustom);
+
+    const auto isHomiesSupporter = (rawFlags & HOMIES_SUPPORTER_FLAG) != 0;
+    const auto isHomiesCustom = (rawFlags & HOMIES_CUSTOM_FLAG) != 0;
+    const auto isHomiesBadge = isHomiesSupporter || isHomiesCustom;
+
+    if (isHomiesBadge)
     {
-        auto image =
-            this->emote_->images.getImageOrLoaded(container.getImageScale());
-        if (image->isEmpty())
+        const auto *settings = getSettings();
+        const auto enabled =
+            ctx.flags.hasAny(elementFlags) &&
+            ((isHomiesSupporter &&
+              settings->showBadgesHomiesSupporter.getValue()) ||
+             (isHomiesCustom && settings->showBadgesHomiesCustom.getValue()));
+
+        if (!enabled)
         {
             return;
         }
-
-        container.addElement(this->makeImageLayoutElement(
-            image, image->size() * container.getScale()));
     }
+    else if (!ctx.flags.hasAny(elementFlags))
+    {
+        return;
+    }
+
+    const auto image =
+        isHomiesBadge
+            ? this->emote_->images.getImageOrLoadedNoLoad(
+                  container.getImageScale())
+            : this->emote_->images.getImageOrLoaded(container.getImageScale());
+    if (image->isEmpty())
+    {
+        return;
+    }
+
+    container.addElement(this->makeImageLayoutElement(
+        image, image->size() * container.getScale()));
 }
 
 EmotePtr BadgeElement::getEmote() const
@@ -802,6 +864,15 @@ TextElement::TextElement(TextElement::CloneTag /*hack*/, QStringList words,
 {
 }
 
+TextElement::TextElement(QStringList &&words, MessageElementFlags flags,
+                         const MessageColor &color, FontStyle style)
+    : MessageElement(flags)
+    , words_(std::move(words))
+    , color_(color)
+    , style_(style)
+{
+}
+
 void TextElement::addToContainer(MessageLayoutContainer &container,
                                  const MessageLayoutContext &ctx)
 {
@@ -844,21 +915,38 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
 
     if (ctx.flags.hasAny(this->getFlags()))
     {
+        if (this->getFlags().has(MessageElementFlag::RepeatedMessageCounter))
+        {
+            container.ensureSingleSpaceBeforeNextElement();
+        }
+
         auto metrics =
             app->getFonts()->getFontMetrics(this->style_, container.getScale());
+#ifdef Q_OS_WIN
+        const bool measureUsernameWithLayout = false;
+#else
+        const bool measureUsernameWithLayout =
+            this->getFlags().has(MessageElementFlag::Username);
+#endif
+        const auto usernameFont =
+            measureUsernameWithLayout
+                ? app->getFonts()->getFont(this->style_, container.getScale())
+                : QFont{};
+        const QFont *layoutFont =
+            measureUsernameWithLayout ? &usernameFont : nullptr;
 
         for (const auto &word : this->words_)
         {
             auto wordId = container.nextWordId();
 
-            auto getTextLayoutElement = [&](QString text, qreal width,
+            auto getTextLayoutElement = [&](QString text, QSizeF size,
                                             bool hasTrailingSpace) {
                 auto color = this->color_.getColor(ctx.messageColors);
                 app->getThemes()->normalizeColor(color);
 
                 auto *e = new TextLayoutElement(
-                    *this, text, QSizeF(width, metrics.height()), color,
-                    this->style_, this->color_.type(), container.getScale(),
+                    *this, text, size, color, this->style_, this->color_.type(),
+                    container.getScale(),
                     container.getImageScale() / container.getScale());
                 e->setTrailingSpace(hasTrailingSpace);
                 e->setText(text);
@@ -867,13 +955,14 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
                 return e;
             };
 
-            auto width = metrics.horizontalAdvance(word);
+            auto size = textElementSize(word, metrics, layoutFont);
+            auto width = size.width();
 
             // see if the text fits in the current line
             if (container.fitsInLine(width))
             {
-                container.addElementNoLineBreak(getTextLayoutElement(
-                    word, width, this->hasTrailingSpace()));
+                container.addElementNoLineBreak(
+                    getTextLayoutElement(word, size, this->hasTrailingSpace()));
                 continue;
             }
 
@@ -885,7 +974,7 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
                 if (container.fitsInLine(width))
                 {
                     container.addElementNoLineBreak(getTextLayoutElement(
-                        word, width, this->hasTrailingSpace()));
+                        word, size, this->hasTrailingSpace()));
                     continue;
                 }
             }
@@ -958,8 +1047,20 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
                     currentWidth = nextWidth;
                 } while (nextBreak < to);
                 // Now we either processed the whole text or we need to break
+                auto currentText = word.sliced(actualStart, nextBreak);
+                auto currentSize =
+                    textElementSize(currentText, metrics, layoutFont);
+                if (layoutFont != nullptr)
+                {
+                    currentSize.setWidth(std::max(
+                        currentSize.width(), std::ceil(currentWidth.toReal())));
+                }
+                else
+                {
+                    currentSize.setWidth(currentWidth.toReal());
+                }
                 container.addElementNoLineBreak(getTextLayoutElement(
-                    word.sliced(actualStart, nextBreak), currentWidth.toReal(),
+                    currentText, currentSize,
                     !needsBreak && this->hasTrailingSpace()));
                 if (needsBreak)
                 {
@@ -988,8 +1089,20 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
 
                 if (!container.fitsInLine(width + charWidth))
                 {
-                    container.addElementNoLineBreak(getTextLayoutElement(
-                        word.mid(wordStart, i - wordStart), width, false));
+                    auto currentText = word.mid(wordStart, i - wordStart);
+                    auto currentSize =
+                        textElementSize(currentText, metrics, layoutFont);
+                    if (layoutFont != nullptr)
+                    {
+                        currentSize.setWidth(
+                            std::max(currentSize.width(), std::ceil(width)));
+                    }
+                    else
+                    {
+                        currentSize.setWidth(width);
+                    }
+                    container.addElementNoLineBreak(
+                        getTextLayoutElement(currentText, currentSize, false));
                     container.breakLine();
 
                     wordStart = i;
@@ -1010,8 +1123,20 @@ void TextElement::addToContainer(MessageLayoutContainer &container,
                 }
             }
             //add the final piece of wrapped text
+            auto currentText = word.mid(wordStart);
+            auto currentSize =
+                textElementSize(currentText, metrics, layoutFont);
+            if (layoutFont != nullptr)
+            {
+                currentSize.setWidth(
+                    std::max(currentSize.width(), std::ceil(width)));
+            }
+            else
+            {
+                currentSize.setWidth(width);
+            }
             container.addElementNoLineBreak(getTextLayoutElement(
-                word.mid(wordStart), width, this->hasTrailingSpace()));
+                currentText, currentSize, this->hasTrailingSpace()));
 #endif
         }
     }
@@ -1240,7 +1365,7 @@ std::unique_ptr<MessageElement> SingleLineTextElement::clone() const
 LinkElement::LinkElement(const Parsed &parsed, const QString &fullUrl,
                          MessageElementFlags flags, const MessageColor &color,
                          FontStyle style)
-    : TextElement({}, flags, color, style)
+    : TextElement(QStringList(), flags, color, style)
     , linkInfo_(fullUrl)
     , lowercase_({parsed.lowercase})
     , original_({parsed.original})
@@ -1252,7 +1377,7 @@ LinkElement::LinkElement(TextElement::CloneTag /*hack*/, QStringList lowercase,
                          QStringList original, const QString &fullUrl,
                          MessageElementFlags flags, const MessageColor &color,
                          FontStyle style)
-    : TextElement({}, flags, color, style)
+    : TextElement(QStringList{}, flags, color, style)
     , linkInfo_(fullUrl)
     , lowercase_(std::move(lowercase))
     , original_(std::move(original))
@@ -1266,9 +1391,69 @@ LinkElement::LinkElement(TextElement::CloneTag /*hack*/, QStringList lowercase,
 void LinkElement::addToContainer(MessageLayoutContainer &container,
                                  const MessageLayoutContext &ctx)
 {
-    this->words_ =
+    const auto &source =
         getSettings()->lowercaseDomains ? this->lowercase_ : this->original_;
-    TextElement::addToContainer(container, ctx);
+
+    // Split the URL into segments at natural break points so long URLs
+    // can wrap mid-link instead of being treated as a single unbreakable word.
+    // Break points: before '/', '?', '&', '#', '='  (keep delimiter at start
+    // of next segment so the visual break is clean).
+    QStringList segments;
+    for (const auto &url : source)
+    {
+        QString current;
+        // Skip the protocol prefix (e.g. "https://") so we don't break there
+        int start = 0;
+        int protocolEnd = url.indexOf("://");
+        if (protocolEnd != -1)
+        {
+            start = protocolEnd + 3;  // past "://"
+            current = url.left(start);
+        }
+
+        for (int i = start; i < url.size(); i++)
+        {
+            QChar ch = url[i];
+            // Break BEFORE these characters (except at the very start)
+            if (!current.isEmpty() && current.size() > 1 &&
+                (ch == '/' || ch == '?' || ch == '&' || ch == '#' || ch == '='))
+            {
+                segments.append(current);
+                current.clear();
+            }
+            current += ch;
+        }
+        if (!current.isEmpty())
+        {
+            segments.append(current);
+        }
+    }
+
+    this->words_ = segments;
+
+    // Temporarily disable trailing space so URL segments render contiguously
+    // (no visible gap between "example.com" and "/path").
+    bool originalTrailingSpace = this->trailingSpace;
+    this->trailingSpace = false;
+
+    // Lay out all segments except the last with no trailing space
+    if (!this->words_.isEmpty())
+    {
+        QStringList allButLast = this->words_.mid(0, this->words_.size() - 1);
+        QString lastWord = this->words_.last();
+
+        this->words_ = allButLast;
+        TextElement::addToContainer(container, ctx);
+
+        // Lay out the last segment with the original trailing space setting
+        this->trailingSpace = originalTrailingSpace;
+        this->words_ = {lastWord};
+        TextElement::addToContainer(container, ctx);
+    }
+
+    // Restore words_ for any subsequent use (e.g. copy, tooltip)
+    this->words_ = source;
+    this->trailingSpace = originalTrailingSpace;
 }
 
 Link LinkElement::getLink() const
@@ -1488,38 +1673,149 @@ std::unique_ptr<MessageElement> TimestampElement::clone() const
 }
 
 // TWITCH MODERATION
-TwitchModerationElement::TwitchModerationElement()
+namespace {
+
+int normalizeInlineActionMode(int mode)
+{
+    if (mode <= 0)
+    {
+        return 0;
+    }
+    if (mode >= 2)
+    {
+        return 2;
+    }
+    return 1;
+}
+
+void addModerationActionToContainer(MessageElement &source,
+                                    const ModerationAction &action,
+                                    MessageLayoutContainer &container,
+                                    const QSizeF &size)
+{
+    if (const auto &image = action.getImage())
+    {
+        container.addElement(
+            (new ImageLayoutElement(source, *image, size))
+                ->setLink(Link(Link::UserAction, action.getAction())));
+    }
+    else
+    {
+        container.addElement(
+            (new TextIconLayoutElement(source, action.getLine1(),
+                                       action.getLine2(), container.getScale(),
+                                       size))
+                ->setLink(Link(Link::UserAction, action.getAction())));
+    }
+}
+
+}  // namespace
+
+TwitchModerationElement::TwitchModerationElement(bool canModerateUser,
+                                                 bool targetIsModOrBroadcaster,
+                                                 bool targetIsCurrentUser)
     : MessageElement(MessageElementFlag::ModeratorTools)
+    , canModerateUser_(canModerateUser)
+    , targetIsModOrBroadcaster_(targetIsModOrBroadcaster)
+    , targetIsCurrentUser_(targetIsCurrentUser)
 {
 }
 
 void TwitchModerationElement::addToContainer(MessageLayoutContainer &container,
                                              const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.has(MessageElementFlag::ModeratorTools))
+    const bool inModerationMode =
+        ctx.flags.has(MessageElementFlag::ModeratorTools);
+    auto *settings = getSettings();
+    const auto selfDeleteMode =
+        normalizeInlineActionMode(settings->showSelfDeleteButton.getValue());
+    const auto pinOnModeratorsMode = normalizeInlineActionMode(
+        settings->showPinButtonOnModeratorsMode.getValue());
+    const bool showSelfDeleteOutsideModerationMode =
+        this->targetIsCurrentUser_ && selfDeleteMode == 2;
+    const bool showPinOutsideModerationMode =
+        this->targetIsModOrBroadcaster_ && pinOnModeratorsMode == 2;
+    if (!inModerationMode && !showSelfDeleteOutsideModerationMode &&
+        !showPinOutsideModerationMode)
     {
-        QSizeF size{
-            container.getScale() * 16,
-            container.getScale() * 16,
-        };
-        auto actions = getSettings()->moderationActions.readOnly();
-        for (const auto &action : *actions)
+        return;
+    }
+
+    QSizeF size{
+        container.getScale() * 16,
+        container.getScale() * 16,
+    };
+
+    bool hasVisiblePinAction = false;
+    bool hasVisibleDeleteAction = false;
+    auto actions = settings->moderationActions.readOnly();
+    for (const auto &action : *actions)
+    {
+        if (!this->shouldShowAction(action, inModerationMode, selfDeleteMode,
+                                    pinOnModeratorsMode))
         {
-            if (const auto &image = action.getImage())
-            {
-                container.addElement(
-                    (new ImageLayoutElement(*this, *image, size))
-                        ->setLink(Link(Link::UserAction, action.getAction())));
-            }
-            else
-            {
-                container.addElement(
-                    (new TextIconLayoutElement(*this, action.getLine1(),
-                                               action.getLine2(),
-                                               container.getScale(), size))
-                        ->setLink(Link(Link::UserAction, action.getAction())));
-            }
+            continue;
         }
+
+        switch (action.getType())
+        {
+            case ModerationAction::Type::Pin:
+                hasVisiblePinAction = true;
+                break;
+            case ModerationAction::Type::Delete:
+                hasVisibleDeleteAction = true;
+                break;
+            default:
+                break;
+        }
+
+        addModerationActionToContainer(*this, action, container, size);
+    }
+
+    auto addBuiltInAction = [&](const QString &command) {
+        const ModerationAction action(command);
+        addModerationActionToContainer(*this, action, container, size);
+    };
+
+    if (!hasVisiblePinAction && this->targetIsModOrBroadcaster_ &&
+        pinOnModeratorsMode != 0 &&
+        (inModerationMode || pinOnModeratorsMode == 2))
+    {
+        addBuiltInAction("/pin {msg.id}");
+    }
+
+    if (!hasVisibleDeleteAction && this->targetIsCurrentUser_ &&
+        selfDeleteMode != 0 && (inModerationMode || selfDeleteMode == 2))
+    {
+        addBuiltInAction("/delete {msg.id}");
+    }
+}
+
+bool TwitchModerationElement::shouldShowAction(const ModerationAction &action,
+                                               bool inModerationMode,
+                                               int selfDeleteMode,
+                                               int pinOnModeratorsMode) const
+{
+    switch (action.getType())
+    {
+        case ModerationAction::Type::Delete:
+            if (this->targetIsCurrentUser_)
+            {
+                return selfDeleteMode != 0 &&
+                       (inModerationMode || selfDeleteMode == 2);
+            }
+            return this->canModerateUser_ && inModerationMode;
+
+        case ModerationAction::Type::Pin:
+            if (this->targetIsModOrBroadcaster_)
+            {
+                return pinOnModeratorsMode != 0 &&
+                       (inModerationMode || pinOnModeratorsMode == 2);
+            }
+            return inModerationMode;
+
+        default:
+            return this->canModerateUser_ && inModerationMode;
     }
 }
 
@@ -1538,9 +1834,11 @@ std::string_view TwitchModerationElement::type() const
 
 std::unique_ptr<MessageElement> TwitchModerationElement::clone() const
 {
-    auto elem = std::make_unique<TwitchModerationElement>();
-    elem->cloneFrom(*this);
-    return elem;
+    auto el = std::make_unique<TwitchModerationElement>(
+        this->canModerateUser_, this->targetIsModOrBroadcaster_,
+        this->targetIsCurrentUser_);
+    el->cloneFrom(*this);
+    return el;
 }
 
 LinebreakElement::LinebreakElement(MessageElementFlags flags)

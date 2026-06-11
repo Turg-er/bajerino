@@ -95,6 +95,10 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/Ban.hpp
         controllers/commands/builtin/twitch/Block.cpp
         controllers/commands/builtin/twitch/Block.hpp
+        controllers/commands/builtin/twitch/BlockedTerms.cpp
+        controllers/commands/builtin/twitch/BlockedTerms.hpp
+        controllers/commands/builtin/twitch/ChannelPoints.cpp
+        controllers/commands/builtin/twitch/ChannelPoints.hpp
         controllers/commands/builtin/twitch/ChatSettings.cpp
         controllers/commands/builtin/twitch/ChatSettings.hpp
         controllers/commands/builtin/twitch/Chatters.cpp
@@ -103,10 +107,16 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/DeleteMessages.hpp
         controllers/commands/builtin/twitch/GetModerators.cpp
         controllers/commands/builtin/twitch/GetModerators.hpp
+        controllers/commands/builtin/twitch/GetFounders.cpp
+        controllers/commands/builtin/twitch/GetFounders.hpp
         controllers/commands/builtin/twitch/GetVIPs.cpp
         controllers/commands/builtin/twitch/GetVIPs.hpp
         controllers/commands/builtin/twitch/LowTrust.cpp
         controllers/commands/builtin/twitch/LowTrust.hpp
+        controllers/commands/builtin/twitch/ModVipActions.cpp
+        controllers/commands/builtin/twitch/ModVipActions.hpp
+        controllers/commands/builtin/twitch/Nuke.cpp
+        controllers/commands/builtin/twitch/Nuke.hpp
         controllers/commands/builtin/twitch/Pin.cpp
         controllers/commands/builtin/twitch/Pin.hpp
         controllers/commands/builtin/twitch/Poll.cpp
@@ -260,6 +270,9 @@ set(SOURCE_FILES
 
         controllers/pings/MutedChannelModel.cpp
         controllers/pings/MutedChannelModel.hpp
+
+        controllers/tray/TrayController.cpp
+        controllers/tray/TrayController.hpp
 
 
         controllers/plugins/api/Accounts.cpp
@@ -442,6 +455,19 @@ set(SOURCE_FILES
         providers/links/LinkResolver.cpp
         providers/links/LinkResolver.hpp
 
+        providers/moltorino/MoltorinoAuth.cpp
+        providers/moltorino/MoltorinoAuth.hpp
+        providers/moltorino/MoltorinoFeatureFlags.hpp
+        providers/moltorino/MoltorinoSupporterBadges.cpp
+        providers/moltorino/MoltorinoSupporterBadges.hpp
+
+        providers/repetitions/RepeatedMessageDetector.cpp
+        providers/repetitions/RepeatedMessageDetector.hpp
+
+        providers/homies/HomiesBadges.cpp
+        providers/homies/HomiesBadges.hpp
+
+
         providers/liveupdates/BasicPubSubClient.hpp
         providers/liveupdates/BasicPubSubListener.hpp
         providers/liveupdates/BasicPubSubManager.hpp
@@ -457,6 +483,9 @@ set(SOURCE_FILES
         providers/recentmessages/Api.hpp
         providers/recentmessages/Impl.cpp
         providers/recentmessages/Impl.hpp
+
+        providers/translation/Translator.cpp
+        providers/translation/Translator.hpp
 
         providers/seventv/SeventvAPI.cpp
         providers/seventv/SeventvAPI.hpp
@@ -496,6 +525,8 @@ set(SOURCE_FILES
         providers/twitch/ChannelPointReward.hpp
         providers/twitch/IrcMessageHandler.cpp
         providers/twitch/IrcMessageHandler.hpp
+        providers/twitch/ModerationActionLogs.cpp
+        providers/twitch/ModerationActionLogs.hpp
         providers/twitch/PubSubClient.cpp
         providers/twitch/PubSubClient.hpp
         providers/twitch/PubSubManager.cpp
@@ -509,6 +540,7 @@ set(SOURCE_FILES
         providers/twitch/TwitchBadge.hpp
         providers/twitch/TwitchBadges.cpp
         providers/twitch/TwitchBadges.hpp
+        providers/twitch/api/TwitchGql.cpp
         providers/twitch/TwitchChannel.cpp
         providers/twitch/TwitchChannel.hpp
         providers/twitch/TwitchCommon.cpp
@@ -521,6 +553,8 @@ set(SOURCE_FILES
         providers/twitch/TwitchIrc.hpp
         providers/twitch/TwitchIrcServer.cpp
         providers/twitch/TwitchIrcServer.hpp
+        providers/twitch/TwitchNameHistory.cpp
+        providers/twitch/TwitchNameHistory.hpp
         providers/twitch/TwitchUser.cpp
         providers/twitch/TwitchUser.hpp
         providers/twitch/TwitchUsers.cpp
@@ -548,8 +582,14 @@ set(SOURCE_FILES
         providers/twitch/pubsubmessages/Listen.cpp
         providers/twitch/pubsubmessages/Listen.hpp
         providers/twitch/pubsubmessages/Message.hpp
+        providers/twitch/pubsubmessages/PinnedChat.cpp
+        providers/twitch/pubsubmessages/PinnedChat.hpp
         providers/twitch/pubsubmessages/Unlisten.cpp
         providers/twitch/pubsubmessages/Unlisten.hpp
+        providers/twitch/pubsubmessages/PredictionEvent.cpp
+        providers/twitch/pubsubmessages/PredictionEvent.hpp
+        providers/twitch/pubsubmessages/PredictionUserEvent.cpp
+        providers/twitch/pubsubmessages/PredictionUserEvent.hpp
 
         providers/twitch/api/Helix.cpp
         providers/twitch/api/Helix.hpp
@@ -740,6 +780,8 @@ set(SOURCE_FILES
         widgets/dialogs/BadgePickerDialog.hpp
         widgets/dialogs/ChannelFilterEditorDialog.cpp
         widgets/dialogs/ChannelFilterEditorDialog.hpp
+        widgets/dialogs/ChannelPointsDialog.cpp
+        widgets/dialogs/ChannelPointsDialog.hpp
         widgets/dialogs/ColorPickerDialog.cpp
         widgets/dialogs/ColorPickerDialog.hpp
         widgets/dialogs/EditHotkeyDialog.cpp
@@ -772,6 +814,10 @@ set(SOURCE_FILES
         widgets/dialogs/LoginDialog.hpp
         widgets/dialogs/QualityPopup.cpp
         widgets/dialogs/QualityPopup.hpp
+        widgets/dialogs/PredictionDialog.cpp
+        widgets/dialogs/PredictionDialog.hpp
+        widgets/dialogs/PollDialog.cpp
+        widgets/dialogs/PollDialog.hpp
         widgets/dialogs/ReplyThreadPopup.cpp
         widgets/dialogs/ReplyThreadPopup.hpp
         widgets/dialogs/RestoreBackupsDialog.cpp
@@ -840,6 +886,12 @@ set(SOURCE_FILES
         widgets/helper/NotebookTab.hpp
         widgets/helper/OverlayInteraction.cpp
         widgets/helper/OverlayInteraction.hpp
+        widgets/helper/PinnedMessageBanner.cpp
+        widgets/helper/PinnedMessageBanner.hpp
+        widgets/helper/PollBanner.cpp
+        widgets/helper/PollBanner.hpp
+        widgets/helper/PredictionBanner.cpp
+        widgets/helper/PredictionBanner.hpp
         widgets/helper/RegExpItemDelegate.cpp
         widgets/helper/RegExpItemDelegate.hpp
         widgets/helper/ResizingTextEdit.cpp
@@ -894,6 +946,8 @@ set(SOURCE_FILES
         widgets/settingspages/KeyboardSettingsPage.hpp
         widgets/settingspages/ModerationPage.cpp
         widgets/settingspages/ModerationPage.hpp
+        widgets/settingspages/MoltorinoPage.cpp
+        widgets/settingspages/MoltorinoPage.hpp
         widgets/settingspages/NicknamesPage.cpp
         widgets/settingspages/NicknamesPage.hpp
         widgets/settingspages/NotificationPage.cpp

@@ -152,4 +152,13 @@ void handleModerateMessage(
     });
 }
 
+void handleModerateMessage(TwitchChannel *chan, const QDateTime &,
+                           const lib::payload::channel_moderate::v2::Event &,
+                           const lib::payload::channel_moderate::v2::Unraid &)
+{
+    runInGuiThread([chan] {
+        chan->clearActiveRaid();
+    });
+}
+
 }  // namespace chatterino::eventsub

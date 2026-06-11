@@ -4,8 +4,10 @@
 
 #include "providers/bttv/BttvLiveUpdates.hpp"
 
+#include "common/Env.hpp"
 #include "liveupdates/BttvLiveUpdateClient.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
+#include "providers/NetworkConfigurationProvider.hpp"
 
 #include <QJsonDocument>
 
@@ -40,7 +42,9 @@ public:
 
 BttvLiveUpdatesPrivate::BttvLiveUpdatesPrivate(BttvLiveUpdates &parent,
                                                QString host)
-    : BasicPubSubManager(std::move(host), u"BTTV"_s)
+    : BasicPubSubManager(std::move(host), u"BTTV"_s,
+                         NetworkConfigurationProvider::webSocketProxyFromEnv(
+                             Env::get(), ProxyConnection::ThirdParty))
     , parent(parent)
 {
 }
