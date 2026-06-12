@@ -3222,7 +3222,10 @@ void TwitchGql::createPollEvent(
     input.insert("title", title);
     input.insert("durationSeconds", durationSeconds);
     input.insert("ownedBy", channelId);
-    input.insert("multichoiceEnabled", true);
+    // Twitch standard polls are single-choice; the dialog exposes no
+    // multiple-choice option, and forcing it on makes Twitch reject the
+    // mutation with an UNKNOWN error.
+    input.insert("multichoiceEnabled", false);
     input.insert("isCommunityPointsVotingEnabled", pointsPerVote.has_value());
     input.insert("communityPointsCost", pointsPerVote.value_or(0));
 

@@ -90,6 +90,10 @@ private:
 
     QString draftTitle_;
     QStringList draftChoices_;
+    // Live input widgets for the create view, used to read the latest values
+    // at submit time so a background rebuild can't desync them from the draft.
+    QPointer<QLineEdit> titleInput_;
+    std::vector<QPointer<QLineEdit>> choiceInputs_;
     int draftDurationSeconds_ = 120;
     bool draftEnableAdditionalVotes_ = false;
     int draftPointsPerVote_ = 10;

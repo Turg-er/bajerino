@@ -824,6 +824,15 @@ std::string_view DecryptedBadge::type() const
     return std::remove_pointer_t<decltype(this)>::TYPE;
 }
 
+std::unique_ptr<MessageElement> DecryptedBadge::clone() const
+{
+    auto elem =
+        std::make_unique<DecryptedBadge>(this->getEmote(), this->getFlags());
+    elem->cloneFrom(*this);
+    elem->setScale(this->scale);
+    return elem;
+}
+
 void DecryptedBadge::addToContainer(MessageLayoutContainer &container,
                                     const MessageLayoutContext & /*ctx*/)
 {

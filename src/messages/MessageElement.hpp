@@ -690,6 +690,7 @@ public:
 
     QJsonObject toJson() const override;
     std::string_view type() const override;
+    std::unique_ptr<MessageElement> clone() const override;
 
     void addToContainer(MessageLayoutContainer &container,
                         const MessageLayoutContext &ctx) override;

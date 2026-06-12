@@ -3,6 +3,7 @@
 #include "Application.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "singletons/Fonts.hpp"
@@ -817,6 +818,7 @@ void PollDialog::buildCreateUi()
     titleInput->setText(this->draftTitle_);
     titleInput->setFont(uiFont);
     titleInput->setFixedHeight(inputHeight);
+    this->titleInput_ = titleInput;
     QObject::connect(titleInput, &QLineEdit::textChanged, this,
                      [this](const QString &text) {
                          this->draftTitle_ = text.left(TITLE_LIMIT);
@@ -869,6 +871,7 @@ void PollDialog::buildCreateUi()
     choicesLayout->setSpacing(rowSpacing);
     choicesLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
+    this->choiceInputs_.assign(MAX_CHOICES, QPointer<QLineEdit>{});
     for (int i = 0; i < MAX_CHOICES; ++i)
     {
         auto *rowWidget = new QWidget(choicesWidget);
@@ -892,6 +895,7 @@ void PollDialog::buildCreateUi()
                                         : QString("Response %1").arg(i + 1));
         input->setFont(uiFont);
         input->setFixedHeight(inputHeight);
+        this->choiceInputs_[i] = input;
         QObject::connect(input, &QLineEdit::textChanged, this,
                          [this, i](const QString &text) {
                              this->draftChoices_[i] = text.left(CHOICE_LIMIT);
@@ -1478,6 +1482,22 @@ void PollDialog::buildVoteUi()
 
 void PollDialog::createPoll()
 {
+    // Read the latest values straight from the live input widgets. The draft
+    // members are kept in sync via textChanged, but reading the widgets here
+    // guarantees we use exactly what's on screen even if a background poll
+    // refresh rebuilt the create view.
+    if (this->titleInput_)
+    {
+        this->draftTitle_ = this->titleInput_->text().left(TITLE_LIMIT);
+    }
+    for (int i = 0; i < static_cast<int>(this->choiceInputs_.size()); ++i)
+    {
+        if (const auto &input = this->choiceInputs_[i])
+        {
+            this->draftChoices_[i] = input->text().left(CHOICE_LIMIT);
+        }
+    }
+
     const auto title = this->draftTitle_.trimmed();
     if (title.isEmpty())
     {
@@ -1495,6 +1515,7 @@ void PollDialog::createPoll()
         return;
     }
 
+    bool hadDuplicates = false;
     for (const auto &draftChoice : this->draftChoices_)
     {
         const auto trimmed = draftChoice.trimmed();
@@ -1502,18 +1523,22 @@ void PollDialog::createPoll()
         {
             continue;
         }
-        const auto normalized = trimmed.toCaseFolded();
-        if (uniqueChoices.contains(normalized))
+        // Twitch only rejects exact-duplicate choices, so dedupe on the exact
+        // (trimmed) text rather than case-folding distinct responses together.
+        if (uniqueChoices.contains(trimmed))
         {
+            hadDuplicates = true;
             continue;
         }
-        uniqueChoices.insert(normalized);
+        uniqueChoices.insert(trimmed);
         choices.push_back(trimmed);
     }
 
     if (choices.size() < MIN_CHOICES)
     {
-        this->channel_->addSystemMessage("A poll needs at least 2 responses.");
+        this->channel_->addSystemMessage(
+            hadDuplicates ? "Poll responses must be unique."
+                          : "A poll needs at least 2 responses.");
         return;
     }
 
@@ -1539,27 +1564,29 @@ void PollDialog::createPoll()
         return;
     }
 
-    QString authError;
-    const auto auth = MoltorinoAuth::resolveModerationToken(
-        this->channel_->roomId(), this->channel_->getName(), &authError);
-    if (!auth.hasToken())
+    // Poll creation is a broadcaster-only action on Twitch, so use the
+    // official Helix endpoint (same path as the /poll command). The private
+    // GQL CreatePoll mutation returns an opaque "UNKNOWN" error even for
+    // well-formed requests.
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (account->isAnon())
     {
         this->channel_->addSystemMessage(
-            authError.isEmpty() ? moltorinoAuthRequiredMessage("creating polls")
-                                : authError);
+            "You must be logged in to create a poll.");
         return;
     }
 
     this->actionInFlight_ = true;
     this->updateUi();
 
+    const int pointsPerVote = this->draftEnableAdditionalVotes_
+                                  ? this->draftPointsPerVote_
+                                  : 0;
+
     QPointer<PollDialog> self = this;
-    TwitchGql::createPollEvent(
-        this->channel_->roomId(), title, choices, this->draftDurationSeconds_,
-        this->draftEnableAdditionalVotes_
-            ? std::optional<int>(this->draftPointsPerVote_)
-            : std::nullopt,
-        auth.token,
+    getHelix()->createPoll(
+        this->channel_->roomId(), title, choices,
+        std::chrono::seconds(this->draftDurationSeconds_), pointsPerVote,
         [self] {
             if (!self)
             {

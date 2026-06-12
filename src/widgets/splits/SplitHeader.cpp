@@ -1059,28 +1059,18 @@ void SplitHeader::handleChannelChanged()
     };
 
     auto channel = this->split_->getChannel();
+
+    // Always connect to the currently selected channel's signals (follow
+    // status, stream status, ...). For a regular Twitch/Kick split this is the
+    // channel itself; for a MultiChannel it's the active sub-channel.
+    connectSelectedChannel();
+
     if (auto *multiChannel = dynamic_cast<MultiChannel *>(channel.get()))
     {
-        connectSelectedChannel();
         this->channelConnections_.managedConnect(
             multiChannel->activeChannelChanged, [this] {
                 this->handleChannelChanged();
                 this->updateIcons();
-                this->updateRoomModes();
-            });
-    }
-    else if (auto *kickChannel = dynamic_cast<KickChannel *>(channel.get()))
-    {
-        this->channelConnections_.managedConnect(kickChannel->streamDataChanged,
-                                                 [this]() {
-                                                     this->updateChannelText();
-                                                 });
-    }
-    else if (auto *multiChannel = dynamic_cast<MultiChannel *>(channel.get()))
-    {
-        this->channelConnections_.managedConnect(
-            multiChannel->activeChannelChanged, [this] {
-                this->updateChannelText();
                 this->updateRoomModes();
             });
     }
@@ -1289,10 +1279,18 @@ void SplitHeader::updateIcons()
 
     if (channel->isTwitchOrKickChannel())
     {
+        // A MultiChannel split aggregates several channels, so a single
+        // follow/unfollow toggle can't represent them faithfully (it would
+        // look "followed" even if only one of them is). Hide the button there.
+        const bool isMultiChannel =
+            dynamic_cast<MultiChannel *>(this->split_->getChannel().get()) !=
+            nullptr;
+
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get());
             twitchChannel != nullptr && !twitchChannel->isEmpty())
         {
-            if (!getSettings()->showFollowButtonInSplitHeader ||
+            if (isMultiChannel ||
+                !getSettings()->showFollowButtonInSplitHeader ||
                 !canUseFollowButtonForChannel(*twitchChannel))
             {
                 this->followButton_->hide();
