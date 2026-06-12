@@ -1103,7 +1103,7 @@ TEST(Commands, PredictionCommandOpensDialogInsteadOfCreatingViaArgs)
         "--duration 60",
         channel, false);
 
-    PredictionDialog *openedDialog = nullptr;
+    PredictionDialog const *openedDialog = nullptr;
     for (auto *widget : QApplication::topLevelWidgets())
     {
         auto *dialog = dynamic_cast<PredictionDialog *>(widget);

@@ -69,6 +69,9 @@
 #include <rapidjson/document.h>
 
 #include <algorithm>
+#include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace chatterino {
 
@@ -177,9 +180,9 @@ BotBadgeSendConfig getBotBadgeSendConfig()
     const auto &settings = *getSettings();
 
     return {
-        settings.botBadgeAppAccessToken.getValue().trimmed(),
-        settings.botBadgeClientID.getValue().trimmed(),
-        settings.botBadgeUserID.getValue().trimmed(),
+        .appToken = settings.botBadgeAppAccessToken.getValue().trimmed(),
+        .clientId = settings.botBadgeClientID.getValue().trimmed(),
+        .senderID = settings.botBadgeUserID.getValue().trimmed(),
     };
 }
 
@@ -290,7 +293,7 @@ qint64 parseJsonInteger(const QJsonValue &value)
 {
     if (value.isDouble())
     {
-        return qint64(value.toDouble());
+        return static_cast<qint64>(value.toDouble());
     }
     if (value.isString())
     {
@@ -390,7 +393,7 @@ QJsonObject objectFromAnyKey(const QJsonObject &obj, const QString &snakeKey,
 
 QString predictionActorOrFallback(const QString &actor)
 {
-    return actor.trimmed().isEmpty() ? QStringLiteral("Twitch") : actor;
+    return actor.trimmed().isEmpty() ? u"Twitch"_s : actor;
 }
 
 QString pinnedChatEventPinId(const QJsonObject &data)
@@ -604,25 +607,25 @@ QString predictionSystemMessageKind(
 {
     if (type == "event-created")
     {
-        return QStringLiteral("created");
+        return u"created"_s;
     }
     if (type == "event-locked" ||
         (type == "event-updated" &&
          prediction.status.compare("LOCKED", Qt::CaseInsensitive) == 0))
     {
-        return QStringLiteral("locked");
+        return u"locked"_s;
     }
     if (type == "event-canceled" ||
         (type == "event-updated" &&
          prediction.status.compare("CANCELED", Qt::CaseInsensitive) == 0))
     {
-        return QStringLiteral("canceled");
+        return u"canceled"_s;
     }
     if (type == "event-resolved" ||
         (type == "event-updated" &&
          prediction.status.compare("RESOLVED", Qt::CaseInsensitive) == 0))
     {
-        return QStringLiteral("resolved");
+        return u"resolved"_s;
     }
 
     return {};
@@ -651,7 +654,7 @@ QString sanitizeChatWarningReason(QString reason)
     reason = reason.simplified();
     if (reason.isEmpty())
     {
-        return QStringLiteral("No moderator message was provided");
+        return u"No moderator message was provided"_s;
     }
     return reason;
 }
@@ -699,14 +702,9 @@ bool isChannelCurrentlyVisible(const TwitchChannel &channel)
 {
     const auto visibleChannels =
         getApp()->getWindows()->getVisibleChannelNames();
-    for (const auto &visible : visibleChannels)
-    {
-        if (visible.compare(channel.getName(), Qt::CaseInsensitive) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(visibleChannels, [&](const auto &visible) {
+        return visible.compare(channel.getName(), Qt::CaseInsensitive) == 0;
+    });
 }
 
 MessagePtr makeChatWarningMessage(const TwitchChannel &channel,
@@ -714,8 +712,7 @@ MessagePtr makeChatWarningMessage(const TwitchChannel &channel,
 {
     const auto reason = sanitizeChatWarningReason(warning.reason);
     const auto text =
-        QStringLiteral("Moltorino: You received a warning: \"%1\" Acknowledge")
-            .arg(reason);
+        u"Moltorino: You received a warning: \"%1\" Acknowledge"_s.arg(reason);
     const auto timestamp = warning.createdAt.isValid()
                                ? warning.createdAt.toLocalTime().time()
                                : QTime::currentTime();
@@ -723,9 +720,9 @@ MessagePtr makeChatWarningMessage(const TwitchChannel &channel,
     MessageBuilder builder;
     builder.message().id = chatWarningMessageId(warning);
     builder.message().channelName = channel.getName();
-    builder.message().loginName = QStringLiteral("moltorino");
-    builder.message().displayName = QStringLiteral("Moltorino");
-    builder.message().localizedName = QStringLiteral("Moltorino");
+    builder.message().loginName = u"moltorino"_s;
+    builder.message().displayName = u"Moltorino"_s;
+    builder.message().localizedName = u"Moltorino"_s;
     builder.message().usernameColor = QColor("#FFA500");
     builder.message().serverReceivedTime =
         warning.createdAt.isValid() ? warning.createdAt
@@ -769,7 +766,9 @@ TwitchChannel::TwitchChannel(const QString &name,
                              std::optional<bool> anonymousOverride)
     : Channel(name, Channel::Type::Twitch)
     , ChannelChatters(*static_cast<Channel *>(this))
-    , nameOptions{name, name, name}
+    , nameOptions{.displayName = name,
+                  .localizedName = name,
+                  .actualDisplayName = name}
     , anonymousOverride_(anonymousOverride)
     , subscriptionUrl_("https://www.twitch.tv/subs/" + name)
     , channelUrl_("https://www.twitch.tv/" + name)
@@ -913,7 +912,7 @@ TwitchChannel::TwitchChannel(const QString &name,
                 return;
             }
 
-            const auto payload = d;
+            const auto &payload = d;
             const auto weak = this->weak_from_this();
             runInGuiThread([this, weak, payload] {
                 if (auto shared = weak.lock())
@@ -925,14 +924,13 @@ TwitchChannel::TwitchChannel(const QString &name,
 
     this->signalHolder_.managedConnect(
         getApp()->getTwitchPubSub()->raid.updated, [this](const auto &d) {
-            const auto expectedTopic =
-                QStringLiteral("raid.%1").arg(this->roomId());
+            const auto expectedTopic = u"raid.%1"_s.arg(this->roomId());
             if (d["topic"].toString() != expectedTopic)
             {
                 return;
             }
 
-            const auto payload = d;
+            const auto &payload = d;
             const auto weak = this->weak_from_this();
             runInGuiThread([weak, payload] {
                 if (auto shared =
@@ -963,7 +961,7 @@ TwitchChannel::TwitchChannel(const QString &name,
                     return;
                 }
 
-                const auto payload = d;
+                const auto &payload = d;
                 const auto weak = this->weak_from_this();
                 runInGuiThread([this, weak, payload] {
                     if (auto shared = weak.lock())
@@ -1028,7 +1026,7 @@ void TwitchChannel::initialize()
     // When the global default anonymity changes, channels that follow it (i.e.
     // have no explicit override) have their effective anonymity change too.
     getSettings()->twitchIrcJoinAsAnonymous.connect(
-        [this](auto, auto) {
+        [this](auto, const auto &) {
             if (!this->anonymousOverride_.has_value())
             {
                 this->anonymousChanged.invoke();
@@ -1205,7 +1203,7 @@ void TwitchChannel::refreshBTTVChannelEmotes(bool manualRefresh)
 
     bool cacheHit = readProviderEmotesCache(
         this->roomId(), "betterttv",
-        [this, weak = weakOf<Channel>(this)](auto jsonDoc) {
+        [this, weak = weakOf<Channel>(this)](const auto &jsonDoc) {
             if (auto shared = weak.lock())
             {
                 auto emoteMap = bttv::detail::parseChannelEmotes(
@@ -1281,7 +1279,7 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
     }
 
     bool cacheHit = readProviderEmotesCache(
-        this->roomId(), "seventv", [this](auto jsonDoc) {
+        this->roomId(), "seventv", [this](const auto &jsonDoc) {
             const auto json = jsonDoc.object();
             const auto emoteSet = json["emote_set"].toObject();
             const auto parsedEmotes = emoteSet["emotes"].toArray();
@@ -1293,7 +1291,7 @@ void TwitchChannel::refreshSevenTVChannelEmotes(bool manualRefresh)
     SeventvEmotes::loadChannelEmotes(
         weakOf<Channel>(this), this->roomId(),
         [this, weak = weakOf<Channel>(this)](auto &&emoteMap,
-                                             auto channelInfo) {
+                                             const auto &channelInfo) {
             if (auto shared = weak.lock())
             {
                 this->setSeventvEmotes(
@@ -1327,9 +1325,9 @@ void TwitchChannel::addQueuedRedemption(const QString &rewardId,
                                         Communi::IrcMessage *message)
 {
     this->waitingRedemptions_.push_back({
-        rewardId,
-        originalContent,
-        {message->clone(), {}},
+        .rewardID = rewardId,
+        .originalContent = originalContent,
+        .message = {message->clone(), {}},
     });
 }
 
@@ -1366,33 +1364,35 @@ void TwitchChannel::addChannelPointReward(const ChannelPointReward &reward)
             << reward.title << "," << reward.isUserInputRequired;
 
         auto *server = getApp()->getTwitch();
-        auto it = std::remove_if(
-            this->waitingRedemptions_.begin(), this->waitingRedemptions_.end(),
-            [&](const QueuedRedemption &msg) {
-                if (reward.id == msg.rewardID)
-                {
-                    VectorMessageSink sink(
-                        MessageSinkTrait::AddMentionsToGlobalChannel);
-                    IrcMessageHandler::instance().addMessage(
-                        msg.message.get(), sink, this, msg.originalContent,
-                        *server, false, false);
-                    if (sink.messages().empty())
+        auto it =
+            std::ranges::remove_if(
+                this->waitingRedemptions_,
+                [&](const QueuedRedemption &msg) {
+                    if (reward.id == msg.rewardID)
                     {
+                        VectorMessageSink sink(
+                            MessageSinkTrait::AddMentionsToGlobalChannel);
+                        chatterino::IrcMessageHandler::addMessage(
+                            msg.message.get(), sink, this, msg.originalContent,
+                            *server, false, false);
+                        if (sink.messages().empty())
+                        {
+                            return true;
+                        }
+                        MessagePtr next = sink.messages().back();
+                        auto prev = this->findMessageByID(next->id);
+                        if (!prev)
+                        {
+                            // message gone
+                            this->addMessage(next, MessageContext::Repost);
+                            return true;
+                        }
+                        this->replaceMessage(prev, next);
                         return true;
                     }
-                    MessagePtr next = sink.messages().back();
-                    auto prev = this->findMessageByID(next->id);
-                    if (!prev)
-                    {
-                        // message gone
-                        this->addMessage(next, MessageContext::Repost);
-                        return true;
-                    }
-                    this->replaceMessage(prev, next);
-                    return true;
-                }
-                return false;
-            });
+                    return false;
+                })
+                .begin();
         this->waitingRedemptions_.erase(it, this->waitingRedemptions_.end());
     }
 }
@@ -1407,7 +1407,7 @@ bool TwitchChannel::markChannelPointRedemptionSeen(const QString &key)
     }
 
     auto &recent = this->recentChannelPointRedemptions_;
-    if (std::find(recent.begin(), recent.end(), key) != recent.end())
+    if (std::ranges::find(recent, key) != recent.end())
     {
         return false;
     }
@@ -1462,7 +1462,7 @@ void TwitchChannel::updateStreamStatus(
             auto diff = since.secsTo(QDateTime::currentDateTime());
             status->uptime = QString::number(diff / 3600) + "h " +
                              QString::number(diff % 3600 / 60) + "m";
-            status->uptimeSeconds = diff;
+            status->uptimeSeconds = static_cast<int>(diff);
 
             status->rerun = false;
             status->streamType = stream.type;
@@ -1586,9 +1586,9 @@ void TwitchChannel::showLoginMessage()
     const auto accountsLink = Link(Link::OpenAccountsPage, QString());
     const auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
     const auto expirationText =
-        QStringLiteral("You need to log in to send messages. You can link your "
-                       "Twitch account");
-    const auto loginPromptText = QStringLiteral("in the settings.");
+        u"You need to log in to send messages. You can link your "
+        "Twitch account"_s;
+    const auto loginPromptText = u"in the settings."_s;
 
     auto builder = MessageBuilder();
     builder.message().flags.set(MessageFlag::System);
@@ -1633,7 +1633,7 @@ void TwitchChannel::roomIdChanged()
 }
 
 QString TwitchChannel::prepareMessage(const QString &message,
-                                      int duplicateNonce) const
+                                      int /*duplicateNonce*/) const
 {
     auto *app = getApp();
     QString parsedMessage =
@@ -1791,10 +1791,9 @@ bool TwitchChannel::sendSpamMessageViaHelix(
 
             if (!res.isSent)
             {
-                const auto error =
-                    res.dropReason
-                        ? res.dropReason->message
-                        : QStringLiteral("Your message was not sent.");
+                const auto error = res.dropReason
+                                       ? res.dropReason->message
+                                       : u"Your message was not sent."_s;
                 if (isWarningAcknowledgeNotice(error))
                 {
                     channel->handleChatWarningNotice();
@@ -1826,7 +1825,8 @@ bool TwitchChannel::sendSpamMessageViaHelix(
 
             if (*sharedCallback)
             {
-                auto errorText = helixSendMessageErrorText(error, message);
+                auto errorText =
+                    helixSendMessageErrorText(error, std::move(message));
                 if (isWarningAcknowledgeNotice(errorText))
                 {
                     channel->handleChatWarningNotice();
@@ -2028,11 +2028,8 @@ void TwitchChannel::sendMessage(const QString &message)
                                     dropReason.value("message").toString();
                                 channel->addSystemMessage(
                                     message.isEmpty()
-                                        ? QStringLiteral(
-                                              "Bot message was not sent.")
-                                        : QStringLiteral(
-                                              "Bot message dropped: ") +
-                                              message);
+                                        ? u"Bot message was not sent."_s
+                                        : u"Bot message dropped: "_s + message);
                                 return;
                             }
 
@@ -2056,7 +2053,7 @@ void TwitchChannel::sendMessage(const QString &message)
                     channel->lastSentMessage_ = parsedMessage;
                 })
                 .onError([weak = weakOf<Channel>(this), parsedMessage,
-                          botSenderID](auto result) {
+                          botSenderID](const auto &result) {
                     auto channel =
                         std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
                     if (!channel)
@@ -2209,11 +2206,8 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
                                     dropReason.value("message").toString();
                                 channel->addSystemMessage(
                                     message.isEmpty()
-                                        ? QStringLiteral(
-                                              "Bot reply was not sent.")
-                                        : QStringLiteral(
-                                              "Bot reply dropped: ") +
-                                              message);
+                                        ? u"Bot reply was not sent."_s
+                                        : u"Bot reply dropped: "_s + message);
                                 return;
                             }
 
@@ -2232,7 +2226,7 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
                     channel->lastSentMessage_ = parsedMessage;
                 })
                 .onError([weak = weakOf<Channel>(this), parsedMessage, replyId,
-                          botSenderID](auto result) {
+                          botSenderID](const auto &result) {
                     auto channel =
                         std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
                     if (!channel)
@@ -2321,7 +2315,7 @@ bool TwitchChannel::isFollowingStatusKnown() const
 void TwitchChannel::setFollowingStatus(bool following,
                                        std::optional<QDateTime> followedAt)
 {
-    const bool changed = this->followingStatusKnown_ != true ||
+    const bool changed = !this->followingStatusKnown_ ||
                          this->following_ != following ||
                          this->followedAt_ != followedAt;
 
@@ -2397,8 +2391,8 @@ void TwitchChannel::refreshFollowingStatus(bool force)
     }
 
     this->lastFollowingStatusRefreshAt_ = now;
-    const auto requestUserId = userId;
-    const auto requestRoomId = roomId;
+    const auto &requestUserId = userId;
+    const auto &requestRoomId = roomId;
     const auto weak = this->weak_from_this();
 
     getHelix()->getFollowedChannel(
@@ -2799,6 +2793,7 @@ void TwitchChannel::unpinMessage()
         return;
     }
 
+    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
     this->unpinMessageAs((*pinGuard)->messageId, *currentUser);
 }
 
@@ -2818,8 +2813,10 @@ void TwitchChannel::keepPinned()
         return;
     }
 
+    // NOLINTBEGIN(bugprone-unchecked-optional-access)
     this->updatePinnedMessageAs((*pinGuard)->messageId, std::nullopt,
                                 *currentUser, (*pinGuard)->text);
+    // NOLINTEND(bugprone-unchecked-optional-access)
 }
 
 bool TwitchChannel::isLive() const
@@ -3660,7 +3657,7 @@ void TwitchChannel::refreshChatters()
         this->roomId(),
         getApp()->getAccounts()->twitch.getCurrent()->getUserId(),
         MAX_CHATTERS_TO_FETCH,
-        [this, weak = weakOf<Channel>(this)](auto result) {
+        [this, weak = weakOf<Channel>(this)](const auto &result) {
             if (auto shared = weak.lock())
             {
                 this->updateOnlineChatters(result.chatters);
@@ -3669,7 +3666,7 @@ void TwitchChannel::refreshChatters()
                 this->chatterFetchInFlight_.store(false);
             }
         },
-        [this, weak = weakOf<Channel>(this)](auto error, auto message) {
+        [this, weak = weakOf<Channel>(this)](auto error, const auto &message) {
             if (auto shared = weak.lock())
             {
                 this->chatterFetchInFlight_.store(false);
@@ -3749,7 +3746,7 @@ void TwitchChannel::refreshBadges()
             this->addTwitchBadgeSets(channelBadges);
         },
         // failureCallback
-        [this, weak = weakOf<Channel>(this)](auto error, auto message) {
+        [this, weak = weakOf<Channel>(this)](auto error, const auto &message) {
             auto shared = weak.lock();
             if (!shared)
             {
@@ -3873,11 +3870,11 @@ void TwitchChannel::setCheerEmoteSets(
         }
 
         // Sort cheermotes by cost
-        std::sort(cheerEmoteSet.cheerEmotes.begin(),
-                  cheerEmoteSet.cheerEmotes.end(),
-                  [](const auto &lhs, const auto &rhs) {
-                      return lhs.minBits > rhs.minBits;
-                  });
+        std::ranges::sort(cheerEmoteSet.cheerEmotes,
+
+                          [](const auto &lhs, const auto &rhs) {
+                              return lhs.minBits > rhs.minBits;
+                          });
 
         emoteSets.emplace_back(std::move(cheerEmoteSet));
     }
@@ -3944,7 +3941,7 @@ void TwitchChannel::createClip(const QString &title,
             this->addMessage(builder.release(), MessageContext::Original);
         },
         // failureCallback
-        [this](auto error, auto errorMessage) {
+        [this](auto error, const auto &errorMessage) {
             MessageBuilder builder;
             QString text;
             builder.message().flags.set(MessageFlag::System);
@@ -4378,7 +4375,7 @@ void TwitchChannel::updateBttvActivity()
 void TwitchChannel::updateSevenTVActivity()
 {
     static const QString seventvActivityUrl =
-        QStringLiteral("https://7tv.io/v3/users/%1/presences");
+        u"https://7tv.io/v3/users/%1/presences"_s;
 
     const auto currentSeventvUserID =
         getApp()->getAccounts()->twitch.getCurrent()->getSeventvUserID();
@@ -4510,6 +4507,7 @@ void TwitchChannel::handlePinnedChatUpdate(const QJsonObject &data)
             auto locked = this->currentPin_.accessConst();
             if (locked->has_value())
             {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 currentPin = **locked;
             }
         }
@@ -4598,8 +4596,10 @@ void TwitchChannel::setActivePoll(std::optional<PollEvent> poll)
 
     {
         auto locked = this->activePoll_.access();
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
         if (poll && locked->has_value() && (*locked)->id == poll->id)
         {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             const auto &previous = **locked;
 
             if (!poll->channelPointsVotingEnabled &&
@@ -4659,8 +4659,10 @@ void TwitchChannel::clearActiveRaid()
 
     {
         auto locked = this->activeRaid_.access();
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
         if (locked->has_value() && !(**locked).id.isEmpty())
         {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             this->locallyClearedRaidId_ = (**locked).id;
             this->locallyClearedRaidAt_ = QDateTime::currentDateTimeUtc();
         }
@@ -4717,7 +4719,7 @@ void TwitchChannel::handlePredictionUpdate(const QJsonObject &payload)
     prediction.endedByName = userDisplayNameFromObject(endedBy);
 
     auto outcomesArray = event.value("outcomes").toArray();
-    int outcomeCount = outcomesArray.size();
+    int outcomeCount = static_cast<int>(outcomesArray.size());
     for (int i = 0; i < outcomeCount; ++i)
     {
         auto o = outcomesArray[i].toObject();
@@ -4734,11 +4736,17 @@ void TwitchChannel::handlePredictionUpdate(const QJsonObject &payload)
         else if (outcomeCount == 3)
         {
             if (i == 0)
+            {
                 outcome.color = "BLUE";
+            }
             else if (i == 1)
+            {
                 outcome.color = "PINK";
+            }
             else
+            {
                 outcome.color = "GREEN";
+            }
         }
         else
         {
@@ -4908,8 +4916,8 @@ void TwitchChannel::handlePollUpdate(const QJsonObject &payload)
         event.endsAt = endsAt;
         if (event.createdAt.isValid())
         {
-            event.durationSeconds =
-                std::max(0, int(event.createdAt.secsTo(*event.endsAt)));
+            event.durationSeconds = std::max(
+                0, static_cast<int>(event.createdAt.secsTo(*event.endsAt)));
         }
     }
 
@@ -4937,7 +4945,7 @@ void TwitchChannel::handlePollUpdate(const QJsonObject &payload)
             .toInt(topContributor.value("amount").toInt());
 
     const auto choices = poll.value("choices").toArray();
-    event.choices.reserve(size_t(choices.size()));
+    event.choices.reserve(static_cast<size_t>(choices.size()));
     for (const auto choiceVal : choices)
     {
         const auto choiceObj = choiceVal.toObject();
@@ -4998,7 +5006,7 @@ void TwitchChannel::handleRaidUpdate(const QJsonObject &payload)
     assertInGuiThread();
 
     const auto topic = payload.value("topic").toString();
-    if (topic != QStringLiteral("raid.%1").arg(this->roomId()))
+    if (topic != u"raid.%1"_s.arg(this->roomId()))
     {
         return;
     }
@@ -5034,14 +5042,14 @@ void TwitchChannel::handleRaidUpdate(const QJsonObject &payload)
     event.targetProfileImage =
         raid.value("target_profile_image")
             .toString(raid.value("targetProfileImage").toString());
-    event.viewerCount = int(std::max<qint64>(
+    event.viewerCount = static_cast<int>(std::max<qint64>(
         0, parseJsonInteger(raid.value("viewer_count").isUndefined()
                                 ? raid.value("viewerCount")
                                 : raid.value("viewer_count"))));
-    event.forceRaidNowSeconds =
-        int(parseJsonInteger(raid.value("force_raid_now_seconds").isUndefined()
-                                 ? raid.value("forceRaidNowSeconds")
-                                 : raid.value("force_raid_now_seconds")));
+    event.forceRaidNowSeconds = static_cast<int>(
+        parseJsonInteger(raid.value("force_raid_now_seconds").isUndefined()
+                             ? raid.value("forceRaidNowSeconds")
+                             : raid.value("force_raid_now_seconds")));
     if (event.forceRaidNowSeconds <= 0)
     {
         event.forceRaidNowSeconds = 90;
@@ -5060,11 +5068,15 @@ void TwitchChannel::handleRaidUpdate(const QJsonObject &payload)
     if (!event.raidCreatedAt.isValid())
     {
         auto locked = this->activeRaid_.accessConst();
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
         if (locked->has_value() && (**locked).id == event.id)
         {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             event.raidCreatedAt = (**locked).raidCreatedAt;
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             if ((**locked).receivedAt.isValid())
             {
+                // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                 event.receivedAt = (**locked).receivedAt;
             }
         }
@@ -5638,6 +5650,7 @@ void TwitchChannel::showPendingChatWarningIfVisible()
         {
             return;
         }
+        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
         warning = **locked;
     }
 

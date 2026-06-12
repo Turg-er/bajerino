@@ -152,7 +152,7 @@ protected:
         QWidget *selectedWidget{};
     };
 
-    const QList<Item> items()
+    QList<Item> items()
     {
         return this->items_;
     }

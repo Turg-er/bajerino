@@ -77,12 +77,12 @@ private:
     void fetchNext();
     void processPage(const GqlModerationActionLogPage &page);
     void processAction(const GqlModerationActionLogEntry &action);
-    void emitProgress();
+    void emitProgress() const;
     void finish(bool truncated = false);
     void fail(const QString &message);
     bool matchesModeratorFilter(
         const GqlModerationActionLogEntry &action) const;
-    QString moderatorKey(const GqlModerationActionLogEntry &action) const;
+    static QString moderatorKey(const GqlModerationActionLogEntry &action);
 
     ModerationActionLogScanRequest request_;
     ModerationActionLogScanSnapshot snapshot_;

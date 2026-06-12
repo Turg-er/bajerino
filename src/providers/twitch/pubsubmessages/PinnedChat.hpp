@@ -26,6 +26,7 @@ struct PubSubPinnedChatUpdatesV1Message {
 }  // namespace chatterino
 
 template <>
+// NOLINTNEXTLINE(readability-identifier-naming)
 constexpr magic_enum::customize::customize_t magic_enum::customize::enum_name<
     chatterino::PubSubPinnedChatUpdatesV1Message::Type>(
     chatterino::PubSubPinnedChatUpdatesV1Message::Type value) noexcept

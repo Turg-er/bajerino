@@ -359,7 +359,7 @@ public:
     SharedAccessGuard<const std::optional<PredictionEvent>> accessPrediction()
         const;
     void setActivePrediction(std::optional<PredictionEvent> prediction);
-    void handlePredictionUpdate(const QJsonObject &data);
+    void handlePredictionUpdate(const QJsonObject &payload);
     void handleUserPointsUpdate(const QJsonObject &payload);
     void refreshPrediction(bool force = false);
     SharedAccessGuard<const std::optional<PollEvent>> accessPoll() const;
@@ -733,7 +733,7 @@ private:
     QString lastChannelPointsError_;
     bool disconnected_{};
     std::optional<std::chrono::time_point<std::chrono::system_clock>>
-        lastConnectedAt_{};
+        lastConnectedAt_;
     std::atomic_flag loadingRecentMessages_ = ATOMIC_FLAG_INIT;
     std::unordered_map<QString, std::weak_ptr<MessageThread>> threads_;
 

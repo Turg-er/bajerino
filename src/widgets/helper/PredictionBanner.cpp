@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <utility>
 
 namespace chatterino {
 
@@ -55,7 +56,7 @@ float normalizedBannerScale(float value)
 float predictionBannerContentScale()
 {
     return normalizedBannerScale(
-        float(getSettings()->predictionBannerContentScale));
+        static_cast<float>(getSettings()->predictionBannerContentScale));
 }
 
 QString stateTextForPrediction(const TwitchChannel::PredictionEvent &prediction)
@@ -94,18 +95,24 @@ constexpr std::array<const char *, 10> OUTCOME_PALETTE = {{
 
 QColor outcomeColorByIndex(int index)
 {
-    return QColor(OUTCOME_PALETTE[index % OUTCOME_PALETTE.size()]);
+    return {OUTCOME_PALETTE[index % OUTCOME_PALETTE.size()]};
 }
 
 QColor outcomeColorForPrediction(
     const TwitchChannel::PredictionOutcome &outcome, int index)
 {
     if (outcome.color == "PINK")
-        return QColor("#e9198b");
+    {
+        return {"#e9198b"};
+    }
     if (outcome.color == "GREEN")
-        return QColor("#16a34a");
+    {
+        return {"#16a34a"};
+    }
     if (outcome.color == "BLUE" && index == 0)
-        return QColor("#1f8fff");
+    {
+        return {"#1f8fff"};
+    }
     return outcomeColorByIndex(index);
 }
 
@@ -170,7 +177,8 @@ int outcomePercent(qlonglong points, qlonglong totalPoints, int outcomeCount)
 {
     if (totalPoints > 0)
     {
-        return static_cast<int>((points * 100.0) / totalPoints);
+        return static_cast<int>((static_cast<double>(points) * 100.0) /
+                                static_cast<double>(totalPoints));
     }
     if (outcomeCount > 0)
     {
@@ -181,22 +189,33 @@ int outcomePercent(qlonglong points, qlonglong totalPoints, int outcomeCount)
 
 int scaledInt(float value, int minimum = 1)
 {
-    return std::max(minimum, int(std::round(value)));
+    return std::max(minimum, static_cast<int>(std::round(value)));
 }
 }  // namespace
 
 PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
     : BaseWidget(parent)
+    , metadataLabel_(new QLabel(this))
+    , titleLabel_(new QLabel(this))
+    , leftOutcomeLabel_(new QLabel(this))
+    , rightOutcomeLabel_(new QLabel(this))
+    , outcomeBar_(new QWidget(this))
+    , timerLabel_(new QLabel(this))
+    , rootLayout_(new QVBoxLayout(this))
+    , topLayout_(new QHBoxLayout())
+    , contentLayout_(new QVBoxLayout())
+    , outcomeRowLayout_(new QHBoxLayout())
     , split_(split)
+    , updateTimer_(new QTimer(this))
+    , anim_(new QVariantAnimation(this))
 {
     this->setObjectName("PredictionBanner");
     this->setCursor(Qt::PointingHandCursor);
     this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-    this->anim_ = new QVariantAnimation(this);
     this->anim_->setEasingCurve(QEasingCurve::OutCubic);
     QObject::connect(this->anim_, &QVariantAnimation::valueChanged, this,
-                     [this](const QVariant &value) {
+                     [this](const QVariant & /*value*/) {
                          this->update();
                      });
 
@@ -207,12 +226,10 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
         this->update();
     }));
 
-    this->rootLayout_ = new QVBoxLayout(this);
     this->rootLayout_->setContentsMargins(0, BASE_TOP_MARGIN, BASE_RIGHT_MARGIN,
                                           BASE_BOTTOM_MARGIN);
     this->rootLayout_->setSpacing(BASE_SPACING);
 
-    this->topLayout_ = new QHBoxLayout();
     this->topLayout_->setContentsMargins(BASE_HEADER_LEFT_MARGIN, 0, 0, 0);
     this->topLayout_->setSpacing(BASE_HEADER_SPACING);
 
@@ -229,7 +246,6 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
     this->icon_->setGraphicsEffect(iconOpacity);
     this->topLayout_->addWidget(this->icon_, 0, Qt::AlignBottom);
 
-    this->metadataLabel_ = new QLabel(this);
     this->metadataLabel_->setObjectName("PredictionMetadata");
     this->metadataLabel_->setContentsMargins(0, 0, 0, 0);
     this->metadataLabel_->setAlignment(Qt::AlignLeft | Qt::AlignBottom);
@@ -240,7 +256,6 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
         QString("font-size: %1px;").arg(BASE_HEADER_FONT_SIZE));
     this->topLayout_->addWidget(this->metadataLabel_, 1, Qt::AlignBottom);
 
-    this->timerLabel_ = new QLabel(this);
     this->timerLabel_->setObjectName("PredictionTimer");
     this->timerLabel_->setStyleSheet(
         QString("font-size: %1px; font-weight: bold;")
@@ -281,11 +296,9 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
 
     this->rootLayout_->addLayout(this->topLayout_);
 
-    this->contentLayout_ = new QVBoxLayout();
     this->contentLayout_->setContentsMargins(BASE_CONTENT_LEFT_MARGIN, 0, 0, 0);
     this->contentLayout_->setSpacing(2);
 
-    this->titleLabel_ = new QLabel(this);
     this->titleLabel_->setObjectName("PredictionTitle");
     this->titleLabel_->setContentsMargins(0, 0, 0, 0);
     this->titleLabel_->setWordWrap(false);
@@ -298,11 +311,9 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
             .arg(BASE_TITLE_FONT_SIZE));
     this->contentLayout_->addWidget(this->titleLabel_);
 
-    this->outcomeRowLayout_ = new QHBoxLayout();
     this->outcomeRowLayout_->setContentsMargins(0, 0, 0, 0);
     this->outcomeRowLayout_->setSpacing(BASE_OUTCOME_SPACING);
 
-    this->leftOutcomeLabel_ = new QLabel(this);
     this->leftOutcomeLabel_->setObjectName("PredictionOutcomeLeft");
     this->leftOutcomeLabel_->setContentsMargins(0, 0, 0, 0);
     this->leftOutcomeLabel_->setTextFormat(Qt::RichText);
@@ -314,7 +325,6 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
         QString("font-size: %1px;").arg(BASE_OUTCOME_FONT_SIZE));
     this->outcomeRowLayout_->addWidget(this->leftOutcomeLabel_, 1);
 
-    this->rightOutcomeLabel_ = new QLabel(this);
     this->rightOutcomeLabel_->setObjectName("PredictionOutcomeRight");
     this->rightOutcomeLabel_->setContentsMargins(0, 0, 0, 0);
     this->rightOutcomeLabel_->setTextFormat(Qt::RichText);
@@ -328,43 +338,45 @@ PredictionBanner::PredictionBanner(Split *split, QWidget *parent)
     this->outcomeRowLayout_->addWidget(this->rightOutcomeLabel_, 1);
     this->contentLayout_->addLayout(this->outcomeRowLayout_);
 
-    this->outcomeBar_ = new QWidget(this);
     this->outcomeBar_->setAttribute(Qt::WA_TransparentForMouseEvents);
     this->outcomeBar_->setFixedHeight(BASE_BAR_HEIGHT);
 
     this->rootLayout_->addLayout(this->contentLayout_);
 
-    this->updateTimer_ = new QTimer(this);
     this->updateTimer_->setInterval(1000);
-    this->connect(this->updateTimer_, &QTimer::timeout, this,
-                  &PredictionBanner::updateTimer);
+    chatterino::PredictionBanner::connect(this->updateTimer_, &QTimer::timeout,
+                                          this, &PredictionBanner::updateTimer);
 
-    this->connect(this->closeButton_, &Button::leftClicked, [this]() {
-        if (this->prediction_)
-        {
-            this->dismissedPredictionKey_ =
-                this->dismissalKey(*this->prediction_);
-        }
-        this->hide();
-        this->dismissed.invoke();
-    });
+    chatterino::PredictionBanner::connect(
+        this->closeButton_, &Button::leftClicked, [this]() {
+            if (this->prediction_)
+            {
+                this->dismissedPredictionKey_ =
+                    chatterino::PredictionBanner::dismissalKey(
+                        *this->prediction_);
+            }
+            this->hide();
+            this->dismissed.invoke();
+        });
 
-    this->connect(this->toggleButton_, &Button::leftClicked, [this]() {
-        this->toggleBannerRequested.invoke();
-    });
+    chatterino::PredictionBanner::connect(
+        this->toggleButton_, &Button::leftClicked, [this]() {
+            this->toggleBannerRequested.invoke();
+        });
 
-    this->connect(this->icon_, &Button::leftClicked, [this]() {
-        this->openPredictionDialog();
-    });
+    chatterino::PredictionBanner::connect(this->icon_, &Button::leftClicked,
+                                          [this]() {
+                                              this->openPredictionDialog();
+                                          });
 
     getSettings()->pinBannerBackgroundColor.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->update();
         },
         this->managedConnections_);
 
     getSettings()->predictionBannerContentScale.connect(
-        [this](const float &, auto) {
+        [this](const float &, const auto &) {
             this->scaleChangedEvent(this->scale());
             this->updateGeometry();
         },
@@ -380,7 +392,7 @@ bool PredictionBanner::hasPrediction() const
         return false;
     }
     return this->dismissedPredictionKey_ !=
-           this->dismissalKey(*this->prediction_);
+           chatterino::PredictionBanner::dismissalKey(*this->prediction_);
 }
 
 void PredictionBanner::setToggleButtonVisible(bool visible)
@@ -417,12 +429,14 @@ void PredictionBanner::setPrediction(
         totalPoints += outcome.totalPoints;
     }
     const double fallbackFraction =
-        prediction->outcomes.empty() ? 0.0 : 1.0 / prediction->outcomes.size();
+        prediction->outcomes.empty()
+            ? 0.0
+            : 1.0 / static_cast<double>(prediction->outcomes.size());
     for (const auto &outcome : prediction->outcomes)
     {
         newFractions.push_back(totalPoints > 0
                                    ? static_cast<double>(outcome.totalPoints) /
-                                         totalPoints
+                                         static_cast<double>(totalPoints)
                                    : fallbackFraction);
     }
 
@@ -442,8 +456,8 @@ void PredictionBanner::setPrediction(
         {
             this->previousFractions_[i] =
                 this->previousFractions_[i] +
-                (this->targetFractions_[i] - this->previousFractions_[i]) *
-                    progress;
+                ((this->targetFractions_[i] - this->previousFractions_[i]) *
+                 progress);
         }
         this->targetFractions_ = newFractions;
         this->anim_->stop();
@@ -465,7 +479,8 @@ void PredictionBanner::setPrediction(
         this->updateTimer_->stop();
     }
 
-    if (this->dismissedPredictionKey_ != this->dismissalKey(*prediction))
+    if (this->dismissedPredictionKey_ !=
+        chatterino::PredictionBanner::dismissalKey(*prediction))
     {
         const int autoDismiss = getSettings()->predictionAutoDismissSeconds;
         if (autoDismiss > 0 && (prediction->status == "RESOLVED" ||
@@ -477,7 +492,8 @@ void PredictionBanner::setPrediction(
                      this->prediction_->status == "CANCELED"))
                 {
                     this->dismissedPredictionKey_ =
-                        this->dismissalKey(*this->prediction_);
+                        chatterino::PredictionBanner::dismissalKey(
+                            *this->prediction_);
                     this->hide();
                     this->dismissed.invoke();
                 }
@@ -965,12 +981,6 @@ void PredictionBanner::paintEvent(QPaintEvent * /*event*/)
     baseBarColor.setAlpha(80);
     painter.fillRect(barRect, baseBarColor);
 
-    qlonglong totalPoints = 0;
-    for (const auto &outcome : this->prediction_->outcomes)
-    {
-        totalPoints += outcome.totalPoints;
-    }
-
     const int outcomeCount =
         static_cast<int>(this->prediction_->outcomes.size());
     if (outcomeCount == 0)
@@ -990,13 +1000,13 @@ void PredictionBanner::paintEvent(QPaintEvent * /*event*/)
     {
         const auto &outcome = this->prediction_->outcomes.at(i);
 
-        double oldF = (i < static_cast<int>(this->previousFractions_.size()))
+        double oldF = (std::cmp_less(i, this->previousFractions_.size()))
                           ? this->previousFractions_[i]
                           : fallbackFraction;
-        double targetF = (i < static_cast<int>(this->targetFractions_.size()))
+        double targetF = (std::cmp_less(i, this->targetFractions_.size()))
                              ? this->targetFractions_[i]
                              : fallbackFraction;
-        double fraction = oldF + (targetF - oldF) * animProgress;
+        double fraction = oldF + ((targetF - oldF) * animProgress);
 
         cumulativeFraction += fraction;
 
@@ -1078,7 +1088,7 @@ QDateTime PredictionBanner::predictionEndsAt() const
 }
 
 QString PredictionBanner::dismissalKey(
-    const TwitchChannel::PredictionEvent &prediction) const
+    const TwitchChannel::PredictionEvent &prediction)
 {
     return prediction.id + ':' + prediction.status;
 }

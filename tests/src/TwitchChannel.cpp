@@ -151,7 +151,7 @@ public:
     PubSub pubSub;
 };
 
-QJsonObject makeChannelPointRedemption(QString redemptionId,
+QJsonObject makeChannelPointRedemption(const QString &redemptionId,
                                        QString cursor = "cursor-1")
 {
     QJsonObject redemption{

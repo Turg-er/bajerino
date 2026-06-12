@@ -30,9 +30,9 @@ public:
 private:
     void queueRefresh();
 
-    EmotePtr lookupBadge(const std::unordered_map<QString, int> &badgeMap,
-                         const std::vector<EmotePtr> &emotes,
-                         const QString &userId) const;
+    static EmotePtr lookupBadge(
+        const std::unordered_map<QString, int> &badgeMap,
+        const std::vector<EmotePtr> &emotes, const QString &userId);
 
     std::atomic_bool refreshQueued_{false};
     std::atomic_bool loadStarted_{false};

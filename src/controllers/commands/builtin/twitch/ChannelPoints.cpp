@@ -4,7 +4,6 @@
 #include "common/Channel.hpp"
 #include "controllers/commands/CommandContext.hpp"
 #include "providers/moltorino/MoltorinoFeatureFlags.hpp"
-#include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/WindowManager.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"

@@ -59,7 +59,7 @@ QString removeModerator(const CommandContext &ctx)
          channel{ctx.channel}](const HelixUser &targetUser) {
             getHelix()->removeChannelModerator(
                 twitchChannel->roomId(), targetUser.id, [] {},
-                [channel, targetUser](auto error, auto message) {
+                [channel, targetUser](auto error, const auto &message) {
                     QString errorMessage =
                         QString("Failed to remove channel moderator - ");
 

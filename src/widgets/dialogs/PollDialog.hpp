@@ -30,6 +30,7 @@ class SvgButton;
 class PollDialog : public DraggablePopup
 {
 public:
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class OpenMode {
         CreateOrActivePoll,
         ShowPollResults,
@@ -48,6 +49,7 @@ protected:
     void themeChangedEvent() override;
     void scaleChangedEvent(float scale) override;
     void showEvent(QShowEvent *event) override;
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
@@ -108,7 +110,8 @@ private:
     int mainScrollValue_ = 0;
     std::vector<pajlada::Signals::ScopedConnection> managedConnections_;
 
-    static std::vector<QPointer<PollDialog>> activeDialogs_;
+    static std::vector<QPointer<PollDialog>>
+        activeDialogs_;  // NOLINT(readability-identifier-naming)
 };
 
 }  // namespace chatterino

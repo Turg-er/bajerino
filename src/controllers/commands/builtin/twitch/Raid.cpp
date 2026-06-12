@@ -20,6 +20,8 @@
 #include <memory>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -144,9 +146,8 @@ MoltorinoAuthToken resolveRaidAuth(const CommandContext &ctx,
 
 QString raidAuthRequiredMessage()
 {
-    return QStringLiteral(
-        "Raid controls need a broadcaster or editor account. Add it in "
-        "Settings -> Moltorino -> Authentication, then try again.");
+    return u"Raid controls need a broadcaster or editor account. Add it in "
+           "Settings -> Moltorino -> Authentication, then try again."_s;
 }
 
 QString raidAuthMessage(const QString &authError)
@@ -168,7 +169,7 @@ void startRaidWithHelix(const CommandContext &ctx, const QString &target)
         [roomId, channel{ctx.channel}](const HelixUser &targetUser) {
             getHelix()->startRaid(
                 roomId, targetUser.id, [] {},
-                [channel](auto error, auto message) {
+                [channel](auto error, const auto &message) {
                     auto errorMessage = formatStartRaidError(error, message);
                     runInGuiThread([channel, errorMessage] {
                         channel->addSystemMessage(errorMessage);
@@ -241,7 +242,7 @@ QString startRaid(const CommandContext &ctx)
     const auto weak = ctx.twitchChannel->weak_from_this();
     TwitchGql::getRaidChannelIDs(
         sourceLogin, target, auth.token,
-        [channel{ctx.channel}, weak, auth](RaidChannelIDs ids) {
+        [channel{ctx.channel}, weak, auth](const RaidChannelIDs &ids) {
             TwitchGql::createRaid(
                 ids.sourceId, ids.targetId, auth.token,
                 [weak, ids](const QString &raidId) {
@@ -299,7 +300,7 @@ QString cancelRaid(const CommandContext &ctx)
     }
 
     const auto commandName =
-        ctx.words.isEmpty() ? QStringLiteral("/unraid") : ctx.words.first();
+        ctx.words.isEmpty() ? u"/unraid"_s : ctx.words.first();
 
     if (ctx.twitchChannel == nullptr)
     {
@@ -370,7 +371,7 @@ QString cancelRaid(const CommandContext &ctx)
                 }
             });
         },
-        [channel{ctx.channel}](auto error, auto message) {
+        [channel{ctx.channel}](auto error, const auto &message) {
             auto errorMessage = formatCancelRaidError(error, message);
             runInGuiThread([channel, errorMessage] {
                 channel->addSystemMessage(errorMessage);

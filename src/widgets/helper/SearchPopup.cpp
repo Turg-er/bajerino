@@ -177,7 +177,7 @@ void SearchPopup::updateWindowTitle()
         this->searchInput_->setPlaceholderText("Search all open tabs");
         return;
     }
-    else if (this->channelName_ == "/automod")
+    if (this->channelName_ == "/automod")
     {
         historyName = "automod";
     }
@@ -277,11 +277,11 @@ std::vector<MessagePtr> SearchPopup::buildSnapshot()
               });
 
     auto uniqueIterator =
-        std::unique(combinedSnapshot.begin(), combinedSnapshot.end(),
-                    [](MessagePtr &a, MessagePtr &b) {
-                        // nullptr check prevents system messages from being dropped
-                        return !a->id.isEmpty() && a->id == b->id;
-                    });
+        std::ranges::unique(combinedSnapshot, [](MessagePtr &a, MessagePtr &b) {
+            // nullptr check prevents system messages from
+            // being dropped
+            return !a->id.isEmpty() && a->id == b->id;
+        }).begin();
 
     combinedSnapshot.erase(uniqueIterator, combinedSnapshot.end());
 

@@ -35,7 +35,7 @@ private:
     void refreshInternal(bool force, std::optional<int> minimumVersion);
     void finishRequest();
     void loadCache();
-    void saveCache(const QByteArray &payload) const;
+    static void saveCache(const QByteArray &payload);
     bool applyPayload(const QByteArray &payload, bool fromCache,
                       std::optional<int> minimumVersion = std::nullopt);
 

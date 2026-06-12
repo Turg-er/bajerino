@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 namespace {
@@ -46,7 +48,7 @@ bool isShownModerationAction(GqlModerationActionKind kind)
     return false;
 }
 
-QString normalized(QString value)
+QString normalized(const QString &value)
 {
     return value.trimmed().toLower();
 }
@@ -100,10 +102,7 @@ ModerationActionLogScanner::ModerationActionLogScanner(
     {
         this->request_.maxPages = 1;
     }
-    if (this->request_.pageDelayMs < 0)
-    {
-        this->request_.pageDelayMs = 0;
-    }
+    this->request_.pageDelayMs = std::max(this->request_.pageDelayMs, 0);
 }
 
 void ModerationActionLogScanner::start()
@@ -131,19 +130,17 @@ ModerationActionLogScanSnapshot ModerationActionLogScanner::snapshot() const
     {
         snapshot.moderators.push_back(entry.summary);
     }
-    std::sort(
-        snapshot.moderators.begin(), snapshot.moderators.end(),
-        [](const auto &a, const auto &b) {
-            const auto aTotal = a.counts.countedTotal();
-            const auto bTotal = b.counts.countedTotal();
-            if (aTotal != bTotal)
-            {
-                return aTotal > bTotal;
-            }
-            const auto aName = a.login.isEmpty() ? a.displayName : a.login;
-            const auto bName = b.login.isEmpty() ? b.displayName : b.login;
-            return aName.compare(bName, Qt::CaseInsensitive) < 0;
-        });
+    std::ranges::sort(snapshot.moderators, [](const auto &a, const auto &b) {
+        const auto aTotal = a.counts.countedTotal();
+        const auto bTotal = b.counts.countedTotal();
+        if (aTotal != bTotal)
+        {
+            return aTotal > bTotal;
+        }
+        const auto aName = a.login.isEmpty() ? a.displayName : a.login;
+        const auto bName = b.login.isEmpty() ? b.displayName : b.login;
+        return aName.compare(bName, Qt::CaseInsensitive) < 0;
+    });
     return snapshot;
 }
 
@@ -163,7 +160,7 @@ void ModerationActionLogScanner::fetchNext()
     const QPointer<ModerationActionLogScanner> self(this);
     TwitchGql::getModerationActionLogs(
         this->request_.channelId, this->cursor_, this->request_.oauthToken,
-        [self](GqlModerationActionLogPage page) {
+        [self](const GqlModerationActionLogPage &page) {
             if (!self)
             {
                 return;
@@ -188,7 +185,7 @@ void ModerationActionLogScanner::processPage(
     }
 
     this->snapshot_.pagesRead++;
-    this->snapshot_.rawActionsSeen += page.actions.size();
+    this->snapshot_.rawActionsSeen += static_cast<int>(page.actions.size());
 
     bool stopForCutoff = false;
     for (const auto &action : page.actions)
@@ -251,7 +248,8 @@ void ModerationActionLogScanner::processAction(
 
     addKind(this->snapshot_.totals, action.kind);
 
-    const auto key = this->moderatorKey(action);
+    const auto key =
+        chatterino::ModerationActionLogScanner::moderatorKey(action);
     auto &entry = this->moderators_[key];
     if (entry.summary.id.isEmpty())
     {
@@ -266,14 +264,13 @@ void ModerationActionLogScanner::processAction(
     }
     else if (entry.summary.displayName.isEmpty())
     {
-        entry.summary.displayName = entry.summary.login.isEmpty()
-                                        ? QStringLiteral("Unknown")
-                                        : entry.summary.login;
+        entry.summary.displayName =
+            entry.summary.login.isEmpty() ? u"Unknown"_s : entry.summary.login;
     }
     addKind(entry.summary.counts, action.kind);
 }
 
-void ModerationActionLogScanner::emitProgress()
+void ModerationActionLogScanner::emitProgress() const
 {
     if (this->onProgress)
     {
@@ -336,7 +333,7 @@ bool ModerationActionLogScanner::matchesModeratorFilter(
 }
 
 QString ModerationActionLogScanner::moderatorKey(
-    const GqlModerationActionLogEntry &action) const
+    const GqlModerationActionLogEntry &action)
 {
     if (!action.moderatorId.isEmpty())
     {

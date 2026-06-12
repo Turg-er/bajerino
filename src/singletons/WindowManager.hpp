@@ -199,7 +199,7 @@ private:
     Window *mainWindow_{};
     Window *selectedWindow_{};
 
-    MessageElementFlags wordFlags_{};
+    MessageElementFlags wordFlags_;
 
     QTimer *saveTimer;
 

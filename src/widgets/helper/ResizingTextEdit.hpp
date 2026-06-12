@@ -36,7 +36,7 @@ public:
     void resetCompletion();
 
 protected:
-    int heightForWidth(int) const override;
+    int heightForWidth(int /*unused*/) const override;
     void keyPressEvent(QKeyEvent *event) override;
     void changeEvent(QEvent *event) override;
 
@@ -79,7 +79,6 @@ private:
 
     bool eventFilter(QObject *obj, QEvent *event) override;
 
-private Q_SLOTS:
     void insertCompletion(const QString &completion);
 };
 

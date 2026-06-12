@@ -44,7 +44,7 @@ SplitContainer::SplitContainer(Notebook *parent)
     this->refreshTabTitle();
 
     getSettings()->showAnonymousChannelIndicator.connect(
-        [this](auto, auto) {
+        [this](auto, const auto &) {
             this->refreshTabTitle();
         },
         this->signalHolder_);

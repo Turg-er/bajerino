@@ -31,6 +31,8 @@
 #include <QTableView>
 #include <QtConcurrent/QtConcurrent>
 
+#include <utility>
+
 namespace chatterino {
 
 qint64 dirSize(QString &dirPath)
@@ -350,11 +352,11 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
     texts->setContentsMargins(0, 0, 0, 15);
     texts->setSizeConstraint(QLayout::SetMaximumSize);
 
-    const auto valueChanged = [=, this] {
+    const auto valueChanged = [this] {
         bool ok = false;
         const auto index = QObject::sender()->objectName().toInt(&ok);
         if (!ok || index < 0 ||
-            index >= static_cast<int>(this->durationInputs_.size()))
+            std::cmp_greater_equal(index, this->durationInputs_.size()))
         {
             return;
         }
@@ -380,7 +382,7 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
         }
 
         auto timeouts = getSettings()->timeoutButtons.getValue();
-        if (index >= static_cast<int>(timeouts.size()))
+        if (std::cmp_greater_equal(index, timeouts.size()))
         {
             return;
         }
@@ -388,11 +390,11 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
         getSettings()->timeoutButtons.setValue(timeouts);
     };
 
-    const auto reasonChanged = [=, this] {
+    const auto reasonChanged = [this] {
         bool ok = false;
         const auto index = QObject::sender()->objectName().toInt(&ok);
         if (!ok || index < 0 ||
-            index >= static_cast<int>(this->reasonInputs_.size()))
+            std::cmp_greater_equal(index, this->reasonInputs_.size()))
         {
             return;
         }
@@ -444,7 +446,7 @@ void ModerationPage::addModerationButtonSettings(QTabWidget *tabs)
         auto *lineEditReasonInput = new QLineEdit();
         lineEditReasonInput->setObjectName(buttonNumber);
         lineEditReasonInput->setPlaceholderText("optional timeout reason");
-        if (index < static_cast<int>(reasons.size()))
+        if (std::cmp_less(index, reasons.size()))
         {
             lineEditReasonInput->setText(reasons[index]);
         }

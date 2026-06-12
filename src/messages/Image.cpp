@@ -31,6 +31,8 @@
 #include <algorithm>
 #include <atomic>
 
+using namespace Qt::StringLiterals;
+
 // Duration between each check of every Image instance
 const auto IMAGE_POOL_CLEANUP_INTERVAL = std::chrono::minutes(1);
 // Duration since last usage of Image pixmap before expiration of frames
@@ -793,9 +795,12 @@ void ImageExpirationPool::freeOld()
     qCDebug(chatterinoImage) << "freed frame data for" << numExpired << "/"
                              << eligible << "eligible images";
 #    endif
-    DebugCount::set(DebugObject::LastImageGcExpired, numExpired);
-    DebugCount::set(DebugObject::LastImageGcEligible, eligible);
-    DebugCount::set(DebugObject::LastImageGcLeft, this->allImages_.size());
+    DebugCount::set(DebugObject::LastImageGcExpired,
+                    static_cast<int64_t>(numExpired));
+    DebugCount::set(DebugObject::LastImageGcEligible,
+                    static_cast<int64_t>(eligible));
+    DebugCount::set(DebugObject::LastImageGcLeft,
+                    static_cast<int64_t>(this->allImages_.size()));
 }
 
 std::vector<ImageExpirationPool::ProviderUsage>
@@ -804,62 +809,62 @@ std::vector<ImageExpirationPool::ProviderUsage>
     const auto providerForUrl = [](const QString &url) {
         if (url.isEmpty())
         {
-            return QStringLiteral("internal");
+            return u"internal"_s;
         }
         if (url.startsWith(u":/"))
         {
-            return QStringLiteral("resources");
+            return u"resources"_s;
         }
 
         const QUrl parsed(url);
-        const auto host = parsed.host().toLower();
+        auto host = parsed.host().toLower();
         const auto path = parsed.path().toLower();
         if (host.isEmpty())
         {
-            return QStringLiteral("unknown");
+            return u"unknown"_s;
         }
 
         if (host.contains(u"chatterinohomies.com") ||
             host == u"itzalex.github.io")
         {
-            return QStringLiteral("Homies");
+            return u"Homies"_s;
         }
         if (host.contains(u"7tv"))
         {
             if (path.contains(u"/emote/"))
             {
-                return QStringLiteral("7TV emotes");
+                return u"7TV emotes"_s;
             }
             if (path.contains(u"/paint/"))
             {
-                return QStringLiteral("7TV paints");
+                return u"7TV paints"_s;
             }
             if (path.contains(u"/badge/"))
             {
-                return QStringLiteral("7TV badges");
+                return u"7TV badges"_s;
             }
             if (path.contains(u"/cosmetic/"))
             {
-                return QStringLiteral("7TV cosmetics");
+                return u"7TV cosmetics"_s;
             }
-            return QStringLiteral("7TV");
+            return u"7TV"_s;
         }
         if (host.contains(u"jtvnw.net") || host.contains(u"ttvnw.net") ||
             host.contains(u"twitch.tv"))
         {
-            return QStringLiteral("Twitch");
+            return u"Twitch"_s;
         }
         if (host.contains(u"betterttv") || host.contains(u"bttv"))
         {
-            return QStringLiteral("BTTV");
+            return u"BTTV"_s;
         }
         if (host.contains(u"frankerfacez") || host.contains(u"ffzap"))
         {
-            return QStringLiteral("FFZ");
+            return u"FFZ"_s;
         }
         if (host.contains(u"chatterino"))
         {
-            return QStringLiteral("Chatterino");
+            return u"Chatterino"_s;
         }
 
         return host;
@@ -867,7 +872,7 @@ std::vector<ImageExpirationPool::ProviderUsage>
 
     std::map<QString, ProviderUsage> providers;
 
-    std::lock_guard<std::mutex> lock(this->mutex_);
+    std::scoped_lock lock(this->mutex_);
     for (auto it = this->allImages_.begin(); it != this->allImages_.end();)
     {
         auto img = it->second.lock();

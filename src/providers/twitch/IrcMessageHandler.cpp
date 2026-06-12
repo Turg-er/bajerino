@@ -69,7 +69,7 @@ bool isAnonymousIrcNick(const QString &nick)
     }
 
     constexpr auto prefixSize = 9;
-    if (!nick.startsWith(QStringLiteral("justinfan"), Qt::CaseInsensitive) ||
+    if (!nick.startsWith(u"justinfan"_s, Qt::CaseInsensitive) ||
         nick.size() <= prefixSize)
     {
         return false;
@@ -101,12 +101,10 @@ bool deleteActionTargetsMessage(const MessagePtr &message,
         return false;
     }
 
-    return std::any_of(message->elements.cbegin(), message->elements.cend(),
-                       [&](const auto &element) {
-                           const auto link = element->getLink();
-                           return link.type == Link::JumpToMessage &&
-                                  link.value == messageID;
-                       });
+    return std::ranges::any_of(message->elements, [&](const auto &element) {
+        const auto link = element->getLink();
+        return link.type == Link::JumpToMessage && link.value == messageID;
+    });
 }
 
 bool hasDeleteActionForMessage(Channel *channel, const QString &messageID)
@@ -117,7 +115,7 @@ bool hasDeleteActionForMessage(Channel *channel, const QString &messageID)
     }
 
     const auto messages = channel->getMessageSnapshot();
-    return std::any_of(messages.cbegin(), messages.cend(), [&](const auto &m) {
+    return std::ranges::any_of(messages, [&](const auto &m) {
         return deleteActionTargetsMessage(m, messageID);
     });
 }

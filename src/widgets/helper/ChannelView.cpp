@@ -87,6 +87,8 @@
 #include <memory>
 #include <variant>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 constexpr size_t TOOLTIP_EMOTE_ENTRIES_LIMIT = 7;
@@ -144,11 +146,11 @@ QString translationTooltip(const TranslationResult &translation,
 
     if (detectedLanguageName.isEmpty() || detectedLanguage == targetLanguage)
     {
-        return QStringLiteral("Translated to %1").arg(targetLanguageName);
+        return u"Translated to %1"_s.arg(targetLanguageName);
     }
 
-    return QStringLiteral("Translated from %1 to %2")
-        .arg(detectedLanguageName, targetLanguageName);
+    return u"Translated from %1 to %2"_s.arg(detectedLanguageName,
+                                             targetLanguageName);
 }
 
 bool isTranslatableContentElement(const MessageElement &element,
@@ -256,8 +258,7 @@ TranslationRequestText prepareTranslationRequestText(
         }
 
         const auto placeholder =
-            QStringLiteral("MOLTOEMOTE%1")
-                .arg(placeholderIndex++, 4, 10, QLatin1Char('0'));
+            u"MOLTOEMOTE%1"_s.arg(placeholderIndex++, 4, 10, QLatin1Char('0'));
         placeholderEmotes.insert(placeholder, *emoteIt);
         word = placeholder;
     }
@@ -272,10 +273,9 @@ QString expandTranslationPlaceholders(
     QString text, const QHash<QString, EmotePtr> &placeholderEmotes)
 {
     auto placeholders = placeholderEmotes.keys();
-    std::sort(placeholders.begin(), placeholders.end(),
-              [](const QString &a, const QString &b) {
-                  return a.size() > b.size();
-              });
+    std::ranges::sort(placeholders, [](const QString &a, const QString &b) {
+        return a.size() > b.size();
+    });
 
     for (const auto &placeholder : placeholders)
     {
@@ -348,8 +348,7 @@ void appendTranslatedContent(std::vector<std::unique_ptr<MessageElement>> &out,
     if (getSettings()->showTranslatedMessageIndicator)
     {
         builder
-            .emplace<TextElement>(QStringLiteral("(translated)"),
-                                  MessageElementFlag::Text,
+            .emplace<TextElement>(u"(translated)"_s, MessageElementFlag::Text,
                                   MessageColor::System)
             ->setTooltip(tooltip);
     }
@@ -378,7 +377,7 @@ MessagePtrMut makeTranslatedMessage(
     translated->translatedFrom = sourceMessage;
     translated->messageText = translatedText;
     translated->searchText =
-        sourceMessage->searchText + QStringLiteral(" ") + translatedText;
+        sourceMessage->searchText + u" "_s + translatedText;
 
     const auto contentStart =
         std::ranges::find_if(sourceMessage->elements, [&](const auto &element) {
@@ -514,7 +513,7 @@ bool shouldApplyAutomaticTranslation(
 void translateMessageForChannel(const ChannelPtr &channel,
                                 const MessagePtr &message, QObject *caller,
                                 bool showErrors, bool skipSameLanguage,
-                                std::function<void()> onFinished = {})
+                                const std::function<void()> &onFinished = {})
 {
     if (channel == nullptr)
     {
@@ -578,7 +577,7 @@ void translateMessageForChannel(const ChannelPtr &channel,
                 addTranslationFailedMessage(channel);
             }
         },
-        std::move(onFinished));
+        onFinished);
 }
 
 std::shared_ptr<QColor> nukePreviewScrollbarColor()
@@ -592,7 +591,7 @@ bool hostMatches(const QString &host, QStringView domain)
     const auto lowerHost = host.toLower();
     const auto domainString = domain.toString();
     return lowerHost == domainString ||
-           lowerHost.endsWith(QStringLiteral(".") + domainString);
+           lowerHost.endsWith(u"."_s + domainString);
 }
 
 std::optional<QString> chatVaultEmoteUrl(QStringView provider,
@@ -604,9 +603,9 @@ std::optional<QString> chatVaultEmoteUrl(QStringView provider,
         return std::nullopt;
     }
 
-    return QStringLiteral("https://chatvau.lt/emote/%1/%2")
-        .arg(provider.toString(),
-             QString::fromLatin1(QUrl::toPercentEncoding(trimmedID)));
+    return u"https://chatvau.lt/emote/%1/%2"_s.arg(
+        provider.toString(),
+        QString::fromLatin1(QUrl::toPercentEncoding(trimmedID)));
 }
 
 std::optional<QString> chatVaultEmoteUrlFromKnownUrl(const QString &urlString)
@@ -625,35 +624,32 @@ std::optional<QString> chatVaultEmoteUrlFromKnownUrl(const QString &urlString)
     }
 
     if (hostMatches(host, u"7tv.app") && path.size() >= 2 &&
-        (path[0] == QStringLiteral("emotes") ||
-         path[0] == QStringLiteral("emote")))
+        (path[0] == u"emotes"_s || path[0] == u"emote"_s))
     {
         return chatVaultEmoteUrl(u"7tv", path[1]);
     }
 
     if (hostMatches(host, u"betterttv.com") && path.size() >= 2 &&
-        path[0] == QStringLiteral("emotes"))
+        path[0] == u"emotes"_s)
     {
         return chatVaultEmoteUrl(u"bttv", path[1]);
     }
 
     if (hostMatches(host, u"betterttv.net") && path.size() >= 2 &&
-        path[0] == QStringLiteral("emote"))
+        path[0] == u"emote"_s)
     {
         return chatVaultEmoteUrl(u"bttv", path[1]);
     }
 
     if (hostMatches(host, u"frankerfacez.com") && path.size() >= 2 &&
-        (path[0] == QStringLiteral("emoticon") ||
-         path[0] == QStringLiteral("emote")))
+        (path[0] == u"emoticon"_s || path[0] == u"emote"_s))
     {
         return chatVaultEmoteUrl(u"ffz", path[1].section('-', 0, 0));
     }
 
-    if (host.compare(QStringLiteral("static-cdn.jtvnw.net"),
-                     Qt::CaseInsensitive) == 0 &&
-        path.size() >= 3 && path[0] == QStringLiteral("emoticons") &&
-        (path[1] == QStringLiteral("v2") || path[1] == QStringLiteral("v1")))
+    if (host.compare(u"static-cdn.jtvnw.net"_s, Qt::CaseInsensitive) == 0 &&
+        path.size() >= 3 && path[0] == u"emoticons"_s &&
+        (path[1] == u"v2"_s || path[1] == u"v1"_s))
     {
         return chatVaultEmoteUrl(u"twitch", path[2]);
     }
@@ -721,8 +717,7 @@ void addEmoteContextMenuItems(QMenu *menu, const Emote &emote, QStringView kind)
     // Scale of the smallest image
     std::optional<qreal> baseScale;
     const auto isMoltorinoBadge =
-        kind == u"badge" &&
-        emote.name.string.startsWith(QStringLiteral("moltorino:"));
+        kind == u"badge" && emote.name.string.startsWith(u"moltorino:"_s);
     // Add copy and open links for images
     auto addImageLink = [&](const ImagePtr &image, const QString &label = {}) {
         if (!image->isEmpty())
@@ -749,11 +744,11 @@ void addEmoteContextMenuItems(QMenu *menu, const Emote &emote, QStringView kind)
     };
 
     addImageLink(emote.images.getImage1(),
-                 isMoltorinoBadge ? QStringLiteral("1") : QString{});
+                 isMoltorinoBadge ? u"1"_s : QString{});
     addImageLink(emote.images.getImage2(),
-                 isMoltorinoBadge ? QStringLiteral("2") : QString{});
+                 isMoltorinoBadge ? u"2"_s : QString{});
     addImageLink(emote.images.getImage3(),
-                 isMoltorinoBadge ? QStringLiteral("3") : QString{});
+                 isMoltorinoBadge ? u"3"_s : QString{});
 
     bool openPageSection = false;
     auto ensureOpenPageSection = [&] {
@@ -1350,14 +1345,14 @@ void ChannelView::updateScrollWidgetGeometries()
 {
     if (this->scrollBar_)
     {
-        const auto scrollbarWidth = int(16 * this->scale());
+        const auto scrollbarWidth = static_cast<int>(16 * this->scale());
         this->scrollBar_->setGeometry(this->width() - scrollbarWidth, 0,
                                       scrollbarWidth, this->height());
     }
 
     if (this->goToBottom_)
     {
-        const auto goToBottomHeight = int(this->scale() * 26);
+        const auto goToBottomHeight = static_cast<int>(this->scale() * 26);
         this->goToBottom_->setGeometry(0, this->height() - goToBottomHeight,
                                        this->width(), goToBottomHeight);
     }
@@ -2573,7 +2568,7 @@ void ChannelView::drawMessages(QPainter &painter, const QRect &area)
         return;
     }
 
-    MessageLayout *end = nullptr;
+    MessageLayout const *end = nullptr;
 
     auto messagePreferences = this->messagePreferences_;
     if (this->overrideSeparateMessages_.has_value())
@@ -2639,7 +2634,8 @@ void ChannelView::drawMessages(QPainter &painter, const QRect &area)
                 };
                 painter.fillRect(previewRect, QColor(255, 70, 70, 38));
                 painter.fillRect(
-                    QRect{0, ctx.y, std::max(2, int(3 * this->scale())),
+                    QRect{0, ctx.y,
+                          std::max(2, static_cast<int>(3 * this->scale())),
                           layout->getHeight()},
                     QColor(255, 70, 70, 145));
             }
@@ -3744,6 +3740,7 @@ void ChannelView::addMessageContextMenuItems(QMenu *menu,
         {
             auto id = layout->getMessage()->id;
             auto pinnedMessage = twitchChannel->accessPinnedMessage();
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             if (pinnedMessage->has_value() && (*pinnedMessage)->messageId == id)
             {
                 menu->addAction("Unpin message", [twitchChannel] {
@@ -3811,6 +3808,7 @@ void ChannelView::addMessageContextMenuItems(QMenu *menu,
             {
                 auto pinnedMessage = twitchChannel->accessPinnedMessage();
                 if (pinnedMessage->has_value() &&
+                    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
                     (*pinnedMessage)->messageId == id)
                 {
                     moderateMenu->addAction("Unpin message", [twitchChannel] {

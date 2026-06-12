@@ -152,14 +152,9 @@ bool Settings::isAutoTranslateChannel(const QString &channelName)
 {
     auto items = this->autoTranslateChannels.readOnly();
 
-    for (const auto &channel : *items)
-    {
-        if (channelName.compare(channel, Qt::CaseInsensitive) == 0)
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(*items, [&](const auto &channel) {
+        return channelName.compare(channel, Qt::CaseInsensitive) == 0;
+    });
 }
 
 std::optional<QString> Settings::matchNickname(const QString &usernameText)
@@ -214,7 +209,7 @@ void Settings::disableAutoTranslateChannel(const QString &channelName)
         if (this->autoTranslateChannels.raw()[i].compare(
                 channelName, Qt::CaseInsensitive) == 0)
         {
-            this->autoTranslateChannels.removeAt(i);
+            this->autoTranslateChannels.removeAt(static_cast<int>(i));
             i--;
         }
     }

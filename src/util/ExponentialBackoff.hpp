@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
 
 namespace chatterino {
@@ -24,10 +25,7 @@ public:
 
         this->step_ += 1;
 
-        if (this->step_ >= maxSteps)
-        {
-            this->step_ = maxSteps;
-        }
+        this->step_ = std::min(this->step_, maxSteps);
 
         return next;
     }

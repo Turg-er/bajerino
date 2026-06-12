@@ -616,9 +616,11 @@ void BadgeElement::addToContainer(MessageLayoutContainer &container,
     const auto elementFlags = this->getFlags();
     const auto rawFlags =
         static_cast<MessageElementFlags::Int>(elementFlags.value());
+    // NOLINTNEXTLINE(readability-identifier-naming)
     constexpr auto HOMIES_SUPPORTER_FLAG =
         static_cast<MessageElementFlags::Int>(
             MessageElementFlag::BadgeHomiesSupporter);
+    // NOLINTNEXTLINE(readability-identifier-naming)
     constexpr auto HOMIES_CUSTOM_FLAG = static_cast<MessageElementFlags::Int>(
         MessageElementFlag::BadgeHomiesCustom);
 
@@ -1413,7 +1415,7 @@ void LinkElement::addToContainer(MessageLayoutContainer &container,
         QString current;
         // Skip the protocol prefix (e.g. "https://") so we don't break there
         int start = 0;
-        int protocolEnd = url.indexOf("://");
+        int protocolEnd = static_cast<int>(url.indexOf("://"));
         if (protocolEnd != -1)
         {
             start = protocolEnd + 3;  // past "://"

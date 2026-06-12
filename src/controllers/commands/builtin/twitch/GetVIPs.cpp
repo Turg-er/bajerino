@@ -127,7 +127,7 @@ QString getVIPs(const CommandContext &ctx)
                                         messagePrefix, vipList, twitchChannel),
                                     MessageContext::Original);
             },
-            [channel{ctx.channel}](auto error, auto message) {
+            [channel{ctx.channel}](auto error, const auto &message) {
                 auto errorMessage = formatGetVIPsError(error, message);
                 channel->addSystemMessage(errorMessage);
             });

@@ -45,7 +45,7 @@ private:
     void updateLabelStyles();
     qint64 remainingPollSeconds() const;
     void openPollDialog();
-    QString dismissalKey(const TwitchChannel::PollEvent &poll) const;
+    static QString dismissalKey(const TwitchChannel::PollEvent &poll);
 
     SvgButton *icon_{};
     QLabel *metadataLabel_{};

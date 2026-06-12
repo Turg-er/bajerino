@@ -34,8 +34,8 @@ const std::vector<TranslationLanguage> &supportedTranslationLanguages();
 
 void requestTextTranslation(const QString &text, const QString &targetLanguage,
                             QObject *caller,
-                            TranslationSuccessCallback onSuccess,
-                            TranslationErrorCallback onError,
-                            TranslationFinishedCallback onFinished = {});
+                            const TranslationSuccessCallback &onSuccess,
+                            const TranslationErrorCallback &onError,
+                            const TranslationFinishedCallback &onFinished = {});
 
 }  // namespace chatterino

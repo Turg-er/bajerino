@@ -43,9 +43,7 @@ class MockApplication : public mock::BaseApplication
 {
 public:
     MockApplication()
-        : highlights(this->settings, &this->accounts)
-    {
-    }
+        : highlights(this->settings, &this->accounts) = default;
 
     EmoteController *getEmotes() override
     {
@@ -242,7 +240,7 @@ public:
     {
     }
 
-    void run(benchmark::State &state)
+    void run(benchmark::State &state) override
     {
         for (auto _ : state)
         {
@@ -261,7 +259,7 @@ public:
     {
     }
 
-    void run(benchmark::State &state)
+    void run(benchmark::State &state) override
     {
         auto parsed = recentmessages::detail::parseRecentMessages(
             this->messages.object());

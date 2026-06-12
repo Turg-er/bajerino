@@ -152,9 +152,10 @@ void handleModerateMessage(
     });
 }
 
-void handleModerateMessage(TwitchChannel *chan, const QDateTime &,
-                           const lib::payload::channel_moderate::v2::Event &,
-                           const lib::payload::channel_moderate::v2::Unraid &)
+void handleModerateMessage(
+    TwitchChannel *chan, const QDateTime & /*unused*/,
+    const lib::payload::channel_moderate::v2::Event & /*unused*/,
+    const lib::payload::channel_moderate::v2::Unraid & /*unused*/)
 {
     runInGuiThread([chan] {
         chan->clearActiveRaid();

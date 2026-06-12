@@ -8,6 +8,7 @@ struct CommandContext;
 
 namespace commands {
 
+// NOLINTNEXTLINE(performance-enum-size)
 enum class ModVipAction {
     AddModerator,
     RemoveModerator,

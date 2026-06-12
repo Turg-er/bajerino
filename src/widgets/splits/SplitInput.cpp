@@ -68,6 +68,9 @@
 #include <functional>
 #include <limits>
 #include <ranges>
+#include <utility>
+
+using namespace Qt::StringLiterals;
 
 using namespace Qt::Literals;
 
@@ -91,7 +94,7 @@ qreal highlightEasingFunction(qreal progress)
     {
         return 1.0 - pow(10.0 * progress, 3.0);
     }
-    return 1.0 + pow((20.0 / 9.0) * (0.5 * progress - 0.5), 3.0);
+    return 1.0 + pow((20.0 / 9.0) * ((0.5 * progress) - 0.5), 3.0);
 }
 
 int compactWidgetWidth(QWidget *widget)
@@ -121,14 +124,14 @@ QString elideWithDots(const QString &text, int width, const QFontMetrics &fm)
         return text;
     }
 
-    const auto dots = QStringLiteral("...");
+    const auto dots = u"..."_s;
     if (fm.horizontalAdvance(dots) > width)
     {
         return {};
     }
 
     int low = 0;
-    int high = text.size();
+    int high = static_cast<int>(text.size());
     while (low < high)
     {
         const int mid = (low + high + 1) / 2;
@@ -153,8 +156,8 @@ QString elidedInputPlaceholder(const QString &text, int width,
         return text;
     }
 
-    const auto sendAsPrefix = QStringLiteral("Send message as ");
-    const auto sendAsSuffix = QStringLiteral("...");
+    const auto sendAsPrefix = u"Send message as "_s;
+    const auto sendAsSuffix = u"..."_s;
     if (text.startsWith(sendAsPrefix) && text.endsWith(sendAsSuffix))
     {
         const auto login =
@@ -163,16 +166,15 @@ QString elidedInputPlaceholder(const QString &text, int width,
 
         const QStringList prefixes{
             sendAsPrefix,
-            QStringLiteral("Send as "),
-            QStringLiteral("@"),
+            u"Send as "_s,
+            u"@"_s,
             QString(),
         };
         for (const auto &prefix : prefixes)
         {
             const int loginWidth = width - fm.horizontalAdvance(prefix);
             const auto elidedLogin = elideWithDots(login, loginWidth, fm);
-            if (!elidedLogin.isEmpty() &&
-                elidedLogin != QStringLiteral("...") &&
+            if (!elidedLogin.isEmpty() && elidedLogin != u"..."_s &&
                 fm.horizontalAdvance(prefix + elidedLogin) <= width)
             {
                 return prefix + elidedLogin;
@@ -216,7 +218,7 @@ QString formatChannelPointsValue(qint64 balance)
 {
     if (balance < 0)
     {
-        return QStringLiteral("...");
+        return u"..."_s;
     }
 
     return formatCompactNumber(balance);
@@ -227,20 +229,20 @@ QString formatChannelPointsToolTip(qint64 balance)
     const auto action =
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
         getSettings()->openRewardsWithChannelPointsClick
-            ? QStringLiteral("Click to open rewards")
-            : QStringLiteral("Click to refresh");
+            ? u"Click to open rewards"_s
+            : u"Click to refresh"_s;
 #else
-        QStringLiteral("Click to refresh");
+        u"Click to refresh"_s;
 #endif
 
     if (balance >= 0)
     {
         const auto locale = getSystemLocale();
-        return QStringLiteral("Channel Points: %1\n%2")
-            .arg(locale.toString(balance), action);
+        return u"Channel Points: %1\n%2"_s.arg(locale.toString(balance),
+                                               action);
     }
 
-    return QStringLiteral("Channel Points: loading...\n%1").arg(action);
+    return u"Channel Points: loading...\n%1"_s.arg(action);
 }
 
 QString channelPointsIdleToolTip()
@@ -248,10 +250,10 @@ QString channelPointsIdleToolTip()
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
     if (getSettings()->openRewardsWithChannelPointsClick)
     {
-        return QStringLiteral("Channel Points (click to open rewards)");
+        return u"Channel Points (click to open rewards)"_s;
     }
 #endif
-    return QStringLiteral("Channel Points (click to refresh)");
+    return u"Channel Points (click to refresh)"_s;
 }
 
 QString normalizedOutgoingTranslationMode(QString mode)
@@ -262,7 +264,7 @@ QString normalizedOutgoingTranslationMode(QString mode)
     {
         return mode;
     }
-    return QStringLiteral("off");
+    return u"off"_s;
 }
 
 QString outgoingTranslationModeLabel(const QString &mode)
@@ -270,13 +272,13 @@ QString outgoingTranslationModeLabel(const QString &mode)
     const auto normalized = normalizedOutgoingTranslationMode(mode);
     if (normalized == QLatin1String(OUTGOING_TRANSLATION_PREVIEW))
     {
-        return QStringLiteral("Preview only");
+        return u"Preview only"_s;
     }
     if (normalized == QLatin1String(OUTGOING_TRANSLATION_SEND))
     {
-        return QStringLiteral("Translate on send");
+        return u"Translate on send"_s;
     }
-    return QStringLiteral("Off");
+    return u"Off"_s;
 }
 
 QString formatRaidCountdown(int seconds)
@@ -284,8 +286,7 @@ QString formatRaidCountdown(int seconds)
     seconds = std::max(0, seconds);
     const auto minutes = seconds / 60;
     const auto secs = seconds % 60;
-    return QStringLiteral("%1:%2").arg(minutes).arg(secs, 2, 10,
-                                                    QLatin1Char('0'));
+    return u"%1:%2"_s.arg(minutes).arg(secs, 2, 10, QLatin1Char('0'));
 }
 
 qint64 remainingRaidMilliseconds(const TwitchChannel::RaidEvent &raid)
@@ -304,9 +305,8 @@ qint64 remainingRaidMilliseconds(const TwitchChannel::RaidEvent &raid)
 
 QString raidViewerText(int viewerCount)
 {
-    return QStringLiteral("%1 viewer%2")
-        .arg(std::max(0, viewerCount))
-        .arg(viewerCount == 1 ? QString() : QStringLiteral("s"));
+    return u"%1 viewer%2"_s.arg(std::max(0, viewerCount))
+        .arg(viewerCount == 1 ? QString() : u"s"_s);
 }
 
 int raidProgressValue(qint64 elapsedMs, qint64 totalMs)
@@ -316,10 +316,12 @@ int raidProgressValue(qint64 elapsedMs, qint64 totalMs)
         return RAID_STATUS_PROGRESS_RANGE;
     }
 
-    return std::clamp(int((std::clamp(elapsedMs, qint64(0), totalMs) *
-                           RAID_STATUS_PROGRESS_RANGE) /
-                          totalMs),
-                      0, RAID_STATUS_PROGRESS_RANGE);
+    return std::clamp(
+        static_cast<int>(
+            (std::clamp(elapsedMs, static_cast<qint64>(0), totalMs) *
+             RAID_STATUS_PROGRESS_RANGE) /
+            totalMs),
+        0, RAID_STATUS_PROGRESS_RANGE);
 }
 
 QString warningMessageError(HelixWarnUserError error, const QString &message,
@@ -330,32 +332,31 @@ QString warningMessageError(HelixWarnUserError error, const QString &message,
     switch (error)
     {
         case Error::ConflictingOperation:
-            return QStringLiteral("There was a conflicting warn operation on "
-                                  "this user. Please try again.");
+            return u"There was a conflicting warn operation on "
+                   "this user. Please try again."_s;
 
         case Error::Forwarded:
             return message;
 
         case Error::Ratelimited:
-            return QStringLiteral("You are being ratelimited by Twitch. Try "
-                                  "again in a few seconds.");
+            return u"You are being ratelimited by Twitch. Try "
+                   "again in a few seconds."_s;
 
         case Error::CannotWarnUser:
-            return QStringLiteral("You cannot warn %1.").arg(displayName);
+            return u"You cannot warn %1."_s.arg(displayName);
 
         case Error::UserMissingScope:
-            return QStringLiteral("Missing required scope. Re-login with your "
-                                  "account and try again.");
+            return u"Missing required scope. Re-login with your "
+                   "account and try again."_s;
 
         case Error::UserNotAuthorized:
-            return QStringLiteral(
-                "You don't have permission to perform that action.");
+            return u"You don't have permission to perform that action."_s;
 
         case Error::Unknown:
-            return QStringLiteral("An unknown error has occurred.");
+            return u"An unknown error has occurred."_s;
     }
 
-    return QStringLiteral("An unknown error has occurred.");
+    return u"An unknown error has occurred."_s;
 }
 
 void sendWarningMessageToTarget(const ChannelPtr &channel,
@@ -373,15 +374,15 @@ void sendWarningMessageToTarget(const ChannelPtr &channel,
             [] {
                 // Twitch emits the visible moderation line separately.
             },
-            [channel, displayName](auto error, auto message) {
+            [channel, displayName](auto error, const auto &message) {
                 if (channel == nullptr)
                 {
                     return;
                 }
 
                 channel->addSystemMessage(
-                    QStringLiteral("Failed to send message as warning - %1")
-                        .arg(warningMessageError(error, message, displayName)));
+                    u"Failed to send message as warning - %1"_s.arg(
+                        warningMessageError(error, message, displayName)));
             });
     };
 
@@ -394,22 +395,20 @@ void sendWarningMessageToTarget(const ChannelPtr &channel,
     getHelix()->fetchUsers(
         {}, {QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)},
         [channel, warnTarget](const auto &users) {
-            auto it = std::find_if(
-                users.begin(), users.end(), [](const HelixUser &user) {
-                    return user.login.compare(QString::fromLatin1(
-                                                  WARNING_MESSAGE_TARGET_LOGIN),
-                                              Qt::CaseInsensitive) == 0;
-                });
+            auto it = std::ranges::find_if(users, [](const HelixUser &user) {
+                return user.login.compare(
+                           QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN),
+                           Qt::CaseInsensitive) == 0;
+            });
 
             if (it == users.end())
             {
                 if (channel != nullptr)
                 {
                     channel->addSystemMessage(
-                        QStringLiteral("Failed to send message as warning - "
-                                       "bad target username: %1")
-                            .arg(QString::fromLatin1(
-                                WARNING_MESSAGE_TARGET_LOGIN)));
+                        u"Failed to send message as warning - "
+                        "bad target username: %1"_s.arg(
+                            QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)));
                 }
                 return;
             }
@@ -423,10 +422,9 @@ void sendWarningMessageToTarget(const ChannelPtr &channel,
             if (channel != nullptr)
             {
                 channel->addSystemMessage(
-                    QStringLiteral("Failed to send message as warning - "
-                                   "could not look up %1.")
-                        .arg(
-                            QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)));
+                    u"Failed to send message as warning - "
+                    "could not look up %1."_s.arg(
+                        QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)));
             }
         });
 }
@@ -461,43 +459,43 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
     });
 
     getSettings()->enablePredictions.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->showPredictionButton.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->enablePolls.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->showPollButton.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->enableChannelPointsDisplay.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->openRewardsWithChannelPointsClick.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->bindChannelPoints(dynamic_cast<TwitchChannel *>(
                 this->split_->getSelectedChannel().get()));
         },
         this->managedConnections_);
     getSettings()->customPinAuthToken.connect(
-        [this](const QString &token, auto) {
+        [this](const QString &token, const auto &) {
             if (token.trimmed().isEmpty())
             {
                 return;
@@ -511,7 +509,7 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
         },
         this->managedConnections_);
     getSettings()->moltorinoAuthAccounts.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             if (dynamic_cast<TwitchChannel *>(
                     this->split_->getSelectedChannel().get()) != nullptr)
             {
@@ -520,22 +518,22 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
         },
         this->managedConnections_);
     getSettings()->hideEmojiButton.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->updateEmoteButton();
         },
         this->managedConnections_);
     getSettings()->nukePreviewEnabled.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->updateNukePreview(this->ui_.textEdit->toPlainText());
         },
         this->managedConnections_);
     getSettings()->showRaidStatusAboveInput.connect(
-        [this](const auto &, auto) {
+        [this](const auto &, const auto &) {
             this->updateRaidStatus();
         },
         this->managedConnections_);
     getSettings()->showCommandSuggestions.connect(
-        [this](const bool enabled, auto) {
+        [this](const bool enabled, const auto &) {
             if (enabled)
             {
                 this->updateCompletionPopup();
@@ -547,19 +545,19 @@ SplitInput::SplitInput(QWidget *parent, Split *_chatWidget,
         },
         this->managedConnections_);
     getSettings()->showOutgoingTranslationButton.connect(
-        [this](const bool &, auto) {
+        [this](const bool &, const auto &) {
             this->updateOutgoingTranslationButton();
             this->updateActionRowCompactness();
         },
         this->managedConnections_);
     getSettings()->outgoingTranslationMode.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->updateOutgoingTranslationButton();
             this->updateOutgoingTranslationPreview();
         },
         this->managedConnections_);
     getSettings()->outgoingTranslationTargetLanguage.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->outgoingTranslationPreviewSource_.clear();
             this->updateOutgoingTranslationButton();
             this->updateOutgoingTranslationPreview();
@@ -662,7 +660,8 @@ void SplitInput::initLayout()
     raidProgress->setObjectName("raidStatusProgress");
     raidProgress->setRange(0, RAID_STATUS_PROGRESS_RANGE);
     raidProgress->setTextVisible(false);
-    raidProgress->setFixedHeight(std::max(2, int(2 * this->scale())));
+    raidProgress->setFixedHeight(
+        std::max(2, static_cast<int>(2 * this->scale())));
     raidStatusWidget->hide();
 
     auto nukePreviewLabel =
@@ -692,7 +691,7 @@ void SplitInput::initLayout()
         row->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         row->setContentsMargins(6, 1, 6, 1);
         row->setCursor(Qt::PointingHandCursor);
-        row->setProperty("commandCompletionRow", int(i));
+        row->setProperty("commandCompletionRow", static_cast<int>(i));
         row->installEventFilter(this);
     }
     commandCompletionWidget->hide();
@@ -988,7 +987,8 @@ QSize SplitInput::minimumSizeHint() const
     const auto outerMargins = this->ui_.vbox != nullptr
                                   ? this->ui_.vbox->contentsMargins()
                                   : QMargins{};
-    const int textWidth = std::max(36, int(std::round(44 * this->scale())));
+    const int textWidth =
+        std::max(36, static_cast<int>(std::round(44 * this->scale())));
     const int emoteWidth = getSettings()->hideEmojiButton
                                ? 0
                                : compactWidgetWidth(this->ui_.emoteButton);
@@ -1013,7 +1013,7 @@ QSize SplitInput::minimumSizeHint() const
     return hint;
 }
 
-void SplitInput::scaleChangedEvent(float scale)
+void SplitInput::scaleChangedEvent(float /*scale*/)
 {
     // update the icon size of the buttons
     this->updateEmoteButton();
@@ -1226,33 +1226,33 @@ void SplitInput::updateEncryptToggleButton()
 void SplitInput::updateEmoteButton()
 {
     auto scale = this->scale();
-    auto buttonSize = int(std::round(17 * scale));
-    auto labelBottomInset = int(std::round(1 * scale));
+    auto buttonSize = static_cast<int>(std::round(17 * scale));
+    auto labelBottomInset = static_cast<int>(std::round(1 * scale));
 
     this->ui_.emoteButton->setFixedSize(buttonSize, buttonSize);
 
     if (this->ui_.buttonsRow)
     {
         this->ui_.buttonsRow->setSpacing(0);
-        this->ui_.buttonsRow->setContentsMargins(0, 0,
-                                                 int(std::round(2 * scale)), 0);
+        this->ui_.buttonsRow->setContentsMargins(
+            0, 0, static_cast<int>(std::round(2 * scale)), 0);
     }
 
     if (this->ui_.sendWaitStatus)
     {
         this->ui_.sendWaitStatus->setContentsMargins(
-            0, 0, int(std::round(3 * scale)), labelBottomInset);
+            0, 0, static_cast<int>(std::round(3 * scale)), labelBottomInset);
     }
     if (this->ui_.textEditLength)
     {
         this->ui_.textEditLength->setContentsMargins(
-            0, 0, int(std::round(2 * scale)), 0);
+            0, 0, static_cast<int>(std::round(2 * scale)), 0);
     }
 
     if (this->ui_.channelPointsLabel)
     {
         this->ui_.channelPointsLabel->setContentsMargins(
-            0, 0, int(std::round(2 * scale)), labelBottomInset);
+            0, 0, static_cast<int>(std::round(2 * scale)), labelBottomInset);
     }
 
     if (this->ui_.predictionButton)
@@ -1275,8 +1275,8 @@ void SplitInput::updateCancelReplyButton()
 {
     float scale = this->scale();
 
-    this->ui_.cancelReplyButton->setFixedHeight(int(12 * scale));
-    this->ui_.cancelReplyButton->setFixedWidth(int(20 * scale));
+    this->ui_.cancelReplyButton->setFixedHeight(static_cast<int>(12 * scale));
+    this->ui_.cancelReplyButton->setFixedWidth(static_cast<int>(20 * scale));
 }
 
 void SplitInput::updateActionRowCompactness()
@@ -1293,7 +1293,8 @@ void SplitInput::updateActionRowCompactness()
     const bool hasRealWidth = inputWidth > 0;
     int budget =
         hasRealWidth
-            ? inputWidth - std::max(56, int(std::round(92 * this->scale())))
+            ? inputWidth -
+                  std::max(56, static_cast<int>(std::round(92 * this->scale())))
             : std::numeric_limits<int>::max();
 
     auto tryFit = [&](QWidget *widget, bool wanted) {
@@ -1386,8 +1387,9 @@ void SplitInput::updateDisplayedPlaceholderText()
         return;
     }
 
-    const int width = std::max(0, this->ui_.textEdit->viewport()->width() -
-                                      int(std::round(4 * this->scale())));
+    const int width =
+        std::max(0, this->ui_.textEdit->viewport()->width() -
+                        static_cast<int>(std::round(4 * this->scale())));
     const auto displayed = elidedInputPlaceholder(
         this->placeholderText_, width, this->ui_.textEdit->fontMetrics());
     if (this->ui_.textEdit->placeholderText() != displayed)
@@ -1567,7 +1569,7 @@ void SplitInput::postMessageSend(const QString &message,
     {
         this->clearInput();
     }
-    this->prevIndex_ = this->prevMsg_.size();
+    this->prevIndex_ = static_cast<int>(this->prevMsg_.size());
 }
 
 void SplitInput::postTranslatedMessageSend(
@@ -1584,7 +1586,7 @@ void SplitInput::postTranslatedMessageSend(
     {
         this->clearInput();
     }
-    this->prevIndex_ = this->prevMsg_.size();
+    this->prevIndex_ = static_cast<int>(this->prevMsg_.size());
 }
 
 bool SplitInput::maybeSendTranslatedMessage(
@@ -1604,7 +1606,7 @@ bool SplitInput::maybeSendTranslatedMessage(
         if (this->ui_.translationPreviewWidget != nullptr)
         {
             this->ui_.translationPreviewLabel->setText(
-                QStringLiteral("Translating before send..."));
+                u"Translating before send..."_s);
             this->ui_.translationPreviewWidget->show();
         }
         return true;
@@ -1626,7 +1628,7 @@ bool SplitInput::maybeSendTranslatedMessage(
     if (this->ui_.translationPreviewWidget != nullptr)
     {
         this->ui_.translationPreviewLabel->setText(
-            QStringLiteral("Translating to %1 before send...").arg(targetName));
+            u"Translating to %1 before send..."_s.arg(targetName));
         this->ui_.translationPreviewWidget->show();
     }
 
@@ -1637,17 +1639,18 @@ bool SplitInput::maybeSendTranslatedMessage(
         if (translatedText.isEmpty())
         {
             channel->addSystemMessage(
-                QStringLiteral("Translation failed, so nothing was sent."));
+                u"Translation failed, so nothing was sent."_s);
             return;
         }
         if (translatedText.size() > TWITCH_MESSAGE_LIMIT)
         {
-            channel->addSystemMessage(QStringLiteral(
-                "The translated message is too long for Twitch."));
+            channel->addSystemMessage(
+                u"The translated message is too long for Twitch."_s);
             return;
         }
 
-        if (this->trySendMessageAsWarning(translatedText, channel))
+        if (chatterino::SplitInput::trySendMessageAsWarning(translatedText,
+                                                            channel))
         {
             this->postTranslatedMessageSend(sourceMessage, arguments);
             return;
@@ -1693,7 +1696,7 @@ bool SplitInput::maybeSendTranslatedMessage(
         },
         [channel](const QString &) {
             channel->addSystemMessage(
-                QStringLiteral("Translation failed, so nothing was sent."));
+                u"Translation failed, so nothing was sent."_s);
         },
         [this] {
             this->outgoingTranslationSendInFlight_ = false;
@@ -1726,8 +1729,7 @@ bool SplitInput::trySendMessageAsWarning(const QString &message,
     auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
     if (currentUser->isAnon())
     {
-        channel->addSystemMessage(
-            QStringLiteral("You must be logged in to send warnings."));
+        channel->addSystemMessage(u"You must be logged in to send warnings."_s);
         return true;
     }
 
@@ -1735,7 +1737,7 @@ bool SplitInput::trySendMessageAsWarning(const QString &message,
     if (broadcasterID.isEmpty())
     {
         channel->addSystemMessage(
-            QStringLiteral("Cannot send warning: channel ID not available."));
+            u"Cannot send warning: channel ID not available."_s);
         return true;
     }
 
@@ -1748,7 +1750,7 @@ bool SplitInput::maybeSendMessageAsWarning(
     const QString &message, const std::vector<QString> &arguments,
     const ChannelPtr &channel)
 {
-    if (!this->trySendMessageAsWarning(message, channel))
+    if (!chatterino::SplitInput::trySendMessageAsWarning(message, channel))
     {
         return false;
     }
@@ -2165,7 +2167,8 @@ bool SplitInput::eventFilter(QObject *obj, QEvent *event)
             const auto actualIndex =
                 row->property("commandCompletionIndex").toInt();
             if (actualIndex >= 0 &&
-                actualIndex < int(this->commandCompletionSuggestions_.size()))
+                std::cmp_less(actualIndex,
+                              this->commandCompletionSuggestions_.size()))
             {
                 this->commandCompletionSelectedIndex_ = actualIndex;
                 this->insertCommandCompletionText(
@@ -2385,8 +2388,8 @@ void SplitInput::updateNukePreview(const QString &text)
     this->pendingNukePreviewText_ = text;
     const auto trimmed = text.trimmed();
     const bool isNukeCommand =
-        trimmed.compare(QStringLiteral("/nuke"), Qt::CaseInsensitive) == 0 ||
-        trimmed.startsWith(QStringLiteral("/nuke "), Qt::CaseInsensitive);
+        trimmed.compare(u"/nuke"_s, Qt::CaseInsensitive) == 0 ||
+        trimmed.startsWith(u"/nuke "_s, Qt::CaseInsensitive);
     this->nukePreviewCommandActive_ =
         getSettings()->nukePreviewEnabled && isNukeCommand;
     if (!getSettings()->nukePreviewEnabled || !isNukeCommand)
@@ -2456,6 +2459,7 @@ void SplitInput::updateRaidStatus()
         auto locked = channel->accessRaid();
         if (locked->has_value())
         {
+            // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
             raid = **locked;
         }
     }
@@ -2479,30 +2483,31 @@ void SplitInput::updateRaidStatus()
     }
 
     const auto totalSeconds = std::max(1, raid->forceRaidNowSeconds);
-    const auto totalMs = qint64(totalSeconds) * 1000;
-    const auto remainingSeconds = int((remainingMs + 999) / 1000);
+    const auto totalMs = static_cast<qint64>(totalSeconds) * 1000;
+    const auto remainingSeconds = static_cast<int>((remainingMs + 999) / 1000);
     const auto elapsedMs =
-        std::clamp(totalMs - remainingMs, qint64(0), totalMs);
-    const auto nextElapsedMs = std::clamp(
-        elapsedMs + RAID_STATUS_PROGRESS_TICK_MS, qint64(0), totalMs);
+        std::clamp(totalMs - remainingMs, static_cast<qint64>(0), totalMs);
+    const auto nextElapsedMs =
+        std::clamp(elapsedMs + RAID_STATUS_PROGRESS_TICK_MS,
+                   static_cast<qint64>(0), totalMs);
     const auto elapsedSeconds =
-        std::clamp(int(elapsedMs / 1000), 0, totalSeconds);
+        std::clamp(static_cast<int>(elapsedMs / 1000), 0, totalSeconds);
 
     auto target = raid->targetDisplayName.isEmpty() ? raid->targetLogin
                                                     : raid->targetDisplayName;
     if (target.isEmpty())
     {
-        target = QStringLiteral("target");
+        target = u"target"_s;
     }
     const auto phase = totalSeconds >= 90 && elapsedSeconds < 10
-                           ? QStringLiteral("Preparing raid to %1")
-                           : QStringLiteral("Raiding %1 in %2");
+                           ? u"Preparing raid to %1"_s
+                           : u"Raiding %1 in %2"_s;
     const auto text =
         totalSeconds >= 90 && elapsedSeconds < 10
-            ? QStringLiteral("%1 - %2 - %3")
-                  .arg(phase.arg(target), formatRaidCountdown(remainingSeconds),
-                       raidViewerText(raid->viewerCount))
-            : QStringLiteral("%1 - %2").arg(
+            ? u"%1 - %2 - %3"_s.arg(phase.arg(target),
+                                    formatRaidCountdown(remainingSeconds),
+                                    raidViewerText(raid->viewerCount))
+            : u"%1 - %2"_s.arg(
                   phase.arg(target, formatRaidCountdown(remainingSeconds)),
                   raidViewerText(raid->viewerCount));
 
@@ -2519,8 +2524,9 @@ void SplitInput::updateRaidStatus()
     }
     this->ui_.raidStatusWidget->show();
 
-    const auto animationMs = int(std::clamp(
-        remainingMs, qint64(1), qint64(RAID_STATUS_PROGRESS_TICK_MS)));
+    const auto animationMs = static_cast<int>(
+        std::clamp(remainingMs, static_cast<qint64>(1),
+                   static_cast<qint64>(RAID_STATUS_PROGRESS_TICK_MS)));
     this->raidStatusProgressAnimation_.stop();
     this->raidStatusProgressAnimation_.setDuration(animationMs);
     this->raidStatusProgressAnimation_.setStartValue(
@@ -2641,14 +2647,14 @@ void SplitInput::updateOutgoingTranslationPreview()
         this->outgoingTranslationPreviewTarget_ == targetLanguage &&
         !this->outgoingTranslationPreviewText_.isEmpty())
     {
-        this->ui_.translationPreviewLabel->setText(QStringLiteral("%1: %2").arg(
-            targetName, this->outgoingTranslationPreviewText_));
+        this->ui_.translationPreviewLabel->setText(
+            u"%1: %2"_s.arg(targetName, this->outgoingTranslationPreviewText_));
         this->ui_.translationPreviewWidget->show();
         return;
     }
 
     this->ui_.translationPreviewLabel->setText(
-        QStringLiteral("Translating to %1...").arg(targetName));
+        u"Translating to %1..."_s.arg(targetName));
     this->ui_.translationPreviewWidget->show();
     this->scheduleOutgoingTranslationPreview(body);
 }
@@ -2683,9 +2689,8 @@ void SplitInput::applyOutgoingTranslationPreview()
             this->outgoingTranslationPreviewTarget_ = targetLanguage;
             this->outgoingTranslationPreviewText_ =
                 result.translatedText.trimmed();
-            this->ui_.translationPreviewLabel->setText(
-                QStringLiteral("%1: %2").arg(
-                    targetName, this->outgoingTranslationPreviewText_));
+            this->ui_.translationPreviewLabel->setText(u"%1: %2"_s.arg(
+                targetName, this->outgoingTranslationPreviewText_));
             this->ui_.translationPreviewWidget->show();
         },
         [this, generation](const QString &) {
@@ -2694,7 +2699,7 @@ void SplitInput::applyOutgoingTranslationPreview()
                 return;
             }
             this->ui_.translationPreviewLabel->setText(
-                QStringLiteral("Could not translate this draft."));
+                u"Could not translate this draft."_s);
             this->ui_.translationPreviewWidget->show();
         },
         [] {});
@@ -2720,8 +2725,8 @@ void SplitInput::updateOutgoingTranslationButton()
     }
     this->ui_.outgoingTranslateButton->setColor(buttonColor);
     this->ui_.outgoingTranslateButton->setToolTip(
-        QStringLiteral("Outgoing translation: %1\nTarget: %2")
-            .arg(outgoingTranslationModeLabel(mode), targetName));
+        u"Outgoing translation: %1\nTarget: %2"_s.arg(
+            outgoingTranslationModeLabel(mode), targetName));
 }
 
 void SplitInput::openOutgoingTranslationMenu()
@@ -2745,9 +2750,9 @@ void SplitInput::openOutgoingTranslationMenu()
         });
     };
 
-    addMode("Off", QStringLiteral("off"));
-    addMode("Preview only", QStringLiteral("preview"));
-    addMode("Translate on send", QStringLiteral("send"));
+    addMode("Off", u"off"_s);
+    addMode("Preview only", u"preview"_s);
+    addMode("Translate on send", u"send"_s);
     menu->addSeparator();
 
     auto *targetMenu = menu->addMenu("Target language");
@@ -2773,11 +2778,9 @@ void SplitInput::openOutgoingTranslationMenu()
     };
 
     static const std::vector<QString> commonLanguages{
-        QStringLiteral("en"),    QStringLiteral("es"),    QStringLiteral("pt"),
-        QStringLiteral("fr"),    QStringLiteral("de"),    QStringLiteral("it"),
-        QStringLiteral("nl"),    QStringLiteral("pl"),    QStringLiteral("tr"),
-        QStringLiteral("ru"),    QStringLiteral("ja"),    QStringLiteral("ko"),
-        QStringLiteral("zh-cn"), QStringLiteral("zh-tw"), QStringLiteral("ar"),
+        u"en"_s, u"es"_s, u"pt"_s,    u"fr"_s,    u"de"_s,
+        u"it"_s, u"nl"_s, u"pl"_s,    u"tr"_s,    u"ru"_s,
+        u"ja"_s, u"ko"_s, u"zh-cn"_s, u"zh-tw"_s, u"ar"_s,
     };
     const auto isCommonLanguage = [](const QString &code) {
         return std::ranges::find(commonLanguages, code) !=
@@ -2870,9 +2873,8 @@ void SplitInput::updateCompletionPopup()
             cursorPosition == end)
         {
             const auto currentCompletion = text.mid(start, end - start);
-            const auto stillCycling = std::any_of(
-                this->commandCompletionSuggestions_.begin(),
-                this->commandCompletionSuggestions_.end(),
+            const auto stillCycling = std::ranges::any_of(
+                this->commandCompletionSuggestions_,
                 [&](const auto &suggestion) {
                     return currentCompletion == suggestion.completion + ' ';
                 });
@@ -2902,8 +2904,8 @@ void SplitInput::updateCompletionPopup()
             beforeCursor.size() - commandStart >= 2)
         {
             const auto query = beforeCursor.mid(commandStart);
-            if (this->updateCommandCompletion(query, int(commandStart),
-                                              cursorPosition))
+            if (this->updateCommandCompletion(
+                    query, static_cast<int>(commandStart), cursorPosition))
             {
                 return;
             }
@@ -2912,7 +2914,8 @@ void SplitInput::updateCompletionPopup()
 
     this->resetCommandCompletionSession();
 
-    for (int i = std::clamp(position, 0, (int)text.length() - 1); i >= 0; i--)
+    for (int i = std::clamp(position, 0, static_cast<int>(text.length()) - 1);
+         i >= 0; i--)
     {
         if (text[i] == ' ')
         {
@@ -2968,8 +2971,7 @@ bool SplitInput::updateCommandCompletion(const QString &query, int start,
     this->commandCompletionSuggestions_.clear();
     for (const auto &command : source.output())
     {
-        const auto prefix =
-            command.prefix.isEmpty() ? QStringLiteral("/") : command.prefix;
+        const auto prefix = command.prefix.isEmpty() ? u"/"_s : command.prefix;
         this->commandCompletionSuggestions_.push_back({
             .completion = prefix + command.name,
             .usage = command.usage,
@@ -3003,7 +3005,8 @@ void SplitInput::renderCommandCompletion()
         return;
     }
 
-    const auto count = int(this->commandCompletionSuggestions_.size());
+    const auto count =
+        static_cast<int>(this->commandCompletionSuggestions_.size());
     if (count <= 0)
     {
         this->hideCommandCompletion();
@@ -3015,7 +3018,8 @@ void SplitInput::renderCommandCompletion()
     auto first = this->commandCompletionSelectedIndex_ - 1;
     first = std::clamp(
         first, 0,
-        std::max(0, count - int(this->ui_.commandCompletionRows.size())));
+        std::max(0, count - static_cast<int>(
+                                this->ui_.commandCompletionRows.size())));
 
     const auto textColor = this->theme->splits.input.text.name(QColor::HexRgb);
     auto muted = this->theme->splits.input.text;
@@ -3031,7 +3035,7 @@ void SplitInput::renderCommandCompletion()
             continue;
         }
 
-        const auto actualIndex = first + int(rowIndex);
+        const auto actualIndex = first + static_cast<int>(rowIndex);
         if (actualIndex >= count)
         {
             row->hide();
@@ -3046,20 +3050,16 @@ void SplitInput::renderCommandCompletion()
         row->setProperty("commandCompletionIndex", actualIndex);
         row->setStyleSheet(
             selected
-                ? QStringLiteral(
-                      "QLabel#commandCompletionRow { background: rgba(120, "
-                      "120, 120, 0.20); border: 0; }")
-                : QStringLiteral(
-                      "QLabel#commandCompletionRow { background: transparent; "
-                      "border: 0; }"));
-        row->setText(QStringLiteral(
-                         "<span style=\"font-weight:600; color:%1;\">%2</span>"
-                         "<span style=\"color:%3;\">%4%5</span>")
-                         .arg(textColor, suggestion.completion.toHtmlEscaped(),
-                              mutedColor,
-                              suggestion.usage.isEmpty() ? QString()
-                                                         : QStringLiteral(" "),
-                              suggestion.usage.toHtmlEscaped()));
+                ? u"QLabel#commandCompletionRow { background: rgba(120, "
+                  "120, 120, 0.20); border: 0; }"_s
+                : u"QLabel#commandCompletionRow { background: transparent; "
+                  "border: 0; }"_s);
+        row->setText(u"<span style=\"font-weight:600; color:%1;\">%2</span>"
+                     "<span style=\"color:%3;\">%4%5</span>"_s.arg(
+                         textColor, suggestion.completion.toHtmlEscaped(),
+                         mutedColor,
+                         suggestion.usage.isEmpty() ? QString() : u" "_s,
+                         suggestion.usage.toHtmlEscaped()));
         row->show();
     }
 
@@ -3084,7 +3084,8 @@ void SplitInput::hideCommandCompletion()
 
 bool SplitInput::moveCommandCompletionSelection(int offset)
 {
-    const auto count = int(this->commandCompletionSuggestions_.size());
+    const auto count =
+        static_cast<int>(this->commandCompletionSuggestions_.size());
     if (!this->commandCompletionSession_.active || count <= 0 ||
         this->ui_.commandCompletionWidget == nullptr ||
         !this->ui_.commandCompletionWidget->isVisible())
@@ -3209,9 +3210,9 @@ bool SplitInput::handleCommandCompletionKey(QKeyEvent *event)
         return this->moveCommandCompletionSelection(-1);
     }
 
-    const auto isBacktab =
-        key == Qt::Key_Backtab ||
-        (key == Qt::Key_Tab && (event->modifiers() & Qt::ShiftModifier));
+    const auto isBacktab = key == Qt::Key_Backtab ||
+                           (key == Qt::Key_Tab &&
+                            ((event->modifiers() & Qt::ShiftModifier) != 0U));
     if (key != Qt::Key_Tab && key != Qt::Key_Backtab)
     {
         return false;
@@ -3229,9 +3230,9 @@ bool SplitInput::handleCommandCompletionKey(QKeyEvent *event)
         }
     }
 
-    this->commandCompletionSelectedIndex_ =
-        std::clamp(this->commandCompletionSelectedIndex_, 0,
-                   int(this->commandCompletionSuggestions_.size()) - 1);
+    this->commandCompletionSelectedIndex_ = std::clamp(
+        this->commandCompletionSelectedIndex_, 0,
+        static_cast<int>(this->commandCompletionSuggestions_.size()) - 1);
     const auto completion = this->commandCompletionSuggestions_
                                 [this->commandCompletionSelectedIndex_]
                                     .completion;
@@ -3264,7 +3265,7 @@ void SplitInput::insertCommandCompletionText(const QString &completion,
         end = cursorPosition;
     }
 
-    const auto textSize = int(text.size());
+    const auto textSize = static_cast<int>(text.size());
     start = std::clamp(start, 0, textSize);
     end = std::clamp(end, start, textSize);
 
@@ -3272,7 +3273,7 @@ void SplitInput::insertCommandCompletionText(const QString &completion,
     auto cursor = edit.textCursor();
     this->updatingCommandCompletionText_ = true;
     edit.setPlainText(text.remove(start, end - start).insert(start, input));
-    cursor.setPosition(start + input.size());
+    cursor.setPosition(static_cast<int>(start + input.size()));
     edit.setTextCursor(cursor);
     this->updatingCommandCompletionText_ = false;
 
@@ -3282,7 +3283,8 @@ void SplitInput::insertCommandCompletionText(const QString &completion,
         this->commandCompletionSession_.inserted = true;
         this->commandCompletionSession_.selectionChanged = false;
         this->commandCompletionSession_.start = start;
-        this->commandCompletionSession_.end = start + int(input.size());
+        this->commandCompletionSession_.end =
+            start + static_cast<int>(input.size());
         this->renderCommandCompletion();
     }
     else
@@ -3935,7 +3937,7 @@ void SplitInput::updateChannelPointsDisplay(TwitchChannel *channel)
             this->updateActionRowCompactness();
         }
 
-        const auto tooltip = QStringLiteral("Channel Points: refreshing...");
+        const auto tooltip = u"Channel Points: refreshing..."_s;
         if (this->ui_.channelPointsLabel->toolTip() != tooltip)
         {
             this->ui_.channelPointsLabel->setToolTip(tooltip);
@@ -3948,10 +3950,10 @@ void SplitInput::updateChannelPointsDisplay(TwitchChannel *channel)
     const auto balance = channel->channelPointBalance();
     const auto &error = channel->lastChannelPointsError();
     const auto text = (balance < 0 && !error.isEmpty())
-                          ? QStringLiteral("--")
+                          ? u"--"_s
                           : formatChannelPointsValue(balance);
     auto tooltip = (balance < 0 && !error.isEmpty())
-                       ? QStringLiteral("Channel Points unavailable")
+                       ? u"Channel Points unavailable"_s
                        : formatChannelPointsToolTip(balance);
     if (!error.isEmpty())
     {
@@ -3993,13 +3995,14 @@ void SplitInput::updateFonts()
     this->ui_.replyLabel->setFont(
         app->getFonts()->getFont(FontStyle::ChatMediumBold, this->scale()));
     this->ui_.raidStatusLabel->setContentsMargins(
-        int(std::round(6 * this->scale())), int(std::round(1 * this->scale())),
-        int(std::round(6 * this->scale())),
-        std::max(3, int(std::round(3 * this->scale()))));
+        static_cast<int>(std::round(6 * this->scale())),
+        static_cast<int>(std::round(1 * this->scale())),
+        static_cast<int>(std::round(6 * this->scale())),
+        std::max(3, static_cast<int>(std::round(3 * this->scale()))));
     this->ui_.raidStatusLabel->setFont(
         app->getFonts()->getFont(FontStyle::UiMedium, this->scale()));
     this->ui_.raidStatusProgress->setFixedHeight(
-        std::max(2, int(2 * this->scale())));
+        std::max(2, static_cast<int>(2 * this->scale())));
     this->ui_.nukePreviewLabel->setFont(
         app->getFonts()->getFont(FontStyle::UiMedium, this->scale()));
     if (this->ui_.translationPreviewLabel != nullptr)
@@ -4007,13 +4010,13 @@ void SplitInput::updateFonts()
         this->ui_.translationPreviewLabel->setFont(
             app->getFonts()->getFont(FontStyle::UiMedium, this->scale()));
         this->ui_.translationPreviewLabel->setContentsMargins(
-            int(std::round(6 * this->scale())), 0,
-            int(std::round(6 * this->scale())), 0);
+            static_cast<int>(std::round(6 * this->scale())), 0,
+            static_cast<int>(std::round(6 * this->scale())), 0);
     }
     auto commandCompletionFont =
         app->getFonts()->getFont(FontStyle::UiMedium, this->scale());
     const auto commandRowHeight =
-        std::max(18, int(std::round(20 * this->scale())));
+        std::max(18, static_cast<int>(std::round(20 * this->scale())));
     for (auto *row : this->ui_.commandCompletionRows)
     {
         if (row == nullptr)
@@ -4023,8 +4026,9 @@ void SplitInput::updateFonts()
 
         row->setFont(commandCompletionFont);
         row->setFixedHeight(commandRowHeight);
-        row->setContentsMargins(int(std::round(6 * this->scale())), 0,
-                                int(std::round(6 * this->scale())), 0);
+        row->setContentsMargins(
+            static_cast<int>(std::round(6 * this->scale())), 0,
+            static_cast<int>(std::round(6 * this->scale())), 0);
     }
     this->updateActionRowCompactness();
 }

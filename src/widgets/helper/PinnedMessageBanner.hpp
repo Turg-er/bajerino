@@ -44,6 +44,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
@@ -57,7 +58,7 @@ private:
     QHBoxLayout *messageLayout_{};
     SvgButton *icon_{};
     ChannelView *messageView_{};
-    ChannelPtr channel_{};
+    ChannelPtr channel_;
     QLabel *pinnerLabel_{};
     QLabel *timerLabel_{};
     QLabel *moreLabel_{};

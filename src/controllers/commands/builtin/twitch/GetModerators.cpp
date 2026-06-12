@@ -96,7 +96,7 @@ QString getModerators(const CommandContext &ctx)
         getHelix()->getModerators(
             ctx.twitchChannel->roomId(), 500,
             [channel{ctx.channel},
-             twitchChannel{ctx.twitchChannel}](auto result) {
+             twitchChannel{ctx.twitchChannel}](const auto &result) {
                 if (result.empty())
                 {
                     channel->addSystemMessage(
@@ -109,7 +109,7 @@ QString getModerators(const CommandContext &ctx)
                                         result, twitchChannel),
                                     MessageContext::Original);
             },
-            [channel{ctx.channel}](auto error, auto message) {
+            [channel{ctx.channel}](auto error, const auto &message) {
                 auto errorMessage = formatModsError(error, message);
                 channel->addSystemMessage(errorMessage);
             });

@@ -12,6 +12,8 @@
 #include <optional>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino::commands {
 namespace {
 
@@ -26,50 +28,50 @@ ModVipActionInfo actionInfo(ModVipAction action)
     {
         case ModVipAction::AddModerator:
             return {
-                "adding moderators",
-                "Failed to add channel moderator - ",
+                .authAction = "adding moderators",
+                .failurePrefix = "Failed to add channel moderator - ",
             };
 
         case ModVipAction::RemoveModerator:
             return {
-                "removing moderators",
-                "Failed to remove channel moderator - ",
+                .authAction = "removing moderators",
+                .failurePrefix = "Failed to remove channel moderator - ",
             };
 
         case ModVipAction::AddVIP:
             return {
-                "adding VIP",
-                "Failed to add VIP - ",
+                .authAction = "adding VIP",
+                .failurePrefix = "Failed to add VIP - ",
             };
 
         case ModVipAction::RemoveVIP:
             return {
-                "removing VIP",
-                "Failed to remove VIP - ",
+                .authAction = "removing VIP",
+                .failurePrefix = "Failed to remove VIP - ",
             };
 
         case ModVipAction::AddLeadModerator:
             return {
-                "adding lead moderator",
-                "Failed to add lead moderator - ",
+                .authAction = "adding lead moderator",
+                .failurePrefix = "Failed to add lead moderator - ",
             };
 
         case ModVipAction::RemoveLeadModerator:
             return {
-                "removing lead moderator",
-                "Failed to remove lead moderator - ",
+                .authAction = "removing lead moderator",
+                .failurePrefix = "Failed to remove lead moderator - ",
             };
 
         case ModVipAction::AddEditor:
             return {
-                "adding editor",
-                "Failed to add editor - ",
+                .authAction = "adding editor",
+                .failurePrefix = "Failed to add editor - ",
             };
 
         case ModVipAction::RemoveEditor:
             return {
-                "removing editor",
-                "Failed to remove editor - ",
+                .authAction = "removing editor",
+                .failurePrefix = "Failed to remove editor - ",
             };
     }
 
@@ -78,21 +80,19 @@ ModVipActionInfo actionInfo(ModVipAction action)
 
 QString permissionMessage()
 {
-    return QStringLiteral(
-        "This action needs broadcaster or lead mod permission.");
+    return u"This action needs broadcaster or lead mod permission."_s;
 }
 
 QString broadcasterPermissionMessage()
 {
-    return QStringLiteral("This action needs the broadcaster account.");
+    return u"This action needs the broadcaster account."_s;
 }
 
 QString normalizeGqlRoleError(ModVipAction action, const QString &target,
                               const QString &error)
 {
     const auto info = actionInfo(action);
-    const auto normalized =
-        MoltorinoAuth::normalizeAuthError(info.authAction, error);
+    auto normalized = MoltorinoAuth::normalizeAuthError(info.authAction, error);
     const auto upper = normalized.toUpper();
     const auto lower = normalized.toLower();
 
@@ -202,59 +202,51 @@ QString normalizeGqlRoleError(ModVipAction action, const QString &target,
     return normalized;
 }
 
-void runGqlRoleMutation(ModVipAction action, const QString &channelId,
-                        const QString &target, const QString &token,
-                        std::function<void()> successCallback,
-                        std::function<void(const QString &)> failureCallback)
+void runGqlRoleMutation(
+    ModVipAction action, const QString &channelId, const QString &target,
+    const QString &token, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     switch (action)
     {
         case ModVipAction::AddModerator:
-            TwitchGql::modUser(channelId, target, token,
-                               std::move(successCallback),
-                               std::move(failureCallback));
+            TwitchGql::modUser(channelId, target, token, successCallback,
+                               failureCallback);
             return;
 
         case ModVipAction::RemoveModerator:
-            TwitchGql::unmodUser(channelId, target, token,
-                                 std::move(successCallback),
-                                 std::move(failureCallback));
+            TwitchGql::unmodUser(channelId, target, token, successCallback,
+                                 failureCallback);
             return;
 
         case ModVipAction::AddVIP:
-            TwitchGql::grantVIP(channelId, target, token,
-                                std::move(successCallback),
-                                std::move(failureCallback));
+            TwitchGql::grantVIP(channelId, target, token, successCallback,
+                                failureCallback);
             return;
 
         case ModVipAction::RemoveVIP:
-            TwitchGql::revokeVIP(channelId, target, token,
-                                 std::move(successCallback),
-                                 std::move(failureCallback));
+            TwitchGql::revokeVIP(channelId, target, token, successCallback,
+                                 failureCallback);
             return;
 
         case ModVipAction::AddLeadModerator:
             TwitchGql::assignLeadModerator(channelId, target, token,
-                                           std::move(successCallback),
-                                           std::move(failureCallback));
+                                           successCallback, failureCallback);
             return;
 
         case ModVipAction::RemoveLeadModerator:
             TwitchGql::unassignLeadModerator(channelId, target, token,
-                                             std::move(successCallback),
-                                             std::move(failureCallback));
+                                             successCallback, failureCallback);
             return;
 
         case ModVipAction::AddEditor:
-            TwitchGql::addEditorUser(channelId, target, token,
-                                     std::move(successCallback),
-                                     std::move(failureCallback));
+            TwitchGql::addEditorUser(channelId, target, token, successCallback,
+                                     failureCallback);
             return;
 
         case ModVipAction::RemoveEditor:
             TwitchGql::removeEditorUser(channelId, target, token,
-                                        std::move(successCallback),
-                                        std::move(failureCallback));
+                                        successCallback, failureCallback);
             return;
     }
 }
@@ -281,17 +273,15 @@ QString usageForAction(ModVipAction action)
     switch (action)
     {
         case ModVipAction::AddLeadModerator:
-            return QStringLiteral("Usage: \"/leadmod <username>\" - Grant lead "
-                                  "moderator status.");
+            return u"Usage: \"/leadmod <username>\" - Grant lead "
+                   "moderator status."_s;
         case ModVipAction::RemoveLeadModerator:
-            return QStringLiteral("Usage: \"/unleadmod <username>\" - Revoke "
-                                  "lead moderator status.");
+            return u"Usage: \"/unleadmod <username>\" - Revoke "
+                   "lead moderator status."_s;
         case ModVipAction::AddEditor:
-            return QStringLiteral(
-                "Usage: \"/editor <username>\" - Add a channel editor.");
+            return u"Usage: \"/editor <username>\" - Add a channel editor."_s;
         case ModVipAction::RemoveEditor:
-            return QStringLiteral(
-                "Usage: \"/uneditor <username>\" - Remove a channel editor.");
+            return u"Usage: \"/uneditor <username>\" - Remove a channel editor."_s;
         default:
             return {};
     }

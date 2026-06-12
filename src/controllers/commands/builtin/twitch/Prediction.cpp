@@ -34,6 +34,9 @@
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -139,7 +142,7 @@ QString formatPredictionOutcomeOptions(
     const std::vector<TwitchChannel::PredictionOutcome> &outcomes)
 {
     QStringList options;
-    for (int i = 0; i < static_cast<int>(outcomes.size()); ++i)
+    for (int i = 0; std::cmp_less(i, outcomes.size()); ++i)
     {
         options.push_back(QString("%1: \"%2\"")
                               .arg(QString::number(i + 1), outcomes[i].title));
@@ -275,8 +278,8 @@ WinnerResolution resolveWinnerSelector(
             selector.index > 0 && selector.index <= prediction.outcomes.size();
         if (selector.positionalNumeric)
         {
-            auto titleMatch = std::find_if(
-                prediction.outcomes.begin(), prediction.outcomes.end(),
+            auto titleMatch = std::ranges::find_if(
+                prediction.outcomes,
                 [&selector](const TwitchChannel::PredictionOutcome &outcome) {
                     return outcome.title.compare(selector.title,
                                                  Qt::CaseInsensitive) == 0;
@@ -285,8 +288,8 @@ WinnerResolution resolveWinnerSelector(
             if (titleMatch != prediction.outcomes.end())
             {
                 const auto titleIndex =
-                    size_t(std::distance(prediction.outcomes.begin(),
-                                         titleMatch)) +
+                    static_cast<size_t>(std::distance(
+                        prediction.outcomes.begin(), titleMatch)) +
                     1;
                 if (!indexInRange)
                 {
@@ -330,8 +333,8 @@ WinnerResolution resolveWinnerSelector(
     }
 
     const auto wanted = selector.title.trimmed();
-    auto exact = std::find_if(
-        prediction.outcomes.begin(), prediction.outcomes.end(),
+    auto exact = std::ranges::find_if(
+        prediction.outcomes,
         [&wanted](const TwitchChannel::PredictionOutcome &outcome) {
             return outcome.title.compare(wanted, Qt::CaseInsensitive) == 0;
         });
@@ -384,8 +387,8 @@ void withActivePrediction(const CommandContext &ctx, const QString &action,
 {
     if (ctx.twitchChannel == nullptr)
     {
-        const auto err = QStringLiteral(
-            "This prediction command only works in Twitch channels");
+        const auto err =
+            u"This prediction command only works in Twitch channels"_s;
         if (ctx.channel != nullptr)
         {
             ctx.channel->addSystemMessage(err);
@@ -495,7 +498,7 @@ QString createPrediction(const CommandContext &ctx)
     return "";
 }
 
-QString lockPredictionHelix(const CommandContext &ctx)
+static QString lockPredictionHelix(const CommandContext &ctx)
 {
     if (ctx.twitchChannel == nullptr)
     {
@@ -575,7 +578,7 @@ QString lockPredictionHelix(const CommandContext &ctx)
     return "";
 }
 
-QString cancelPredictionHelix(const CommandContext &ctx)
+static QString cancelPredictionHelix(const CommandContext &ctx)
 {
     if (ctx.twitchChannel == nullptr)
     {
@@ -646,7 +649,7 @@ QString cancelPredictionHelix(const CommandContext &ctx)
     return "";
 }
 
-QString completePredictionHelix(const CommandContext &ctx)
+static QString completePredictionHelix(const CommandContext &ctx)
 {
     const auto usage = QStringLiteral(
         R"(Usage: /completeprediction --choice "<choice>" or /completeprediction --index <index> - Selects a winner for an outstanding prediction. The choice title must exactly match the wording in the prediction. Alternatively, you may specify the one-based index of the winning outcome.)");
@@ -830,8 +833,9 @@ QString lockPrediction(const CommandContext &ctx)
 
     withActivePrediction(
         ctx, "locking predictions",
-        [](ChannelPtr channel, std::shared_ptr<TwitchChannel>,
-           TwitchChannel::PredictionEvent prediction, const QString &token) {
+        [](const ChannelPtr &channel, const std::shared_ptr<TwitchChannel> &,
+           const TwitchChannel::PredictionEvent &prediction,
+           const QString &token) {
             if (prediction.status.compare("LOCKED", Qt::CaseInsensitive) == 0)
             {
                 if (channel != nullptr)
@@ -878,8 +882,9 @@ QString cancelPrediction(const CommandContext &ctx)
 
     withActivePrediction(
         ctx, "deleting predictions",
-        [](ChannelPtr channel, std::shared_ptr<TwitchChannel>,
-           TwitchChannel::PredictionEvent prediction, const QString &token) {
+        [](const ChannelPtr &channel, const std::shared_ptr<TwitchChannel> &,
+           const TwitchChannel::PredictionEvent &prediction,
+           const QString &token) {
             if (prediction.status.compare("ACTIVE", Qt::CaseInsensitive) != 0 &&
                 prediction.status.compare("LOCKED", Qt::CaseInsensitive) != 0)
             {
@@ -926,8 +931,9 @@ QString completePrediction(const CommandContext &ctx)
 
     withActivePrediction(
         ctx, "completing predictions",
-        [selector](ChannelPtr channel, std::shared_ptr<TwitchChannel>,
-                   TwitchChannel::PredictionEvent prediction,
+        [selector](const ChannelPtr &channel,
+                   const std::shared_ptr<TwitchChannel> &,
+                   const TwitchChannel::PredictionEvent &prediction,
                    const QString &token) {
             if (prediction.status.compare("ACTIVE", Qt::CaseInsensitive) != 0 &&
                 prediction.status.compare("LOCKED", Qt::CaseInsensitive) != 0)

@@ -19,6 +19,8 @@
 
 #include <algorithm>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino::completion {
 
 namespace {
@@ -149,7 +151,7 @@ void addCommand(const QString &command, std::vector<CommandItem> &out)
 {
     const auto normalized = command.startsWith('/') || command.startsWith('.')
                                 ? command
-                                : QStringLiteral("/") + command;
+                                : u"/"_s + command;
     const auto usage = commandUsage(normalized);
 
     if (command.startsWith('/') || command.startsWith('.'))
@@ -319,18 +321,15 @@ bool hasBotBadgeAuth()
 
 QString normalizedCommand(const CommandItem &item)
 {
-    const auto prefix =
-        item.prefix.isEmpty() ? QStringLiteral("/") : item.prefix;
+    const auto prefix = item.prefix.isEmpty() ? u"/"_s : item.prefix;
     return (prefix + item.name).toLower();
 }
 
 bool isInternalCommand(const QString &command)
 {
-    return command.startsWith(QStringLiteral("/debug-")) ||
-           command.startsWith(QStringLiteral("/c2-")) ||
-           command.startsWith(QStringLiteral("/unstable-")) ||
-           command == QStringLiteral("/fakemsg") ||
-           command == QStringLiteral("/test-chatters");
+    return command.startsWith(u"/debug-"_s) || command.startsWith(u"/c2-"_s) ||
+           command.startsWith(u"/unstable-"_s) || command == u"/fakemsg"_s ||
+           command == u"/test-chatters"_s;
 }
 
 bool moltorinoFeatureHandlesCommand(const QString &command)
@@ -362,7 +361,7 @@ bool moltorinoFeatureHandlesCommand(const QString &command)
 
 bool needsMoltorinoModerationAccess(const std::vector<CommandItem> &items)
 {
-    return std::any_of(items.begin(), items.end(), [](const auto &item) {
+    return std::ranges::any_of(items, [](const auto &item) {
         const auto command = normalizedCommand(item);
         return moltorinoFeatureHandlesCommand(command) &&
                (moltorinoModerationCommands().contains(command) ||
@@ -372,7 +371,7 @@ bool needsMoltorinoModerationAccess(const std::vector<CommandItem> &items)
 
 bool needsMoltorinoBroadcasterAccess(const std::vector<CommandItem> &items)
 {
-    return std::any_of(items.begin(), items.end(), [](const auto &item) {
+    return std::ranges::any_of(items, [](const auto &item) {
         const auto command = normalizedCommand(item);
         return moltorinoFeatureHandlesCommand(command) &&
                currentAccountBroadcasterCommands().contains(command);
@@ -381,7 +380,7 @@ bool needsMoltorinoBroadcasterAccess(const std::vector<CommandItem> &items)
 
 bool needsMoltorinoRoleManagementAccess(const std::vector<CommandItem> &items)
 {
-    return std::any_of(items.begin(), items.end(), [](const auto &item) {
+    return std::ranges::any_of(items, [](const auto &item) {
         return roleManagementCommands().contains(normalizedCommand(item));
     });
 }
@@ -477,17 +476,13 @@ void CommandSource::update(const QString &query)
             needsMoltorinoRoleManagementAccess(this->output_) &&
             hasMoltorinoRoleManagementAccess(this->channel_);
         const bool botBadgeAuth = hasBotBadgeAuth();
-        this->output_.erase(
-            std::remove_if(this->output_.begin(), this->output_.end(),
-                           [&](const auto &item) {
-                               return shouldHideCommand(
-                                   item, hideUnavailable,
-                                   hasCurrentAccountModRights,
-                                   hasCurrentAccountBroadcasterRights,
-                                   moltorinoAccess, moltorinoBroadcasterAccess,
-                                   moltorinoRoleManagementAccess, botBadgeAuth);
-                           }),
-            this->output_.end());
+        std::erase_if(this->output_, [&](const auto &item) {
+            return shouldHideCommand(
+                item, hideUnavailable, hasCurrentAccountModRights,
+                hasCurrentAccountBroadcasterRights, moltorinoAccess,
+                moltorinoBroadcasterAccess, moltorinoRoleManagementAccess,
+                botBadgeAuth);
+        });
     }
 }
 

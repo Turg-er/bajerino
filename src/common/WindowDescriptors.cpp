@@ -21,6 +21,8 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 namespace {
@@ -35,8 +37,7 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
 
     if (!file.open(QIODevice::ReadOnly))
     {
-        return makeUnexpected(
-            QStringLiteral("Failed to open '%1'").arg(settingsPath));
+        return makeUnexpected(u"Failed to open '%1'"_s.arg(settingsPath));
     }
 
     QByteArray data = file.readAll();
@@ -44,35 +45,32 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
     QJsonDocument document = QJsonDocument::fromJson(data, &error);
     if (error.error != QJsonParseError::NoError)
     {
-        return makeUnexpected(QStringLiteral("Malformed JSON at offset %1: %2")
-                                  .arg(error.offset)
-                                  .arg(error.errorString()));
+        return makeUnexpected(
+            u"Malformed JSON at offset %1: %2"_s.arg(error.offset)
+                .arg(error.errorString()));
     }
 
     if (!document.isObject())
     {
-        return makeUnexpected(
-            QStringLiteral("Window layout root is not a JSON object"));
+        return makeUnexpected(u"Window layout root is not a JSON object"_s);
     }
 
     const auto windowsValue = document.object().value("windows");
     if (!windowsValue.isArray())
     {
-        return makeUnexpected(
-            QStringLiteral("Window layout is missing the windows array"));
+        return makeUnexpected(u"Window layout is missing the windows array"_s);
     }
 
     auto windows = windowsValue.toArray();
     if (windows.isEmpty())
     {
-        return makeUnexpected(
-            QStringLiteral("Window layout does not contain any windows"));
+        return makeUnexpected(u"Window layout does not contain any windows"_s);
     }
 
     return windows;
 }
 
-const QList<QUuid> loadFilters(QJsonValue val)
+const QList<QUuid> loadFilters(const QJsonValue &val)
 {
     QList<QUuid> filterIds;
 
@@ -166,7 +164,7 @@ IndirectChannel SplitDescriptor::decodeChannel() const
         return getApp()->getTwitch()->getOrAddChannel(this->channelName_,
                                                       this->anonymousOverride_);
     }
-    else if (this->type_ == "mentions")
+    if (this->type_ == "mentions")
     {
         return getApp()->getTwitch()->getMentionsChannel();
     }
@@ -310,10 +308,9 @@ WindowLayout WindowLayout::loadFromFile(const QString &path)
         backup::FileData{
             .fileName = fileInfo.fileName(),
             .directory = fileInfo.absolutePath(),
-            .fileKind = QStringLiteral("Window layout"),
-            .fileDescription =
-                QStringLiteral("This file contains your open windows, tabs, "
-                               "splits, and split sizes."),
+            .fileKind = u"Window layout"_s,
+            .fileDescription = u"This file contains your open windows, tabs, "
+                               "splits, and split sizes."_s,
         },
         [&]() -> ExpectedStr<void> {
             auto maybeWindows = loadWindowArray(path);

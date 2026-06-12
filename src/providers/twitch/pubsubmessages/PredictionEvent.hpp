@@ -7,6 +7,7 @@
 namespace chatterino {
 
 struct PubSubPredictionChannelV1Message {
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class Type {
         EventCreated,
         EventUpdated,
@@ -28,6 +29,7 @@ struct PubSubPredictionChannelV1Message {
 }  // namespace chatterino
 
 template <>
+// NOLINTNEXTLINE(readability-identifier-naming)
 constexpr magic_enum::customize::customize_t magic_enum::customize::enum_name<
     chatterino::PubSubPredictionChannelV1Message::Type>(
     chatterino::PubSubPredictionChannelV1Message::Type value) noexcept

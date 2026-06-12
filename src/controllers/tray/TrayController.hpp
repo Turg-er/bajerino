@@ -50,7 +50,7 @@ private:
     void rebuildRecentPingMenu();
     void showTrayPingNotification(const RecentPing &ping);
     bool notificationsMuted() const;
-    QString formatPingActionText(const RecentPing &ping) const;
+    static QString formatPingActionText(const RecentPing &ping);
 
     WindowManager &windows_;
 

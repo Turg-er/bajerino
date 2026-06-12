@@ -119,7 +119,7 @@ Message::ClientDetectionStatus performClientDetection(const QString &nonce)
 
     if (nonce.size() == 32)
     {
-        const bool web = std::all_of(nonce.cbegin(), nonce.cend(), [](QChar c) {
+        const bool web = std::ranges::all_of(nonce, [](QChar c) {
             return isDigit(c) || isLowerHexLetter(c);
         });
         return web ? Status::Web : Status::Abnormal;
@@ -182,24 +182,25 @@ struct HypeChatPaidLevel {
 };
 
 const std::unordered_map<QString, HypeChatPaidLevel> HYPE_CHAT_PAID_LEVEL{
-    {u"ONE"_s, {30s, 1}},    {u"TWO"_s, {2min + 30s, 2}},
-    {u"THREE"_s, {5min, 3}}, {u"FOUR"_s, {10min, 4}},
-    {u"FIVE"_s, {30min, 5}}, {u"SIX"_s, {1h, 6}},
-    {u"SEVEN"_s, {2h, 7}},   {u"EIGHT"_s, {3h, 8}},
-    {u"NINE"_s, {4h, 9}},    {u"TEN"_s, {5h, 10}},
+    {u"ONE"_s, {.duration = 30s, .numeric = 1}},
+    {u"TWO"_s, {.duration = 2min + 30s, .numeric = 2}},
+    {u"THREE"_s, {.duration = 5min, .numeric = 3}},
+    {u"FOUR"_s, {.duration = 10min, .numeric = 4}},
+    {u"FIVE"_s, {.duration = 30min, .numeric = 5}},
+    {u"SIX"_s, {.duration = 1h, .numeric = 6}},
+    {u"SEVEN"_s, {.duration = 2h, .numeric = 7}},
+    {u"EIGHT"_s, {.duration = 3h, .numeric = 8}},
+    {u"NINE"_s, {.duration = 4h, .numeric = 9}},
+    {u"TEN"_s, {.duration = 5h, .numeric = 10}},
 };
 
 bool hasBadge(const QString &badges, const QString &badgeName)
 {
     const auto prefix = badgeName % u"/"_s;
-    for (const auto &badge : badges.split(u',', Qt::SkipEmptyParts))
-    {
-        if (badge.startsWith(prefix))
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(badges.split(u',', Qt::SkipEmptyParts),
+                               [&](const auto &badge) {
+                                   return badge.startsWith(prefix);
+                               });
 }
 
 char32_t codePointBefore(const QString &text, qsizetype end, qsizetype &start)
@@ -300,7 +301,7 @@ void appendRepeatedMessageCounter(MessageBuilder &builder, Channel *channel,
     }
 
     builder
-        .emplace<TextElement>(QStringLiteral("x%1").arg(*count),
+        .emplace<TextElement>(u"x%1"_s.arg(*count),
                               MessageElementFlag::RepeatedMessageCounter,
                               MessageColor(color), FontStyle::ChatMedium)
         ->setTrailingSpace(false);
@@ -363,7 +364,7 @@ QUrl getFallbackHighlightSound()
     return QUrl("qrc:/sounds/ping2.wav");
 }
 
-void actuallyTriggerHighlights(const QString &channelName, bool playSound,
+void actuallyTriggerHighlights(const QString & /*channelName*/, bool playSound,
                                const QUrl &customSoundUrl, bool windowAlert)
 {
     const bool hasFocus = (QApplication::focusWidget() != nullptr);
@@ -2994,7 +2995,7 @@ void MessageBuilder::appendHomiesBadges(const QString &userID)
         return;
     }
 
-    auto homies = getApp()->getHomiesBadges();
+    auto *homies = getApp()->getHomiesBadges();
     if (homies == nullptr)
     {
         return;

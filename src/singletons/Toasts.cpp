@@ -173,7 +173,8 @@ void onNotificationDestroyed(void *data)
     delete channelNameHeap;
 }
 
-void onHighlightAction(NotifyNotification *notif, const char *, void *userData)
+void onHighlightAction(NotifyNotification *notif, const char * /*unused*/,
+                       void *userData)
 {
     const auto *data = static_cast<HighlightNotificationData *>(userData);
     if (data != nullptr)
@@ -571,7 +572,7 @@ bool Toasts::sendLibnotifyHighlightNotification(const QString &channelName,
                                                 const QString &messageId)
 {
     this->ensureInitialized();
-    if (!notify_is_initted())
+    if (notify_is_initted() == 0)
     {
         return false;
     }
@@ -594,12 +595,14 @@ bool Toasts::sendLibnotifyHighlightNotification(const QString &channelName,
         .messageId = messageId,
     };
 
-    notify_notification_add_action(notif, "default", "Open",
-                                   (NotifyActionCallback)onHighlightAction,
-                                   data, onHighlightNotificationDestroyed);
-    notify_notification_add_action(notif, "open", "Open",
-                                   (NotifyActionCallback)onHighlightAction,
-                                   data, nullptr);
+    notify_notification_add_action(
+        notif, "default", "Open",
+        reinterpret_cast<NotifyActionCallback>(onHighlightAction), data,
+        onHighlightNotificationDestroyed);
+    notify_notification_add_action(
+        notif, "open", "Open",
+        reinterpret_cast<NotifyActionCallback>(onHighlightAction), data,
+        nullptr);
 
     g_signal_connect(notif, "closed", (GCallback)onActionClosed, nullptr);
 

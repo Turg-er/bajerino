@@ -18,6 +18,8 @@
 
 #include <algorithm>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -599,8 +601,8 @@ void HotkeyController::clearRemovedDefaults()
                 "/hotkeys/addedDefaults");
         const auto oldSize = addedDefaults.size();
         addedDefaults.erase(
-            std::remove(addedDefaults.begin(), addedDefaults.end(),
-                        QStringLiteral("search all open tabs")),
+            std::ranges::remove(addedDefaults, u"search all open tabs"_s)
+                .begin(),
             addedDefaults.end());
         if (addedDefaults.size() != oldSize)
         {

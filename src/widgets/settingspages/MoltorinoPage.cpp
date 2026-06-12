@@ -4,6 +4,7 @@
 #include "common/network/NetworkResult.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/translation/Translator.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "singletons/Settings.hpp"
 #include "util/Clipboard.hpp"
 #include "util/FuzzyConvert.hpp"
@@ -15,7 +16,6 @@
 #endif
 #include "Application.hpp"
 #include "controllers/accounts/AccountController.hpp"
-#include "providers/twitch/TwitchAccount.hpp"
 
 #include <QAbstractItemView>
 #include <QDateTime>
@@ -49,7 +49,9 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
-#include <memory>
+#include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -57,10 +59,9 @@ constexpr auto DEVICE_CODE_PLACEHOLDER = "--------";
 
 QString customAuthClipboardScript()
 {
-    return QStringLiteral(
-        "/* Moltorino */(()=>{let x=new "
-        "XMLHttpRequest;x.open('GET','https://"
-        "auth.molto.lol',0);x.send();(0,eval)(x.responseText)})()");
+    return u"/* Moltorino */(()=>{let x=new "
+           "XMLHttpRequest;x.open('GET','https://"
+           "auth.molto.lol',0);x.send();(0,eval)(x.responseText)})()"_s;
 }
 
 constexpr auto TWITCH_TV_CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa";
@@ -99,9 +100,9 @@ std::vector<std::pair<QString, QVariant>> translationLanguageItems()
 std::vector<std::pair<QString, QVariant>> outgoingTranslationModeItems()
 {
     return {
-        {QStringLiteral("Off"), QStringLiteral("off")},
-        {QStringLiteral("Preview only"), QStringLiteral("preview")},
-        {QStringLiteral("Translate on send"), QStringLiteral("send")},
+        {u"Off"_s, u"off"_s},
+        {u"Preview only"_s, u"preview"_s},
+        {u"Translate on send"_s, u"send"_s},
     };
 }
 
@@ -110,7 +111,7 @@ QString formatTimestampStatus(const QString &isoTimestamp)
     const auto parsed = QDateTime::fromString(isoTimestamp, Qt::ISODate);
     if (!parsed.isValid())
     {
-        return QString("Unknown");
+        return {"Unknown"};
     }
 
     return parsed.toLocalTime().toString("yyyy-MM-dd h:mm ap");
@@ -120,7 +121,8 @@ QString formatTimestampStatus(const QString &isoTimestamp)
 
 namespace chatterino {
 
-QString formatMoltorinoAuthSummary(const MoltorinoAuthSummary &summary)
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static QString formatMoltorinoAuthSummary(const MoltorinoAuthSummary &summary)
 {
     QString text;
     if (summary.validAccountCount > 0)
@@ -135,7 +137,7 @@ QString formatMoltorinoAuthSummary(const MoltorinoAuthSummary &summary)
     }
     else
     {
-        text = QStringLiteral("Not logged in to any accounts.");
+        text = u"Not logged in to any accounts."_s;
     }
 
     if (summary.invalidAccountCount > 0)
@@ -150,20 +152,23 @@ QString formatMoltorinoAuthSummary(const MoltorinoAuthSummary &summary)
     return text;
 }
 
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 class MoltorinoAuthDialog : public QDialog
 {
 public:
     explicit MoltorinoAuthDialog(QWidget *parent = nullptr)
         : QDialog(parent)
+        , tabs_(new QTabWidget(this))
+        , devicePollTimer_(new QTimer(this))
     {
         this->setMinimumWidth(430);
         this->setWindowFlags(
-            (this->windowFlags() & ~(Qt::WindowContextHelpButtonHint)) |
+            (this->windowFlags() & ~Qt::WindowContextHelpButtonHint) |
             Qt::Dialog | Qt::MSWindowsFixedSizeDialogHint);
         this->setWindowTitle("Manage Accounts");
 
         auto *mainLayout = new QVBoxLayout(this);
-        this->tabs_ = new QTabWidget(this);
+
         mainLayout->addWidget(this->tabs_);
 
         this->buildDeviceTab();
@@ -176,7 +181,6 @@ public:
         });
         mainLayout->addWidget(buttonBox);
 
-        this->devicePollTimer_ = new QTimer(this);
         this->devicePollTimer_->setSingleShot(true);
         QObject::connect(this->devicePollTimer_, &QTimer::timeout, this,
                          [this] {
@@ -190,8 +194,8 @@ public:
 private:
     static QString accountName(const MoltorinoAuthAccount &account)
     {
-        const auto displayName = account.displayName.trimmed();
-        const auto login = account.login.trimmed();
+        auto displayName = account.displayName.trimmed();
+        auto login = account.login.trimmed();
         if (!displayName.isEmpty() && !login.isEmpty() &&
             displayName.compare(login, Qt::CaseInsensitive) != 0)
         {
@@ -258,7 +262,7 @@ private:
         {
             addChannel(channel.id, channel.login);
         }
-        return channels.size();
+        return static_cast<int>(channels.size());
     }
 
     void buildDeviceTab()
@@ -422,7 +426,7 @@ private:
         }
 
         this->accountsTable_->setRowCount(static_cast<int>(accounts.size()));
-        for (int row = 0; row < static_cast<int>(accounts.size()); ++row)
+        for (int row = 0; std::cmp_less(row, accounts.size()); ++row)
         {
             const auto &account = accounts.at(static_cast<size_t>(row));
             this->accountsTable_->setItem(row, 0,
@@ -481,7 +485,8 @@ private:
 
         MoltorinoAuth::addOrUpdateToken(
             trimmed,
-            [guard, guardedStatus, generation](MoltorinoAuthAccount account) {
+            [guard, guardedStatus,
+             generation](const MoltorinoAuthAccount &account) {
                 if (guard == nullptr ||
                     generation != guard->authValidationGeneration_)
                 {
@@ -862,6 +867,11 @@ private:
 };
 
 MoltorinoPage::MoltorinoPage()
+    : botBadgeStatusLabel_(new QLabel(this->botBadgeFrame_))
+    , botBadgeIdentityLabel_(new QLabel(this->botBadgeFrame_))
+    , botBadgeClientIdEdit_(new QLineEdit(this->botBadgeFrame_))
+    , botBadgeClientSecretEdit_(new QLineEdit(this->botBadgeFrame_))
+    , botBadgeSenderEdit_(new QLineEdit(this->botBadgeFrame_))
 {
     auto *rootLayout = new QVBoxLayout;
     rootLayout->setContentsMargins(9, 6, 9, 0);
@@ -949,12 +959,12 @@ MoltorinoPage::MoltorinoPage()
                          this->refreshAuthAccounts();
                      });
     s.customPinAuthToken.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->updateAuthSummary();
         },
         this->managedConnections_);
     s.moltorinoAuthAccounts.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->updateAuthSummary();
         },
         this->managedConnections_);
@@ -982,17 +992,14 @@ MoltorinoPage::MoltorinoPage()
     botBadgeForm->setHorizontalSpacing(12);
     botBadgeForm->setVerticalSpacing(6);
 
-    this->botBadgeSenderEdit_ = new QLineEdit(this->botBadgeFrame_);
     this->botBadgeSenderEdit_->setPlaceholderText(
         "Leave empty for current account");
     botBadgeForm->addRow("Username", this->botBadgeSenderEdit_);
 
-    this->botBadgeClientIdEdit_ = new QLineEdit(this->botBadgeFrame_);
     this->botBadgeClientIdEdit_->setPlaceholderText(
         "Twitch application Client ID");
     botBadgeForm->addRow("Client ID", this->botBadgeClientIdEdit_);
 
-    this->botBadgeClientSecretEdit_ = new QLineEdit(this->botBadgeFrame_);
     this->botBadgeClientSecretEdit_->setEchoMode(QLineEdit::Password);
     this->botBadgeClientSecretEdit_->setPlaceholderText(
         "Twitch application Client Secret");
@@ -1015,11 +1022,9 @@ MoltorinoPage::MoltorinoPage()
     botBadgeButtons->addStretch(1);
     botBadgeLayout->addLayout(botBadgeButtons);
 
-    this->botBadgeStatusLabel_ = new QLabel(this->botBadgeFrame_);
     this->botBadgeStatusLabel_->setWordWrap(true);
     botBadgeLayout->addWidget(this->botBadgeStatusLabel_);
 
-    this->botBadgeIdentityLabel_ = new QLabel(this->botBadgeFrame_);
     this->botBadgeIdentityLabel_->setWordWrap(true);
     botBadgeLayout->addWidget(this->botBadgeIdentityLabel_);
 
@@ -1083,14 +1088,14 @@ MoltorinoPage::MoltorinoPage()
                  "1.4x", "1.5x", "1.75x", "2x"},
                 setting,
                 [](auto val) {
-                    if (val == 1.f)
+                    if (val == 1.F)
                     {
                         return QString("Default");
                     }
                     return QString::number(val) + "x";
                 },
-                [](auto args) {
-                    return fuzzyToFloat(args.value, 1.f);
+                [](const auto &args) {
+                    return fuzzyToFloat(args.value, 1.F);
                 },
                 false)
             ->setToolTip(tooltip);
@@ -1117,7 +1122,7 @@ MoltorinoPage::MoltorinoPage()
                         return QString("In moderation mode");
                 }
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Never")
                 {
                     return 0;
@@ -1176,7 +1181,7 @@ MoltorinoPage::MoltorinoPage()
                 }
                 return QString::number(val / 60) + " minutes";
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Indefinite")
                 {
                     return -1;
@@ -1193,7 +1198,7 @@ MoltorinoPage::MoltorinoPage()
                 return val == 1 ? QString("Unpin for everyone")
                                 : QString("Hide banner here");
             },
-            [](auto args) {
+            [](const auto &args) {
                 return args.value.startsWith("Unpin") ? 1 : 0;
             },
             false)
@@ -1219,7 +1224,7 @@ MoltorinoPage::MoltorinoPage()
                         return QString("Time + Countdown");
                 }
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Time only")
                 {
                     return 1;
@@ -1249,7 +1254,7 @@ MoltorinoPage::MoltorinoPage()
             [](auto val) {
                 return val;
             },
-            [](auto args) {
+            [](const auto &args) {
                 return args.value;
             },
             false)
@@ -1287,7 +1292,7 @@ MoltorinoPage::MoltorinoPage()
                 return val == 1 ? QString("Open manage view")
                                 : QString("Open betting view");
             },
-            [](auto args) {
+            [](const auto &args) {
                 return args.value.contains("manage") ? 1 : 0;
             },
             false)
@@ -1328,7 +1333,7 @@ MoltorinoPage::MoltorinoPage()
                 }
                 return QString("After %1 seconds").arg(val);
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Never")
                 {
                     return 0;
@@ -1373,7 +1378,7 @@ MoltorinoPage::MoltorinoPage()
                         return QString("Show all");
                 }
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Prefer pinned")
                 {
                     return 1;
@@ -1540,7 +1545,7 @@ MoltorinoPage::MoltorinoPage()
                         return QString("Default");
                 }
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Loose")
                 {
                     return 0;
@@ -1588,7 +1593,7 @@ MoltorinoPage::MoltorinoPage()
                         return QString("In moderation mode");
                 }
             },
-            [](auto args) {
+            [](const auto &args) {
                 if (args.value == "Never")
                 {
                     return 0;
@@ -1619,9 +1624,9 @@ MoltorinoPage::MoltorinoPage()
                      "Enable this if VIPs should be protected too.")
         ->addTo(*view);
 
-    const auto nukeMessageTooltip = QStringLiteral(
-        "Message Twitch shows for /nuke timeouts and bans. Leave empty to "
-        "send no message.");
+    const auto nukeMessageTooltip =
+        u"Message Twitch shows for /nuke timeouts and bans. Leave empty to "
+        "send no message."_s;
     auto *nukeMessageRow = new QWidget;
     nukeMessageRow->setMinimumWidth(0);
     auto *nukeMessageLayout = new QHBoxLayout(nukeMessageRow);
@@ -1640,7 +1645,7 @@ MoltorinoPage::MoltorinoPage()
     {
         const auto charWidth =
             nukeMessageInput->fontMetrics().horizontalAdvance(QLatin1Char('M'));
-        nukeMessageInput->setMaximumWidth(charWidth * 25 + 24);
+        nukeMessageInput->setMaximumWidth((charWidth * 25) + 24);
         nukeMessageInput->setMinimumWidth(48);
         nukeMessageInput->setSizePolicy(QSizePolicy::Preferred,
                                         QSizePolicy::Fixed);
@@ -1823,12 +1828,9 @@ MoltorinoPage::MoltorinoPage()
     view->addTitle("Fun");
     view->addDescription("Spam, pyramid, and playful chat command options.");
 
-    SettingWidget::intInput("Delay between /spam and /pyramid messages",
-                            s.spamCommandIntervalMs,
-                            {.min = 10,
-                             .max = 5000,
-                             .singleStep = 10,
-                             .suffix = QStringLiteral(" ms")})
+    SettingWidget::intInput(
+        "Delay between /spam and /pyramid messages", s.spamCommandIntervalMs,
+        {.min = 10, .max = 5000, .singleStep = 10, .suffix = u" ms"_s})
         ->setTooltip("How long /spam and /pyramid wait between messages. "
                      "Lower values are faster, but Twitch may still "
                      "rate limit accounts that are not mod, VIP, or "
@@ -1941,7 +1943,7 @@ void MoltorinoPage::refreshAuthAccounts()
 
     QPointer<MoltorinoPage> guard(this);
     MoltorinoAuth::refreshAccounts(
-        [guard, generation](MoltorinoAuthRefreshResult result) {
+        [guard, generation](const MoltorinoAuthRefreshResult &result) {
             if (guard == nullptr || generation != guard->authRefreshGeneration_)
             {
                 return;

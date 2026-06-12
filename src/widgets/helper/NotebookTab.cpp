@@ -169,7 +169,7 @@ NotebookTab::NotebookTab(Notebook *notebook)
         },
         this->managedConnections_);
     getSettings()->colorTabHighlightsByMessage.connect(
-        [this](auto, auto) {
+        [this](auto, const auto &) {
             this->update();
         },
         this->managedConnections_);
@@ -1086,7 +1086,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     }
 
     // draw color indicator line
-    auto lineThickness = ceil((this->selected_ ? 2.f : 1.f) * scale);
+    auto lineThickness = ceil((this->selected_ ? 2.F : 1.F) * scale);
     auto lineColor = this->mouseOver_ ? colors.line.hover
                                       : (windowFocused ? colors.line.regular
                                                        : colors.line.unfocused);

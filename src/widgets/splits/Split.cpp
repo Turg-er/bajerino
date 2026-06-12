@@ -65,6 +65,8 @@
 #include <functional>
 #include <optional>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 namespace {
 constexpr int DEFERRED_TWITCH_FEATURE_REFRESH_DELAY_MS = 3500;
@@ -170,7 +172,7 @@ Split::Split(QWidget *parent)
         });
     this->updateInputPlaceholder();
     getSettings()->showInputPlaceholder.connect(
-        [this](const bool &, auto) {
+        [this](const bool &, const auto &) {
             this->updateInputPlaceholder();
         },
         this->signalHolder_);
@@ -1112,12 +1114,12 @@ QString pinBannerKey(const std::optional<TwitchChannel::PinnedMessage> &pin)
     QString key = !pin->pinId.isEmpty() ? pin->pinId : pin->messageId;
     if (key.isEmpty())
     {
-        key = pin->authorLogin + QStringLiteral(":") + pin->text.left(80);
+        key = pin->authorLogin + u":"_s + pin->text.left(80);
     }
 
     if (pin->endsAt && pin->endsAt->isValid())
     {
-        key += QStringLiteral("|") + pin->endsAt->toUTC().toString(Qt::ISODate);
+        key += u"|"_s + pin->endsAt->toUTC().toString(Qt::ISODate);
     }
     return key;
 }
@@ -1130,8 +1132,8 @@ QString predictionBannerKey(
         return {};
     }
 
-    return prediction->id + QStringLiteral("|") + prediction->status.toUpper() +
-           QStringLiteral("|") + prediction->winningOutcomeId;
+    return prediction->id + u"|"_s + prediction->status.toUpper() + u"|"_s +
+           prediction->winningOutcomeId;
 }
 
 QString pollBannerKey(const std::optional<TwitchChannel::PollEvent> &poll)
@@ -1141,7 +1143,7 @@ QString pollBannerKey(const std::optional<TwitchChannel::PollEvent> &poll)
         return {};
     }
 
-    return poll->id + QStringLiteral("|") + poll->status.toUpper();
+    return poll->id + u"|"_s + poll->status.toUpper();
 }
 
 bool predictionIsActive(
@@ -1183,7 +1185,7 @@ void Split::noteBannerStateChanged(TwitchChannel *channel, int bannerId)
     const auto newPredictionKey = predictionBannerKey(prediction);
     const auto newPollKey = pollBannerKey(poll);
 
-    QString *oldKey = nullptr;
+    QString const *oldKey = nullptr;
     QString newKey;
     switch (bannerId)
     {
@@ -1283,7 +1285,9 @@ void Split::updateBannerVisibility()
     const int mode = getSettings()->bannerStackMode;
     const bool hasPoll = this->pollBanner_->hasPoll();
 
-    const int activeCount = int(hasPin) + int(hasPred) + int(hasPoll);
+    const int activeCount = static_cast<int>(hasPin) +
+                            static_cast<int>(hasPred) +
+                            static_cast<int>(hasPoll);
     auto setVisibility = [this](bool showPin, bool showPred, bool showPoll,
                                 bool showToggle) {
         this->pinnedBanner_->setVisible(showPin);
@@ -1515,9 +1519,9 @@ void Split::updateBannerVisibility()
 
         Candidate best;
         const Candidate candidates[] = {
-            {0, pinScore, 0},
-            {1, predictionScore, 2},
-            {2, pollScore, 1},
+            {.id = 0, .score = pinScore, .tieBreak = 0},
+            {.id = 1, .score = predictionScore, .tieBreak = 2},
+            {.id = 2, .score = pollScore, .tieBreak = 1},
         };
         for (const auto &candidate : candidates)
         {
@@ -1539,7 +1543,7 @@ void Split::updateBannerVisibility()
     setVisibility(selectedId == 0, selectedId == 1, selectedId == 2, true);
 }
 
-void Split::openChannelInBrowserPlayer(ChannelPtr channel)
+void Split::openChannelInBrowserPlayer(const ChannelPtr &channel)
 {
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
@@ -1683,7 +1687,7 @@ void Split::setChannel(IndirectChannel newChannel)
         }
 
         getSettings()->enablePinnedMessages.connect(
-            [this, tc](const bool &enabled, auto) {
+            [this, tc](const bool &enabled, const auto &) {
                 if (enabled)
                 {
                     tc->refreshPinnedMessage();
@@ -1757,7 +1761,7 @@ void Split::setChannel(IndirectChannel newChannel)
         }
 
         getSettings()->enablePredictions.connect(
-            [this, tc](const bool &enabled, auto) {
+            [this, tc](const bool &enabled, const auto &) {
                 if (enabled)
                 {
                     this->scheduleDeferredTwitchRefresh(true);
@@ -1778,7 +1782,7 @@ void Split::setChannel(IndirectChannel newChannel)
             this->channelSignalHolder_);
 
         getSettings()->enablePolls.connect(
-            [this, tc](const bool &enabled, auto) {
+            [this, tc](const bool &enabled, const auto &) {
                 if (enabled)
                 {
                     this->scheduleDeferredTwitchRefresh(true);
@@ -1815,8 +1819,8 @@ void Split::setChannel(IndirectChannel newChannel)
                 }
                 if (!activeIds.isEmpty())
                 {
-                    const int foundIndex =
-                        activeIds.indexOf(this->bannerToggleOverride_);
+                    const int foundIndex = static_cast<int>(
+                        activeIds.indexOf(this->bannerToggleOverride_));
                     const int currentIndex = foundIndex >= 0 ? foundIndex : 0;
                     this->bannerToggleOverride_ =
                         activeIds.at((currentIndex + 1) % activeIds.size());
@@ -1841,8 +1845,8 @@ void Split::setChannel(IndirectChannel newChannel)
                 }
                 if (!activeIds.isEmpty())
                 {
-                    const int foundIndex =
-                        activeIds.indexOf(this->bannerToggleOverride_);
+                    const int foundIndex = static_cast<int>(
+                        activeIds.indexOf(this->bannerToggleOverride_));
                     const int currentIndex = foundIndex >= 0 ? foundIndex : 0;
                     this->bannerToggleOverride_ =
                         activeIds.at((currentIndex + 1) % activeIds.size());
@@ -1867,8 +1871,8 @@ void Split::setChannel(IndirectChannel newChannel)
                 }
                 if (!activeIds.isEmpty())
                 {
-                    const int foundIndex =
-                        activeIds.indexOf(this->bannerToggleOverride_);
+                    const int foundIndex = static_cast<int>(
+                        activeIds.indexOf(this->bannerToggleOverride_));
                     const int currentIndex = foundIndex >= 0 ? foundIndex : 0;
                     this->bannerToggleOverride_ =
                         activeIds.at((currentIndex + 1) % activeIds.size());
@@ -1893,7 +1897,7 @@ void Split::setChannel(IndirectChannel newChannel)
             });
 
         getSettings()->bannerStackMode.connect(
-            [this](const int &, auto) {
+            [this](const int &, const auto &) {
                 this->bannerToggleOverride_ = -1;
                 this->updateBannerVisibility();
             },

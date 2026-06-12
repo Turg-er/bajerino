@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 namespace chatterino {
@@ -49,7 +50,8 @@ float clampBannerScale(float value)
 
 float pollBannerContentScale()
 {
-    return clampBannerScale(float(getSettings()->pollBannerContentScale));
+    return clampBannerScale(
+        static_cast<float>(getSettings()->pollBannerContentScale));
 }
 
 constexpr std::array<const char *, 5> POLL_TONES = {{
@@ -66,12 +68,12 @@ QString formatCompactVotes(qlonglong value)
 {
     if (value >= 1000000)
     {
-        const double millions = value / 1000000.0;
+        const double millions = static_cast<double>(value) / 1000000.0;
         return QString::number(millions, 'f', millions >= 10.0 ? 0 : 1) + "m";
     }
     if (value >= 1000)
     {
-        const double thousands = value / 1000.0;
+        const double thousands = static_cast<double>(value) / 1000.0;
         return QString::number(thousands, 'f', thousands >= 10.0 ? 0 : 1) + "k";
     }
     return QString::number(value);
@@ -128,7 +130,7 @@ int outcomePercent(int value, int total, int outcomeCount)
 
 int scaledInt(float value, int minimum = 1)
 {
-    return std::max(minimum, int(std::round(value)));
+    return std::max(minimum, static_cast<int>(std::round(value)));
 }
 
 bool pollIsActive(const TwitchChannel::PollEvent &poll)
@@ -149,24 +151,26 @@ int maxPollVotes(const TwitchChannel::PollEvent &poll)
 QColor pollToneForChoice(const TwitchChannel::PollEvent &poll, int index,
                          bool votingEnded)
 {
-    if (index < 0 || index >= static_cast<int>(poll.choices.size()))
+    if (index < 0 || std::cmp_greater_equal(index, poll.choices.size()))
     {
-        return QColor(POLL_TONES.back());
+        return {POLL_TONES.back()};
     }
 
-    const int choiceVotes = poll.choices.at(size_t(index)).totalVotes;
+    const int choiceVotes =
+        poll.choices.at(static_cast<size_t>(index)).totalVotes;
     if (votingEnded)
     {
         if (poll.totalVotes > 0 && choiceVotes == maxPollVotes(poll))
         {
-            return QColor(POLL_ENDED_WINNER_TONE);
+            return {POLL_ENDED_WINNER_TONE};
         }
-        return QColor(POLL_ENDED_TRAILING_TONE);
+        return {POLL_ENDED_TRAILING_TONE};
     }
 
     if (poll.totalVotes <= 0)
     {
-        return QColor(POLL_TONES[size_t(index % int(POLL_TONES.size()))]);
+        return {POLL_TONES[static_cast<size_t>(
+            index % static_cast<int>(POLL_TONES.size()))]};
     }
 
     std::vector<int> strongerCounts;
@@ -174,39 +178,46 @@ QColor pollToneForChoice(const TwitchChannel::PollEvent &poll, int index,
     for (const auto &choice : poll.choices)
     {
         if (choice.totalVotes > choiceVotes &&
-            std::find(strongerCounts.begin(), strongerCounts.end(),
-                      choice.totalVotes) == strongerCounts.end())
+            std::ranges::find(strongerCounts, choice.totalVotes) ==
+                strongerCounts.end())
         {
             strongerCounts.push_back(choice.totalVotes);
         }
     }
 
     const auto rank = std::min(strongerCounts.size(), POLL_TONES.size() - 1);
-    return QColor(POLL_TONES[rank]);
+    return {POLL_TONES[rank]};
 }
 }  // namespace
 
 PollBanner::PollBanner(Split *split, QWidget *parent)
     : BaseWidget(parent)
+    , metadataLabel_(new QLabel(this))
+    , titleLabel_(new QLabel(this))
+    , summaryLabel_(new QLabel(this))
+    , distributionBar_(new QWidget(this))
+    , timerLabel_(new QLabel(this))
+    , rootLayout_(new QVBoxLayout(this))
+    , topLayout_(new QHBoxLayout())
+    , contentLayout_(new QVBoxLayout())
     , split_(split)
+    , updateTimer_(new QTimer(this))
+    , anim_(new QVariantAnimation(this))
 {
     this->setObjectName("PollBanner");
     this->setCursor(Qt::PointingHandCursor);
     this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
-    this->anim_ = new QVariantAnimation(this);
     this->anim_->setEasingCurve(QEasingCurve::OutCubic);
     QObject::connect(this->anim_, &QVariantAnimation::valueChanged, this,
                      [this](const QVariant &) {
                          this->update();
                      });
 
-    this->rootLayout_ = new QVBoxLayout(this);
     this->rootLayout_->setContentsMargins(0, BASE_TOP_MARGIN, BASE_RIGHT_MARGIN,
                                           BASE_BOTTOM_MARGIN);
     this->rootLayout_->setSpacing(BASE_SPACING);
 
-    this->topLayout_ = new QHBoxLayout();
     this->topLayout_->setContentsMargins(BASE_HEADER_LEFT_MARGIN, 0, 0, 0);
     this->topLayout_->setSpacing(BASE_HEADER_SPACING);
 
@@ -223,7 +234,6 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
     this->icon_->setGraphicsEffect(iconOpacity);
     this->topLayout_->addWidget(this->icon_, 0, Qt::AlignBottom);
 
-    this->metadataLabel_ = new QLabel(this);
     this->metadataLabel_->setContentsMargins(0, 0, 0, 0);
     this->metadataLabel_->setAlignment(Qt::AlignLeft | Qt::AlignBottom);
     this->metadataLabel_->setMinimumWidth(0);
@@ -231,7 +241,6 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
                                         QSizePolicy::Preferred);
     this->topLayout_->addWidget(this->metadataLabel_, 1, Qt::AlignBottom);
 
-    this->timerLabel_ = new QLabel(this);
     this->timerLabel_->setContentsMargins(0, 0, 4, 0);
     this->timerLabel_->setAlignment(Qt::AlignRight | Qt::AlignBottom);
     this->timerLabel_->hide();
@@ -264,17 +273,14 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
 
     this->rootLayout_->addLayout(this->topLayout_);
 
-    this->contentLayout_ = new QVBoxLayout();
     this->contentLayout_->setContentsMargins(BASE_CONTENT_LEFT_MARGIN, 0, 0, 0);
     this->contentLayout_->setSpacing(2);
 
-    this->titleLabel_ = new QLabel(this);
     this->titleLabel_->setWordWrap(false);
     this->titleLabel_->setSizePolicy(QSizePolicy::Ignored,
                                      QSizePolicy::Preferred);
     this->contentLayout_->addWidget(this->titleLabel_);
 
-    this->summaryLabel_ = new QLabel(this);
     this->summaryLabel_->setWordWrap(false);
     this->summaryLabel_->setSizePolicy(QSizePolicy::Ignored,
                                        QSizePolicy::Preferred);
@@ -283,11 +289,9 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
 
     this->rootLayout_->addLayout(this->contentLayout_);
 
-    this->distributionBar_ = new QWidget(this);
     this->distributionBar_->setAttribute(Qt::WA_TransparentForMouseEvents);
     this->distributionBar_->setFixedHeight(BASE_BAR_HEIGHT);
 
-    this->updateTimer_ = new QTimer(this);
     this->updateTimer_->setInterval(1000);
     QObject::connect(this->updateTimer_, &QTimer::timeout, this,
                      &PollBanner::updateTimer);
@@ -295,7 +299,8 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
     QObject::connect(this->closeButton_, &Button::leftClicked, [this]() {
         if (this->poll_)
         {
-            this->dismissedPollKey_ = this->dismissalKey(*this->poll_);
+            this->dismissedPollKey_ =
+                chatterino::PollBanner::dismissalKey(*this->poll_);
         }
         this->hide();
         this->dismissed.invoke();
@@ -308,13 +313,13 @@ PollBanner::PollBanner(Split *split, QWidget *parent)
     });
 
     getSettings()->pinBannerBackgroundColor.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->update();
         },
         this->managedConnections_);
 
     getSettings()->pollBannerContentScale.connect(
-        [this](const float &, auto) {
+        [this](const float &, const auto &) {
             this->scaleChangedEvent(this->scale());
             this->updateGeometry();
         },
@@ -358,29 +363,29 @@ void PollBanner::setPoll(const std::optional<TwitchChannel::PollEvent> &poll,
 
     std::vector<int> sortedIndices;
     sortedIndices.reserve(poll->choices.size());
-    for (int i = 0; i < static_cast<int>(poll->choices.size()); ++i)
+    for (int i = 0; std::cmp_less(i, poll->choices.size()); ++i)
     {
         sortedIndices.push_back(i);
     }
     if (poll->totalVotes > 0)
     {
-        std::stable_sort(sortedIndices.begin(), sortedIndices.end(),
-                         [&poll](int a, int b) {
-                             return poll->choices.at(size_t(a)).totalVotes >
-                                    poll->choices.at(size_t(b)).totalVotes;
-                         });
+        std::ranges::stable_sort(sortedIndices, [&poll](int a, int b) {
+            return poll->choices.at(static_cast<size_t>(a)).totalVotes >
+                   poll->choices.at(static_cast<size_t>(b)).totalVotes;
+        });
     }
 
     std::vector<double> newFractions;
     newFractions.reserve(sortedIndices.size());
     const double fallbackFraction =
-        poll->choices.empty() ? 0.0 : 1.0 / poll->choices.size();
+        poll->choices.empty() ? 0.0
+                              : 1.0 / static_cast<double>(poll->choices.size());
     for (const int index : sortedIndices)
     {
-        const auto &choice = poll->choices.at(size_t(index));
+        const auto &choice = poll->choices.at(static_cast<size_t>(index));
         newFractions.push_back(poll->totalVotes > 0
-                                   ? double(choice.totalVotes) /
-                                         double(poll->totalVotes)
+                                   ? static_cast<double>(choice.totalVotes) /
+                                         static_cast<double>(poll->totalVotes)
                                    : fallbackFraction);
     }
 
@@ -401,8 +406,8 @@ void PollBanner::setPoll(const std::optional<TwitchChannel::PollEvent> &poll,
         {
             this->previousFractions_[i] =
                 this->previousFractions_[i] +
-                (this->targetFractions_[i] - this->previousFractions_[i]) *
-                    progress;
+                ((this->targetFractions_[i] - this->previousFractions_[i]) *
+                 progress);
         }
         this->targetFractions_ = newFractions;
         this->anim_->stop();
@@ -424,7 +429,7 @@ void PollBanner::setPoll(const std::optional<TwitchChannel::PollEvent> &poll,
         this->updateTimer_->stop();
     }
 
-    if (this->dismissedPollKey_ == this->dismissalKey(*poll))
+    if (this->dismissedPollKey_ == chatterino::PollBanner::dismissalKey(*poll))
     {
         this->hide();
         return;
@@ -436,7 +441,8 @@ void PollBanner::setPoll(const std::optional<TwitchChannel::PollEvent> &poll,
         QTimer::singleShot(autoDismiss * 1000, this, [this] {
             if (this->poll_ && !pollIsActive(*this->poll_))
             {
-                this->dismissedPollKey_ = this->dismissalKey(*this->poll_);
+                this->dismissedPollKey_ =
+                    chatterino::PollBanner::dismissalKey(*this->poll_);
                 this->hide();
                 this->dismissed.invoke();
             }
@@ -450,7 +456,8 @@ bool PollBanner::hasPoll() const
     {
         return false;
     }
-    return this->dismissedPollKey_ != this->dismissalKey(*this->poll_);
+    return this->dismissedPollKey_ !=
+           chatterino::PollBanner::dismissalKey(*this->poll_);
 }
 
 void PollBanner::setToggleButtonVisible(bool visible)
@@ -521,7 +528,7 @@ void PollBanner::showEvent(QShowEvent *event)
     this->scaleChangedEvent(this->scale());
 }
 
-void PollBanner::paintEvent(QPaintEvent *)
+void PollBanner::paintEvent(QPaintEvent * /*event*/)
 {
     QPainter painter(this);
 
@@ -566,18 +573,17 @@ void PollBanner::paintEvent(QPaintEvent *)
     const double fallbackFraction = outcomeCount > 0 ? 1.0 / outcomeCount : 0.0;
 
     std::vector<int> sortedIndices;
-    sortedIndices.reserve(size_t(outcomeCount));
+    sortedIndices.reserve(static_cast<size_t>(outcomeCount));
     for (int i = 0; i < outcomeCount; ++i)
     {
         sortedIndices.push_back(i);
     }
     if (this->poll_->totalVotes > 0)
     {
-        std::stable_sort(
-            sortedIndices.begin(), sortedIndices.end(), [this](int a, int b) {
-                return this->poll_->choices.at(size_t(a)).totalVotes >
-                       this->poll_->choices.at(size_t(b)).totalVotes;
-            });
+        std::ranges::stable_sort(sortedIndices, [this](int a, int b) {
+            return this->poll_->choices.at(static_cast<size_t>(a)).totalVotes >
+                   this->poll_->choices.at(static_cast<size_t>(b)).totalVotes;
+        });
     }
 
     const bool votingEnded =
@@ -590,15 +596,15 @@ void PollBanner::paintEvent(QPaintEvent *)
                 ? this->anim_->currentValue().toDouble()
                 : 1.0;
         const double oldFraction =
-            orderedIndex < static_cast<int>(this->previousFractions_.size())
-                ? this->previousFractions_.at(size_t(orderedIndex))
+            std::cmp_less(orderedIndex, this->previousFractions_.size())
+                ? this->previousFractions_.at(static_cast<size_t>(orderedIndex))
                 : fallbackFraction;
         const double targetFraction =
-            orderedIndex < static_cast<int>(this->targetFractions_.size())
-                ? this->targetFractions_.at(size_t(orderedIndex))
+            std::cmp_less(orderedIndex, this->targetFractions_.size())
+                ? this->targetFractions_.at(static_cast<size_t>(orderedIndex))
                 : fallbackFraction;
         const double fraction =
-            oldFraction + (targetFraction - oldFraction) * progress;
+            oldFraction + ((targetFraction - oldFraction) * progress);
         cumulativeFraction += fraction;
 
         const int nextLeft = (orderedIndex == outcomeCount - 1)
@@ -606,7 +612,8 @@ void PollBanner::paintEvent(QPaintEvent *)
                                  : (barRect.left() + qRound(cumulativeFraction *
                                                             barRect.width()));
 
-        const int sourceIndex = sortedIndices.at(size_t(orderedIndex));
+        const int sourceIndex =
+            sortedIndices.at(static_cast<size_t>(orderedIndex));
         painter.fillRect(
             QRect(currentLeft, barRect.top(),
                   std::max(0, nextLeft - currentLeft), barRect.height()),
@@ -843,7 +850,7 @@ void PollBanner::openPollDialog()
                            PollDialog::OpenMode::ShowPollResults);
 }
 
-QString PollBanner::dismissalKey(const TwitchChannel::PollEvent &poll) const
+QString PollBanner::dismissalKey(const TwitchChannel::PollEvent &poll)
 {
     return poll.id + ':' + poll.status;
 }

@@ -13,6 +13,11 @@
 #include <QSignalBlocker>
 #include <QSystemTrayIcon>
 
+#include <cstddef>
+#include <utility>
+
+using namespace Qt::StringLiterals;
+
 namespace {
 
 constexpr qsizetype MAX_PREVIEW_LENGTH = 160;
@@ -25,7 +30,7 @@ QString cleanForTray(QString text)
     text = text.simplified();
     if (text.size() > MAX_PREVIEW_LENGTH)
     {
-        text = text.left(MAX_PREVIEW_LENGTH - 1) + QStringLiteral("...");
+        text = text.left(MAX_PREVIEW_LENGTH - 1) + u"..."_s;
     }
     return text;
 }
@@ -110,9 +115,8 @@ void TrayController::hideToTray()
         if (this->trayIcon_ != nullptr && QSystemTrayIcon::supportsMessages())
         {
             this->trayIcon_->showMessage(
-                QStringLiteral("Bajerino is still running"),
-                QStringLiteral(
-                    "You can disable this feature from the settings."),
+                u"Bajerino is still running"_s,
+                u"You can disable this feature from the settings."_s,
                 QSystemTrayIcon::Information, 7000);
         }
     }
@@ -166,7 +170,7 @@ void TrayController::notifyHighlight(const Channel *channel,
 
 void TrayController::openRecentPing(int index)
 {
-    if (index < 0 || index >= static_cast<int>(this->recentPings_.size()))
+    if (index < 0 || std::cmp_greater_equal(index, this->recentPings_.size()))
     {
         this->restoreFromTray();
         return;
@@ -186,29 +190,26 @@ void TrayController::ensureTrayIcon()
         return;
     }
 
-    this->trayIcon_ =
-        new QSystemTrayIcon(QIcon(QStringLiteral(":/icon.ico")), this);
-    this->trayIcon_->setToolTip(QStringLiteral("Bajerino"));
+    this->trayIcon_ = new QSystemTrayIcon(QIcon(u":/icon.ico"_s), this);
+    this->trayIcon_->setToolTip(u"Bajerino"_s);
 
     this->menu_ = new QMenu;
-    this->openAction_ = this->menu_->addAction(QStringLiteral("Open Bajerino"));
+    this->openAction_ = this->menu_->addAction(u"Open Bajerino"_s);
     QObject::connect(this->openAction_, &QAction::triggered, this, [this] {
         this->restoreFromTray();
     });
 
-    this->openLastPingAction_ =
-        this->menu_->addAction(QStringLiteral("Open last ping"));
+    this->openLastPingAction_ = this->menu_->addAction(u"Open last ping"_s);
     QObject::connect(this->openLastPingAction_, &QAction::triggered, this,
                      [this] {
                          this->openRecentPing(0);
                      });
 
-    this->recentPingsMenu_ =
-        this->menu_->addMenu(QStringLiteral("Recent pings"));
+    this->recentPingsMenu_ = this->menu_->addMenu(u"Recent pings"_s);
     this->menu_->addSeparator();
 
-    this->mutePingsAction_ = this->menu_->addAction(
-        QStringLiteral("Mute ping notifications for 15 minutes"));
+    this->mutePingsAction_ =
+        this->menu_->addAction(u"Mute ping notifications for 15 minutes"_s);
     QObject::connect(this->mutePingsAction_, &QAction::triggered, this, [this] {
         if (this->notificationsMuted())
         {
@@ -216,14 +217,14 @@ void TrayController::ensureTrayIcon()
         }
         else
         {
-            this->mutePingsUntil_ =
-                QDateTime::currentDateTimeUtc().addSecs(15 * 60);
+            this->mutePingsUntil_ = QDateTime::currentDateTimeUtc().addSecs(
+                static_cast<qint64>(15 * 60));
         }
         this->refreshMenu();
     });
 
     this->pingNotificationsAction_ = this->menu_->addAction(
-        QStringLiteral("Show notifications for sound-enabled highlights"));
+        u"Show notifications for sound-enabled highlights"_s);
     this->pingNotificationsAction_->setCheckable(true);
     QObject::connect(this->pingNotificationsAction_, &QAction::toggled, this,
                      [](bool checked) {
@@ -231,7 +232,7 @@ void TrayController::ensureTrayIcon()
                      });
 
     this->menu_->addSeparator();
-    this->quitAction_ = this->menu_->addAction(QStringLiteral("Quit Bajerino"));
+    this->quitAction_ = this->menu_->addAction(u"Quit Bajerino"_s);
     QObject::connect(this->quitAction_, &QAction::triggered, qApp, [] {
         QApplication::exit(0);
     });
@@ -291,13 +292,12 @@ void TrayController::refreshMenu()
 
     if (this->notificationsMuted())
     {
-        this->mutePingsAction_->setText(
-            QStringLiteral("Unmute ping notifications"));
+        this->mutePingsAction_->setText(u"Unmute ping notifications"_s);
     }
     else
     {
         this->mutePingsAction_->setText(
-            QStringLiteral("Mute ping notifications for 15 minutes"));
+            u"Mute ping notifications for 15 minutes"_s);
     }
 
     {
@@ -319,17 +319,16 @@ void TrayController::rebuildRecentPingMenu()
 
     if (this->recentPings_.empty())
     {
-        auto *action = this->recentPingsMenu_->addAction(
-            QStringLiteral("No recent pings"));
+        auto *action = this->recentPingsMenu_->addAction(u"No recent pings"_s);
         action->setEnabled(false);
         return;
     }
 
-    for (int i = 0; i < static_cast<int>(this->recentPings_.size()); ++i)
+    for (int i = 0; std::cmp_less(i, this->recentPings_.size()); ++i)
     {
         const auto ping = this->recentPings_[static_cast<size_t>(i)];
-        auto *action =
-            this->recentPingsMenu_->addAction(this->formatPingActionText(ping));
+        auto *action = this->recentPingsMenu_->addAction(
+            chatterino::TrayController::formatPingActionText(ping));
         QObject::connect(action, &QAction::triggered, this, [this, i] {
             this->openRecentPing(i);
         });
@@ -340,13 +339,12 @@ void TrayController::showTrayPingNotification(const RecentPing &ping)
 {
     const auto title =
         ping.displayName.isEmpty()
-            ? QStringLiteral("Highlight in #%1").arg(ping.channelName)
-            : QStringLiteral("%1 in #%2")
-                  .arg(ping.displayName, ping.channelName);
-    const auto body = !ping.messageText.isEmpty()
-                          ? ping.messageText
-                          : QStringLiteral("You were highlighted in #%1")
-                                .arg(ping.channelName);
+            ? u"Highlight in #%1"_s.arg(ping.channelName)
+            : u"%1 in #%2"_s.arg(ping.displayName, ping.channelName);
+    const auto body =
+        !ping.messageText.isEmpty()
+            ? ping.messageText
+            : u"You were highlighted in #%1"_s.arg(ping.channelName);
 
     bool shown = getApp()->getToasts()->sendHighlightNotification(
         ping.channelName, title, body, ping.messageId);
@@ -365,16 +363,16 @@ bool TrayController::notificationsMuted() const
            QDateTime::currentDateTimeUtc() < this->mutePingsUntil_;
 }
 
-QString TrayController::formatPingActionText(const RecentPing &ping) const
+QString TrayController::formatPingActionText(const RecentPing &ping)
 {
-    auto text = QStringLiteral("#%1").arg(ping.channelName);
+    auto text = u"#%1"_s.arg(ping.channelName);
     if (!ping.displayName.isEmpty())
     {
-        text += QStringLiteral(" - %1").arg(ping.displayName);
+        text += u" - %1"_s.arg(ping.displayName);
     }
     if (!ping.messageText.isEmpty())
     {
-        text += QStringLiteral(": %1").arg(ping.messageText);
+        text += u": %1"_s.arg(ping.messageText);
     }
     return cleanForTray(text);
 }

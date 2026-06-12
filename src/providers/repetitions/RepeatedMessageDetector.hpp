@@ -69,9 +69,9 @@ private:
     static void rememberMessageID(UserCache &user, const QString &messageID,
                                   qint64 now);
 
-    void cleanupUser(UserCache &user, qint64 now);
-    void cleanupChannel(ChannelCache &channel, qint64 now);
-    void enforceChannelLimit(ChannelCache &channel);
+    static void cleanupUser(UserCache &user, qint64 now);
+    static void cleanupChannel(ChannelCache &channel, qint64 now);
+    static void enforceChannelLimit(ChannelCache &channel);
 
     QHash<QString, ChannelCache> channels_;
     int checksSinceCleanup_ = 0;

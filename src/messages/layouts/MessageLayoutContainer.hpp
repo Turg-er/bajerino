@@ -370,7 +370,7 @@ private:
     bool centerBadges_ = false;
     qreal width_ = 0;
     float descent_ = 0.F;
-    MessageFlags flags_{};
+    MessageFlags flags_;
     /**
      * line_ is the current line index we are adding
      * This is not the number of lines this message contains, since this will stop

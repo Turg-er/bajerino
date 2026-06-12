@@ -16,8 +16,11 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace chatterino {
 namespace {
@@ -89,7 +92,7 @@ QString formatNameHistoryDate(const QString &isoTimestamp)
 QString formatNameHistoryDateOrUnknown(const QString &isoTimestamp)
 {
     const auto date = formatNameHistoryDate(isoTimestamp);
-    return date.isEmpty() ? QStringLiteral("Unknown") : date;
+    return date.isEmpty() ? u"Unknown"_s : date;
 }
 
 bool historyMatchesExpectedLogin(const TwitchNameHistory &history,
@@ -109,13 +112,13 @@ bool nameHistoryIsFresh(const TwitchNameHistory &history)
     }
 
     const auto now = QDateTime::currentDateTimeUtc();
-    if (history.fetchedAt > now.addSecs(5 * 60))
+    if (history.fetchedAt > now.addSecs(static_cast<qint64>(5 * 60)))
     {
         return false;
     }
 
     return history.fetchedAt.secsTo(now) <=
-           NAME_HISTORY_CACHE_TTL_DAYS * 24 * 60 * 60;
+           static_cast<qint64>(NAME_HISTORY_CACHE_TTL_DAYS) * 24 * 60 * 60;
 }
 
 TwitchNameHistory parseNameHistory(const QJsonArray &root,
@@ -127,7 +130,7 @@ TwitchNameHistory parseNameHistory(const QJsonArray &root,
     result.fetchedAt = QDateTime::currentDateTimeUtc();
 
     QDateTime newestSeenAt;
-    for (const auto &value : root)
+    for (const auto value : root)
     {
         const auto object = value.toObject();
         const auto login = normalizeTwitchNameHistoryLogin(
@@ -152,7 +155,7 @@ TwitchNameHistory parseNameHistory(const QJsonArray &root,
     }
 
     const auto reserveCount =
-        std::min<int>(root.size(), TWITCH_NAME_HISTORY_LIMIT);
+        std::min<int>(static_cast<int>(root.size()), TWITCH_NAME_HISTORY_LIMIT);
     result.entries.reserve(static_cast<size_t>(reserveCount));
 
     bool addedCurrentEntry = false;
@@ -176,16 +179,19 @@ TwitchNameHistory parseNameHistory(const QJsonArray &root,
         if (isCurrentLogin && !addedCurrentEntry)
         {
             addedCurrentEntry = true;
-            result.entries.push_back(
-                {std::move(login), firstSeen, QStringLiteral("Present")});
+            result.entries.push_back({.login = std::move(login),
+                                      .leftText = firstSeen,
+                                      .rightText = u"Present"_s});
         }
         else
         {
             if (i == 0)
             {
-                firstSeen = QStringLiteral("Unknown");
+                firstSeen = u"Unknown"_s;
             }
-            result.entries.push_back({std::move(login), firstSeen, lastSeen});
+            result.entries.push_back({.login = std::move(login),
+                                      .leftText = firstSeen,
+                                      .rightText = lastSeen});
         }
 
         if (static_cast<int>(result.entries.size()) >=
@@ -236,17 +242,17 @@ TwitchNameHistory historyFromJson(const QJsonObject &object)
         parseNameHistoryTimestamp(object.value("fetchedAt").toString());
 
     const auto entries = object.value("entries").toArray();
-    history.entries.reserve(static_cast<size_t>(
-        std::min<int>(entries.size(), TWITCH_NAME_HISTORY_LIMIT)));
+    history.entries.reserve(static_cast<size_t>(std::min<int>(
+        static_cast<int>(entries.size()), TWITCH_NAME_HISTORY_LIMIT)));
 
-    for (const auto &value : entries)
+    for (const auto value : entries)
     {
         const auto entryObject = value.toObject();
         TwitchNameHistoryEntry entry{
-            normalizeTwitchNameHistoryLogin(
+            .login = normalizeTwitchNameHistoryLogin(
                 entryObject.value("login").toString()),
-            entryObject.value("left").toString(),
-            entryObject.value("right").toString(),
+            .leftText = entryObject.value("left").toString(),
+            .rightText = entryObject.value("right").toString(),
         };
         if (entry.login.isEmpty() || entry.leftText.isEmpty() ||
             entry.rightText.isEmpty())
@@ -314,7 +320,7 @@ void loadNameHistoryCache()
         return;
     }
 
-    for (const auto &value : root.value("histories").toArray())
+    for (const auto value : root.value("histories").toArray())
     {
         auto history = historyFromJson(value.toObject());
         if ((history.userId.isEmpty() && history.currentLogin.isEmpty()) ||
@@ -346,8 +352,8 @@ void saveNameHistoryCache()
         }
 
         const auto key = history.userId.isEmpty()
-                             ? QStringLiteral("login:") + history.currentLogin
-                             : QStringLiteral("id:") + history.userId;
+                             ? u"login:"_s + history.currentLogin
+                             : u"id:"_s + history.userId;
         if (key.endsWith(':') || savedKeys.contains(key))
         {
             continue;

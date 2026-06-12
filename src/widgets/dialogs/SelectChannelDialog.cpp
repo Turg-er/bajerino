@@ -442,7 +442,7 @@ void SelectChannelDialog::ok()
 }
 
 void SelectChannelDialog::setAnonymousOverrideUi(
-    std::optional<bool> anonymousOverride)
+    std::optional<bool> anonymousOverride) const
 {
     const bool overriding = anonymousOverride.has_value();
     this->ui_.channelAnonymousOverride->setChecked(overriding);

@@ -20,6 +20,7 @@
 #include <QPainter>
 #include <QVarLengthArray>
 
+#include <algorithm>
 #include <optional>
 
 namespace {
@@ -63,7 +64,7 @@ void MessageLayoutContainer::beginLayout(qreal width, float scale,
     this->flags_ = flags;
     auto mediumFontMetrics =
         getApp()->getFonts()->getFontMetrics(FontStyle::ChatMedium, scale);
-    this->descent_ = mediumFontMetrics.descent();
+    this->descent_ = static_cast<float>(mediumFontMetrics.descent());
     this->textLineHeight_ = mediumFontMetrics.height();
     this->spaceWidth_ = mediumFontMetrics.horizontalAdvance(' ');
     this->dotdotdotWidth_ = mediumFontMetrics.horizontalAdvance("...");
@@ -170,10 +171,7 @@ void MessageLayoutContainer::ensureSingleSpaceBeforeNextElement()
     {
         last->setTrailingSpace(false);
         this->currentX_ -= this->spaceWidth_;
-        if (this->currentX_ < 0)
-        {
-            this->currentX_ = 0;
-        }
+        this->currentX_ = std::max<qreal>(this->currentX_, 0);
     }
     this->currentX_ += this->spaceWidth_;
 }
@@ -324,7 +322,7 @@ void MessageLayoutContainer::paintElements(QPainter &painter,
 
     if (ctx.isCollapsed && this->lines_.size() > 1)
     {
-        MessageLayoutElement *lastElement = nullptr;
+        MessageLayoutElement const *lastElement = nullptr;
         for (const auto &element : this->elements_)
         {
             if (element->getLine() == 0)
@@ -341,9 +339,9 @@ void MessageLayoutContainer::paintElements(QPainter &painter,
             QString ellipsis = "...";
             int ellipsisWidth = metrics.horizontalAdvance(ellipsis);
 
-            int drawX = lastElement->getRect().right();
-            int drawY = lastElement->getRect().y();
-            int drawHeight = lastElement->getRect().height();
+            int drawX = static_cast<int>(lastElement->getRect().right());
+            int drawY = static_cast<int>(lastElement->getRect().y());
+            int drawHeight = static_cast<int>(lastElement->getRect().height());
 
             if (drawX + ellipsisWidth > ctx.canvasWidth)
             {
@@ -715,8 +713,8 @@ size_t MessageLayoutContainer::getLineCount() const
 
 qreal MessageLayoutContainer::remainingWidth() const
 {
-    return (this->width_ - int(MARGIN.left() * this->scale_) -
-            int(MARGIN.right() * this->scale_) -
+    return (this->width_ - static_cast<int>(MARGIN.left() * this->scale_) -
+            static_cast<int>(MARGIN.right() * this->scale_) -
             (static_cast<int>(this->line_ + 1) == maxUncollapsedLines()
                  ? this->dotdotdotWidth_
                  : 0)) -

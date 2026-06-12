@@ -66,6 +66,8 @@
 #include <utility>
 #include <vector>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino::commands {
 
 namespace {
@@ -121,8 +123,7 @@ QString normalizeFollowError(bool unfollow, const QString &error)
 
 QString formatNameHistoryRow(const TwitchNameHistoryEntry &entry)
 {
-    return QStringLiteral("%1: %2 - %3")
-        .arg(entry.login, entry.leftText, entry.rightText);
+    return u"%1: %2 - %3"_s.arg(entry.login, entry.leftText, entry.rightText);
 }
 
 QString modLogNumber(int value)
@@ -133,13 +134,12 @@ QString modLogNumber(int value)
 QString modLogCountPhrase(int value, const QString &singular,
                           const QString &plural)
 {
-    return QStringLiteral("%1 %2").arg(modLogNumber(value),
-                                       value == 1 ? singular : plural);
+    return u"%1 %2"_s.arg(modLogNumber(value), value == 1 ? singular : plural);
 }
 
 struct ModLogRange {
     int days = 7;
-    QString text = QStringLiteral("last 7 days");
+    QString text = u"last 7 days"_s;
 };
 
 enum class ModLogRangeParseState {
@@ -164,19 +164,21 @@ public:
         : MessageLayoutElement(creator, size)
         , left_(std::move(left))
         , right_(std::move(right))
-        , color_(std::move(color))
+        , color_(color)
         , style_(style)
         , scale_(scale)
     {
-        this->setText(this->left_ + QStringLiteral(" ") + this->right_);
+        this->setText(this->left_ + u" "_s + this->right_);
     }
 
     void addCopyTextToString(QString &str, uint32_t from = 0,
                              uint32_t to = UINT32_MAX) const override
     {
         const auto text = this->getText();
-        const auto start = std::min<int>(from, text.size());
-        const auto end = std::min<int>(to, text.size());
+        const auto start = std::min<int>(static_cast<int>(from),
+                                         static_cast<int>(text.size()));
+        const auto end =
+            std::min<int>(static_cast<int>(to), static_cast<int>(text.size()));
         if (end > start)
         {
             str += text.mid(start, end - start);
@@ -188,7 +190,8 @@ public:
         return this->getText().size();
     }
 
-    void paint(QPainter &painter, const MessageColors &) override
+    void paint(QPainter &painter,
+               const MessageColors & /*messageColors*/) override
     {
         const auto font =
             getApp()->getFonts()->getFont(this->style_, this->scale_);
@@ -215,7 +218,7 @@ public:
         painter.drawText(rect, this->right_, rightOption);
     }
 
-    bool paintAnimated(QPainter &, qreal) override
+    bool paintAnimated(QPainter & /*painter*/, qreal /*yOffset*/) override
     {
         return false;
     }
@@ -310,22 +313,18 @@ QString modLogRangeText(int amount, QChar unit)
         case 'd':
             if (amount == 1)
             {
-                return QStringLiteral("last 24 hours");
+                return u"last 24 hours"_s;
             }
-            return QStringLiteral("last %1 days").arg(amount);
+            return u"last %1 days"_s.arg(amount);
         case 'w':
-            return QStringLiteral("last %1 %2")
-                .arg(amount)
-                .arg(amount == 1 ? QStringLiteral("week")
-                                 : QStringLiteral("weeks"));
+            return u"last %1 %2"_s.arg(amount).arg(amount == 1 ? u"week"_s
+                                                               : u"weeks"_s);
         case 'm':
-            return QStringLiteral("last %1 %2")
-                .arg(amount)
-                .arg(amount == 1 ? QStringLiteral("month")
-                                 : QStringLiteral("months"));
+            return u"last %1 %2"_s.arg(amount).arg(amount == 1 ? u"month"_s
+                                                               : u"months"_s);
     }
 
-    return QString();
+    return {};
 }
 
 ModLogRangeParseResult parseModLogRange(QString value)
@@ -352,7 +351,7 @@ ModLogRangeParseResult parseModLogRange(QString value)
     }
     if (amount <= 0)
     {
-        return {ModLogRangeParseState::Invalid, {}};
+        return {.state = ModLogRangeParseState::Invalid, .range = {}};
     }
 
     int days = amount;
@@ -366,23 +365,24 @@ ModLogRangeParseResult parseModLogRange(QString value)
     }
     else if (unit != 'd')
     {
-        return {ModLogRangeParseState::Invalid, {}};
+        return {.state = ModLogRangeParseState::Invalid, .range = {}};
     }
 
     return {
-        ModLogRangeParseState::Valid,
-        {
-            days,
-            modLogRangeText(amount, unit),
-        },
+        .state = ModLogRangeParseState::Valid,
+        .range =
+            {
+                .days = days,
+                .text = modLogRangeText(amount, unit),
+            },
     };
 }
 
 QString modLogCompactCountText(const ModerationActionLogCounts &counts)
 {
-    return QStringLiteral("%1 | %2 | %3")
-        .arg(modLogNumber(counts.bans), modLogNumber(counts.timeouts),
-             modLogNumber(counts.countedTotal()));
+    return u"%1 | %2 | %3"_s.arg(modLogNumber(counts.bans),
+                                 modLogNumber(counts.timeouts),
+                                 modLogNumber(counts.countedTotal()));
 }
 
 QString modLogRawNumber(int value)
@@ -390,21 +390,21 @@ QString modLogRawNumber(int value)
     return QString::number(value);
 }
 
-QString modLogKey(QString value)
+QString modLogKey(const QString &value)
 {
     return value.trimmed().toLower();
 }
 
 QString modLogDisplayName(const ModerationActionLogModeratorSummary &mod)
 {
-    const auto login = mod.login.trimmed();
+    auto login = mod.login.trimmed();
     if (!login.isEmpty())
     {
         return login;
     }
 
     const auto displayName = mod.displayName.trimmed();
-    return displayName.isEmpty() ? QStringLiteral("Unknown") : displayName;
+    return displayName.isEmpty() ? u"Unknown"_s : displayName;
 }
 
 void addModLogCounts(ModerationActionLogCounts &target,
@@ -414,14 +414,14 @@ void addModLogCounts(ModerationActionLogCounts &target,
     target.timeouts += source.timeouts;
 }
 
-QString modLogPaddedCell(QString value, int width, bool rightAligned)
+QString modLogPaddedCell(const QString &value, int width, bool rightAligned)
 {
     return rightAligned ? value.rightJustified(width, QLatin1Char(' '))
                         : value.leftJustified(width, QLatin1Char(' '));
 }
 
 ModerationActionLogScanSnapshot filterModLogsToCurrentModerators(
-    ModerationActionLogScanSnapshot snapshot,
+    const ModerationActionLogScanSnapshot &snapshot,
     const std::vector<HelixModerator> &moderators, const QString &channelLogin)
 {
     QSet<QString> moderatorIds;
@@ -509,26 +509,31 @@ QString buildModLogsFullListText(
     const auto generatedAt =
         QLocale().toString(QDateTime::currentDateTime(), QLocale::ShortFormat);
 
-    int rankWidth =
-        std::max<int>(QStringLiteral("RANK").size(),
-                      modLogRawNumber(snapshot.moderators.size()).size());
-    int moderatorWidth = QStringLiteral("MODERATOR").size();
-    int bansWidth = QStringLiteral("BANS").size();
-    int timeoutsWidth = QStringLiteral("TIMEOUTS").size();
-    int totalWidth = QStringLiteral("TOTAL").size();
+    int rankWidth = std::max<int>(
+        static_cast<int>(u"RANK"_s.size()),
+        static_cast<int>(
+            modLogRawNumber(static_cast<int>(snapshot.moderators.size()))
+                .size()));
+    int moderatorWidth = static_cast<int>(u"MODERATOR"_s.size());
+    int bansWidth = static_cast<int>(u"BANS"_s.size());
+    int timeoutsWidth = static_cast<int>(u"TIMEOUTS"_s.size());
+    int totalWidth = static_cast<int>(u"TOTAL"_s.size());
 
     auto updateWidths = [&](const QString &moderator,
                             const ModerationActionLogCounts &counts) {
-        moderatorWidth = std::max<int>(moderatorWidth, moderator.size());
-        bansWidth =
-            std::max<int>(bansWidth, modLogRawNumber(counts.bans).size());
-        timeoutsWidth = std::max<int>(timeoutsWidth,
-                                      modLogRawNumber(counts.timeouts).size());
+        moderatorWidth =
+            std::max<int>(moderatorWidth, static_cast<int>(moderator.size()));
+        bansWidth = std::max<int>(
+            bansWidth, static_cast<int>(modLogRawNumber(counts.bans).size()));
+        timeoutsWidth = std::max<int>(
+            timeoutsWidth,
+            static_cast<int>(modLogRawNumber(counts.timeouts).size()));
         totalWidth = std::max<int>(
-            totalWidth, modLogRawNumber(counts.countedTotal()).size());
+            totalWidth,
+            static_cast<int>(modLogRawNumber(counts.countedTotal()).size()));
     };
 
-    updateWidths(QStringLiteral("All mods"), snapshot.totals);
+    updateWidths(u"All mods"_s, snapshot.totals);
     for (const auto &mod : snapshot.moderators)
     {
         updateWidths(modLogDisplayName(mod), mod.counts);
@@ -537,35 +542,32 @@ QString buildModLogsFullListText(
     auto row = [&](const QString &rank, const QString &moderator,
                    const QString &bans, const QString &timeouts,
                    const QString &total) {
-        return QStringLiteral("%1 | %2 | %3 | %4 | %5")
-            .arg(modLogPaddedCell(rank, rankWidth, true),
-                 modLogPaddedCell(moderator, moderatorWidth, false),
-                 modLogPaddedCell(bans, bansWidth, true),
-                 modLogPaddedCell(timeouts, timeoutsWidth, true),
-                 modLogPaddedCell(total, totalWidth, true));
+        return u"%1 | %2 | %3 | %4 | %5"_s.arg(
+            modLogPaddedCell(rank, rankWidth, true),
+            modLogPaddedCell(moderator, moderatorWidth, false),
+            modLogPaddedCell(bans, bansWidth, true),
+            modLogPaddedCell(timeouts, timeoutsWidth, true),
+            modLogPaddedCell(total, totalWidth, true));
     };
 
-    const auto header = row(QStringLiteral("RANK"), QStringLiteral("MODERATOR"),
-                            QStringLiteral("BANS"), QStringLiteral("TIMEOUTS"),
-                            QStringLiteral("TOTAL"));
+    const auto header =
+        row(u"RANK"_s, u"MODERATOR"_s, u"BANS"_s, u"TIMEOUTS"_s, u"TOTAL"_s);
     const auto separator = QString(header.size(), QLatin1Char('-'));
 
-    lines.append(
-        QStringLiteral("Mod actions in %1, %2").arg(channelLogin, rangeText));
-    lines.append(QStringLiteral("Generated: %1").arg(generatedAt));
+    lines.append(u"Mod actions in %1, %2"_s.arg(channelLogin, rangeText));
+    lines.append(u"Generated: %1"_s.arg(generatedAt));
     if (snapshot.truncated)
     {
-        lines.append(QStringLiteral("Status: partial, page limit reached"));
+        lines.append(u"Status: partial, page limit reached"_s);
     }
     lines.append(QString());
-    lines.append(QStringLiteral("Total Mods: %1")
-                     .arg(modLogRawNumber(snapshot.moderators.size())));
-    lines.append(QStringLiteral("Total Actions: %1")
-                     .arg(modLogRawNumber(snapshot.totals.countedTotal())));
-    lines.append(QStringLiteral("  - Bans: %1")
-                     .arg(modLogRawNumber(snapshot.totals.bans)));
-    lines.append(QStringLiteral("  - Timeouts: %1")
-                     .arg(modLogRawNumber(snapshot.totals.timeouts)));
+    lines.append(u"Total Mods: %1"_s.arg(
+        modLogRawNumber(static_cast<int>(snapshot.moderators.size()))));
+    lines.append(u"Total Actions: %1"_s.arg(
+        modLogRawNumber(snapshot.totals.countedTotal())));
+    lines.append(u"  - Bans: %1"_s.arg(modLogRawNumber(snapshot.totals.bans)));
+    lines.append(
+        u"  - Timeouts: %1"_s.arg(modLogRawNumber(snapshot.totals.timeouts)));
     lines.append(QString());
     lines.append(separator);
     lines.append(header);
@@ -591,30 +593,28 @@ void uploadModLogsFullList(
     auto callback = std::make_shared<std::function<void(const QString &)>>(
         std::move(completionCallback));
     QJsonObject payload{
-        {QStringLiteral("source"), QStringLiteral("client")},
-        {QStringLiteral("content"), content},
+        {u"source"_s, u"client"_s},
+        {u"content"_s, content},
     };
 
-    NetworkRequest(QUrl(QStringLiteral("https://h.moltorino.com/api/paste")),
+    NetworkRequest(QUrl(u"https://h.moltorino.com/api/paste"_s),
                    NetworkRequestType::Post)
         .timeout(10000)
         .hideRequestBody()
         .json(payload)
         .onSuccess([callback](const NetworkResult &result) {
             const auto root = result.parseJson();
-            auto rawUrl =
-                root.value(QStringLiteral("rawUrl")).toString().trimmed();
+            auto rawUrl = root.value(u"rawUrl"_s).toString().trimmed();
             if (rawUrl.isEmpty())
             {
-                const auto url =
-                    root.value(QStringLiteral("url")).toString().trimmed();
+                const auto url = root.value(u"url"_s).toString().trimmed();
                 if (!url.isEmpty())
                 {
-                    rawUrl = url + QStringLiteral("/raw");
+                    rawUrl = url + u"/raw"_s;
                 }
             }
-            if (!rawUrl.startsWith(QStringLiteral("https://")) &&
-                !rawUrl.startsWith(QStringLiteral("http://")))
+            if (!rawUrl.startsWith(u"https://"_s) &&
+                !rawUrl.startsWith(u"http://"_s))
             {
                 rawUrl.clear();
             }
@@ -649,7 +649,7 @@ void addModLogSummaryRow(MessageBuilder &builder, QString &searchText,
         builder.emplace<LinebreakElement>(MessageElementFlag::Text);
     }
 
-    const auto rowText = QStringLiteral("%1 %2").arg(left, right);
+    const auto rowText = u"%1 %2"_s.arg(left, right);
     searchText += rowText;
     builder.emplace<ModLogSummaryRowElement>(left, right,
                                              MessageElementFlag::Text);
@@ -665,7 +665,7 @@ void addModLogLinkLine(MessageBuilder &builder, QString &searchText,
     }
 
     auto displayUrl = url;
-    displayUrl.remove(QRegularExpression(QStringLiteral("^https?://")));
+    displayUrl.remove(QRegularExpression(u"^https?://"_s));
 
     searchText += prefix + QLatin1Char(' ') + displayUrl;
     builder.emplace<TextElement>(prefix, MessageElementFlag::Text,
@@ -693,9 +693,9 @@ void addModLogsResultMessage(const ChannelPtr &channel,
 
     if (moderatorLogin.isEmpty())
     {
-        addModLogTextLine(builder, searchText,
-                          QStringLiteral("Mod actions in %1, %2")
-                              .arg(channelLogin, rangeText));
+        addModLogTextLine(
+            builder, searchText,
+            u"Mod actions in %1, %2"_s.arg(channelLogin, rangeText));
         if (snapshot.moderators.isEmpty())
         {
             addModLogTextLine(builder, searchText, QString());
@@ -706,41 +706,37 @@ void addModLogsResultMessage(const ChannelPtr &channel,
         {
             addModLogTextLine(
                 builder, searchText,
-                QStringLiteral("%1 across %2")
-                    .arg(modLogCountPhrase(snapshot.totals.countedTotal(),
-                                           QStringLiteral("counted action"),
-                                           QStringLiteral("counted actions")),
-                         modLogCountPhrase(snapshot.moderators.size(),
-                                           QStringLiteral("moderator"),
-                                           QStringLiteral("moderators"))));
+                u"%1 across %2"_s.arg(
+                    modLogCountPhrase(snapshot.totals.countedTotal(),
+                                      u"counted action"_s,
+                                      u"counted actions"_s),
+                    modLogCountPhrase(
+                        static_cast<int>(snapshot.moderators.size()),
+                        u"moderator"_s, u"moderators"_s)));
             addModLogTextLine(builder, searchText, QString());
-            addModLogSummaryRow(builder, searchText, QStringLiteral(""),
-                                QStringLiteral("bans | timeouts | total"));
-            addModLogSummaryRow(builder, searchText,
-                                QStringLiteral("All mods:"),
+            addModLogSummaryRow(builder, searchText, u""_s,
+                                u"bans | timeouts | total"_s);
+            addModLogSummaryRow(builder, searchText, u"All mods:"_s,
                                 modLogCompactCountText(snapshot.totals));
             for (int i = 0;
                  i < snapshot.moderators.size() && i < MAX_MOD_LOG_CHAT_ROWS;
                  ++i)
             {
                 const auto &mod = snapshot.moderators.at(i);
-                addModLogSummaryRow(
-                    builder, searchText,
-                    modLogDisplayName(mod) + QStringLiteral(":"),
-                    modLogCompactCountText(mod.counts));
+                addModLogSummaryRow(builder, searchText,
+                                    modLogDisplayName(mod) + u":"_s,
+                                    modLogCompactCountText(mod.counts));
             }
             if (snapshot.moderators.size() > MAX_MOD_LOG_CHAT_ROWS)
             {
-                addModLogTextLine(
-                    builder, searchText,
-                    QStringLiteral("Showing top %1 of %2 moderators.")
-                        .arg(MAX_MOD_LOG_CHAT_ROWS)
-                        .arg(snapshot.moderators.size()));
+                addModLogTextLine(builder, searchText,
+                                  u"Showing top %1 of %2 moderators."_s
+                                      .arg(MAX_MOD_LOG_CHAT_ROWS)
+                                      .arg(snapshot.moderators.size()));
                 if (!fullListRawUrl.isEmpty())
                 {
                     addModLogTextLine(builder, searchText, QString());
-                    addModLogLinkLine(builder, searchText,
-                                      QStringLiteral("Full list:"),
+                    addModLogLinkLine(builder, searchText, u"Full list:"_s,
                                       fullListRawUrl);
                 }
             }
@@ -754,12 +750,10 @@ void addModLogsResultMessage(const ChannelPtr &channel,
     }
     else
     {
-        addModLogTextLine(
-            builder, searchText,
-            QStringLiteral("Mod actions by %1").arg(moderatorLogin));
-        addModLogTextLine(
-            builder, searchText,
-            QStringLiteral("in %1, %2").arg(channelLogin, rangeText));
+        addModLogTextLine(builder, searchText,
+                          u"Mod actions by %1"_s.arg(moderatorLogin));
+        addModLogTextLine(builder, searchText,
+                          u"in %1, %2"_s.arg(channelLogin, rangeText));
         if (snapshot.totals.rawTotal() == 0)
         {
             addModLogTextLine(builder, searchText, QString());
@@ -769,12 +763,11 @@ void addModLogsResultMessage(const ChannelPtr &channel,
         else
         {
             addModLogTextLine(builder, searchText, QString());
-            addModLogSummaryRow(builder, searchText, QStringLiteral("Bans:"),
+            addModLogSummaryRow(builder, searchText, u"Bans:"_s,
                                 modLogNumber(snapshot.totals.bans));
-            addModLogSummaryRow(builder, searchText,
-                                QStringLiteral("Timeouts:"),
+            addModLogSummaryRow(builder, searchText, u"Timeouts:"_s,
                                 modLogNumber(snapshot.totals.timeouts));
-            addModLogSummaryRow(builder, searchText, QStringLiteral("Total:"),
+            addModLogSummaryRow(builder, searchText, u"Total:"_s,
                                 modLogNumber(snapshot.totals.countedTotal()));
         }
         if (snapshot.truncated)
@@ -804,9 +797,9 @@ void addNameHistorySystemMessage(const ChannelPtr &channel,
     MessageBuilder builder;
     QString searchText;
 
-    for (auto it = history.entries.cbegin(); it != history.entries.cend(); ++it)
+    for (const auto &entrie : history.entries)
     {
-        const auto row = formatNameHistoryRow(*it);
+        const auto row = formatNameHistoryRow(entrie);
         if (!searchText.isEmpty())
         {
             searchText += '\n';
@@ -814,12 +807,12 @@ void addNameHistorySystemMessage(const ChannelPtr &channel,
         }
         searchText += row;
 
-        builder.emplace<TextElement>(it->login + ':', MessageElementFlag::Text,
-                                     MessageColor::System,
-                                     FontStyle::ChatMediumBold);
-        builder.emplace<TextElement>(" " + it->leftText + " - " + it->rightText,
-                                     MessageElementFlag::Text,
-                                     MessageColor::System);
+        builder.emplace<TextElement>(
+            entrie.login + ':', MessageElementFlag::Text, MessageColor::System,
+            FontStyle::ChatMediumBold);
+        builder.emplace<TextElement>(
+            " " + entrie.leftText + " - " + entrie.rightText,
+            MessageElementFlag::Text, MessageColor::System);
     }
 
     builder->flags.set(MessageFlag::System);
@@ -865,8 +858,7 @@ QString commandWordsAfter(const CommandContext &ctx, int wordCount)
 
 QString supportedTranslationLanguageText()
 {
-    return QStringLiteral(
-        "examples: en, es, pt, fr, de, ja, ko, zh-cn, zh-tw, ar");
+    return u"examples: en, es, pt, fr, de, ja, ko, zh-cn, zh-tw, ar"_s;
 }
 
 void addTranslationSystemMessage(const ChannelPtr &channel,
@@ -883,18 +875,18 @@ void addTranslationSystemMessage(const ChannelPtr &channel,
         normalizedLanguageCode(result.detectedLanguage);
     const auto detectedName = translationLanguageName(detectedLanguage);
 
-    QString prefix = QStringLiteral("Translation");
+    QString prefix = u"Translation"_s;
     if (!detectedName.isEmpty() && detectedLanguage != targetLanguage)
     {
-        prefix += QStringLiteral(" (%1 -> %2)").arg(detectedName, targetName);
+        prefix += u" (%1 -> %2)"_s.arg(detectedName, targetName);
     }
     else if (!targetName.isEmpty())
     {
-        prefix += QStringLiteral(" (%1)").arg(targetName);
+        prefix += u" (%1)"_s.arg(targetName);
     }
 
     channel->addSystemMessage(
-        QStringLiteral("%1: %2").arg(prefix, result.translatedText.trimmed()));
+        u"%1: %2"_s.arg(prefix, result.translatedText.trimmed()));
 }
 
 QString runTranslatePreviewCommand(const CommandContext &ctx,
@@ -920,7 +912,7 @@ QString runTranslatePreviewCommand(const CommandContext &ctx,
         },
         [channel = ctx.channel](const QString &) {
             channel->addSystemMessage(
-                QStringLiteral("Translation failed. Try again later."));
+                u"Translation failed. Try again later."_s);
         });
 
     return "";
@@ -949,13 +941,13 @@ QString runTranslateSendCommand(const CommandContext &ctx,
             if (translatedText.isEmpty())
             {
                 channel->addSystemMessage(
-                    QStringLiteral("Translation failed, so nothing was sent."));
+                    u"Translation failed, so nothing was sent."_s);
                 return;
             }
             if (translatedText.size() > TWITCH_MESSAGE_LIMIT)
             {
-                channel->addSystemMessage(QStringLiteral(
-                    "The translated message is too long for Twitch."));
+                channel->addSystemMessage(
+                    u"The translated message is too long for Twitch."_s);
                 return;
             }
 
@@ -963,7 +955,7 @@ QString runTranslateSendCommand(const CommandContext &ctx,
         },
         [channel = ctx.channel](const QString &) {
             channel->addSystemMessage(
-                QStringLiteral("Translation failed, so nothing was sent."));
+                u"Translation failed, so nothing was sent."_s);
         });
 
     return "";
@@ -991,7 +983,7 @@ void runNameHistoryLookup(const ChannelPtr &channel, const QString &userId,
 
     fetchTwitchNameHistoryByUserId(
         userId, expectedLogin,
-        [channel](TwitchNameHistory history) {
+        [channel](const TwitchNameHistory &history) {
             addNameHistorySystemMessage(channel, history);
         },
         [channel, targetName](const QString &error) {
@@ -1235,15 +1227,15 @@ QString logs(const CommandContext &ctx)
         return "";
     }
 
-    QUrl url(QStringLiteral("https://tv.supa.sh/logs"));
+    QUrl url(u"https://tv.supa.sh/logs"_s);
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("c"), channelName);
-    query.addQueryItem(QStringLiteral("u"), userName);
+    query.addQueryItem(u"c"_s, channelName);
+    query.addQueryItem(u"u"_s, userName);
     url.setQuery(query);
 
     const auto link = url.toString();
-    ctx.channel->addSystemMessage(QStringLiteral("Logs from %1 in %2: %3")
-                                      .arg(userName, channelName, link));
+    ctx.channel->addSystemMessage(
+        u"Logs from %1 in %2: %3"_s.arg(userName, channelName, link));
 
     return "";
 }
@@ -1255,8 +1247,7 @@ QString modLogs(const CommandContext &ctx)
         return "";
     }
 
-    const auto usage =
-        QStringLiteral("Usage: /modlogs [all|moderator] [range] [channel]");
+    const auto usage = u"Usage: /modlogs [all|moderator] [range] [channel]"_s;
     auto normalizedCommandArgument = [](QString value) {
         value = value.trimmed();
         stripUserName(value);
@@ -1353,7 +1344,7 @@ QString modLogs(const CommandContext &ctx)
 
         const auto beginScanner = [channel, channelLogin, range](
                                       ModerationActionLogScanRequest request,
-                                      QString moderatorLabel) {
+                                      const QString &moderatorLabel) {
             channel->addSystemMessage("Fetching moderation action logs...");
             auto *scanner = new ModerationActionLogScanner(std::move(request));
             scanner->onDone =
@@ -1382,8 +1373,9 @@ QString modLogs(const CommandContext &ctx)
                     ivr->getModVip(
                         channelLogin,
                         [channel, channelLogin, range, moderatorLabel, scanner,
-                         snapshot](std::vector<HelixModerator> moderators,
-                                   std::vector<HelixVip>) mutable {
+                         snapshot](
+                            const std::vector<HelixModerator> &moderators,
+                            const std::vector<HelixVip> &) mutable {
                             auto filtered = filterModLogsToCurrentModerators(
                                 snapshot, moderators, channelLogin);
                             publishModLogsSnapshot(channel, channelLogin, range,
@@ -1402,10 +1394,8 @@ QString modLogs(const CommandContext &ctx)
                         });
                 };
             scanner->onError = [channel, scanner](const QString &error) {
-                channel->addSystemMessage(
-                    QStringLiteral("Failed to fetch moderation "
-                                   "action logs: %1")
-                        .arg(error));
+                channel->addSystemMessage(u"Failed to fetch moderation "
+                                          "action logs: %1"_s.arg(error));
                 scanner->deleteLater();
             };
             scanner->start();
@@ -1431,8 +1421,8 @@ QString modLogs(const CommandContext &ctx)
                 if (!user)
                 {
                     channel->addSystemMessage(
-                        QStringLiteral("Could not find Twitch user %1.")
-                            .arg(moderatorLogin));
+                        u"Could not find Twitch user %1."_s.arg(
+                            moderatorLogin));
                     return;
                 }
                 request.moderatorId = user->id;
@@ -1441,8 +1431,7 @@ QString modLogs(const CommandContext &ctx)
             },
             [channel, moderatorLogin](const QString &error) {
                 channel->addSystemMessage(
-                    QStringLiteral("Failed to look up %1: %2")
-                        .arg(moderatorLogin, error));
+                    u"Failed to look up %1: %2"_s.arg(moderatorLogin, error));
             });
     };
 
@@ -1467,15 +1456,14 @@ QString modLogs(const CommandContext &ctx)
             if (!user)
             {
                 channel->addSystemMessage(
-                    QStringLiteral("Could not find Twitch channel %1.")
-                        .arg(channelLogin));
+                    u"Could not find Twitch channel %1."_s.arg(channelLogin));
                 return;
             }
             startScan(user->id);
         },
         [channel = ctx.channel, channelLogin](const QString &error) {
-            channel->addSystemMessage(QStringLiteral("Failed to look up %1: %2")
-                                          .arg(channelLogin, error));
+            channel->addSystemMessage(
+                u"Failed to look up %1: %2"_s.arg(channelLogin, error));
         });
 
     return "";
@@ -1485,9 +1473,9 @@ QString translate(const CommandContext &ctx)
 {
     const auto targetLanguage = normalizedTranslationTargetLanguage(
         getSettings()->messageTranslationTargetLanguage.getValue());
-    return runTranslatePreviewCommand(
-        ctx, targetLanguage, commandWordsAfter(ctx, 1),
-        QStringLiteral("Usage: /translate <message>"));
+    return runTranslatePreviewCommand(ctx, targetLanguage,
+                                      commandWordsAfter(ctx, 1),
+                                      u"Usage: /translate <message>"_s);
 }
 
 QString translateTo(const CommandContext &ctx)
@@ -1502,14 +1490,14 @@ QString translateTo(const CommandContext &ctx)
     if (targetLanguage.isEmpty())
     {
         ctx.channel->addSystemMessage(
-            QStringLiteral("Usage: /translateto <language> <message> (%1)")
-                .arg(supportedTranslationLanguageText()));
+            u"Usage: /translateto <language> <message> (%1)"_s.arg(
+                supportedTranslationLanguageText()));
         return "";
     }
 
     return runTranslatePreviewCommand(
         ctx, targetLanguage, commandWordsAfter(ctx, 2),
-        QStringLiteral("Usage: /translateto <language> <message>"));
+        u"Usage: /translateto <language> <message>"_s);
 }
 
 QString sayTranslate(const CommandContext &ctx)
@@ -1524,8 +1512,8 @@ QString sayTranslate(const CommandContext &ctx)
     if (targetLanguage.isEmpty())
     {
         ctx.channel->addSystemMessage(
-            QStringLiteral("Usage: /tl <language> <message> (%1)")
-                .arg(supportedTranslationLanguageText()));
+            u"Usage: /tl <language> <message> (%1)"_s.arg(
+                supportedTranslationLanguageText()));
         return "";
     }
 

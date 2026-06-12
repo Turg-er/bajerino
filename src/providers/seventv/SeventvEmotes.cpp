@@ -33,6 +33,8 @@
 #include <chrono>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 /**
  * # References
  *
@@ -451,9 +453,8 @@ void SeventvEmotes::loadChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << channelId << ", error" << errorString;
                             shared->addSystemMessage(
-                                QStringLiteral("Failed to fetch 7TV channel "
-                                               "emotes. (Error: %1)")
-                                    .arg(errorString));
+                                u"Failed to fetch 7TV channel "
+                                "emotes. (Error: %1)"_s.arg(errorString));
                             if (cacheHit)
                             {
                                 shared->addSystemMessage(
@@ -586,9 +587,8 @@ void SeventvEmotes::loadKickChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << userID << ", error" << errorString;
                             shared->addSystemMessage(
-                                QStringLiteral("Failed to fetch 7TV channel "
-                                               "emotes. (Error: %1)")
-                                    .arg(errorString));
+                                u"Failed to fetch 7TV channel "
+                                "emotes. (Error: %1)"_s.arg(errorString));
                             if (cacheHit)
                             {
                                 shared->addSystemMessage(

@@ -16,6 +16,8 @@
 #include <array>
 #include <numeric>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -111,6 +113,7 @@ QString DebugCount::getDebugText()
     {
         text += "\ntracked image provider bytes:\n";
 
+        // NOLINTNEXTLINE(readability-identifier-naming)
         constexpr size_t MAX_PROVIDERS = 8;
         for (size_t i = 0; i < providerUsage.size() && i < MAX_PROVIDERS; ++i)
         {
@@ -118,20 +121,19 @@ QString DebugCount::getDebugText()
             const auto percent = (static_cast<double>(usage.bytes) * 100.0) /
                                  static_cast<double>(providerBytes);
 
-            text +=
-                QStringLiteral("  ") % usage.provider % QStringLiteral(": ") %
-                locale.formattedDataSize(usage.bytes) % QStringLiteral(" (") %
-                QString::number(percent, 'f', 1) % QStringLiteral("%, ") %
-                locale.toString(static_cast<qlonglong>(usage.images)) %
-                QStringLiteral(" img");
+            text += u"  "_s % usage.provider % u": "_s %
+                    locale.formattedDataSize(usage.bytes) % u" ("_s %
+                    QString::number(percent, 'f', 1) % u"%, "_s %
+                    locale.toString(static_cast<qlonglong>(usage.images)) %
+                    u" img"_s;
             if (usage.animatedImages > 0)
             {
-                text += QStringLiteral(", ") %
+                text += u", "_s %
                         locale.toString(
                             static_cast<qlonglong>(usage.animatedImages)) %
-                        QStringLiteral(" anim");
+                        u" anim"_s;
             }
-            text += QStringLiteral(")\n");
+            text += u")\n"_s;
         }
     }
 #endif

@@ -30,6 +30,8 @@
 #include <memory>
 #include <optional>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -104,11 +106,11 @@ std::optional<MoltorinoAuthToken> moltorinoAuthTokenOrWarn(
     const CommandContext &ctx, const QString &action)
 {
     QString authError;
-    const auto auth = ctx.twitchChannel != nullptr
-                          ? MoltorinoAuth::resolveModerationToken(
-                                ctx.twitchChannel->roomId(),
-                                ctx.twitchChannel->getName(), &authError)
-                          : MoltorinoAuthToken{};
+    auto auth = ctx.twitchChannel != nullptr
+                    ? MoltorinoAuth::resolveModerationToken(
+                          ctx.twitchChannel->roomId(),
+                          ctx.twitchChannel->getName(), &authError)
+                    : MoltorinoAuthToken{};
     if (!auth.hasToken())
     {
         if (ctx.channel != nullptr)
@@ -131,8 +133,7 @@ void withActiveMoltorinoPoll(const CommandContext &ctx, const QString &action,
 {
     if (ctx.twitchChannel == nullptr)
     {
-        const auto err =
-            QStringLiteral("This poll command only works in Twitch channels");
+        const auto err = u"This poll command only works in Twitch channels"_s;
         if (ctx.channel != nullptr)
         {
             ctx.channel->addSystemMessage(err);
@@ -247,7 +248,7 @@ void showPollCommandError(const ChannelPtr &channel, const QString &prefix,
 
 namespace chatterino::commands {
 
-QString createPollHelix(const CommandContext &ctx)
+static QString createPollHelix(const CommandContext &ctx)
 {
     const auto command = QStringLiteral("/poll");
     const auto usage = QStringLiteral(
@@ -301,8 +302,7 @@ QString createPoll(const CommandContext &ctx)
 
     if (ctx.twitchChannel == nullptr)
     {
-        const auto err =
-            QStringLiteral("The /poll command only works in Twitch channels");
+        const auto err = u"The /poll command only works in Twitch channels"_s;
         if (ctx.channel != nullptr)
         {
             ctx.channel->addSystemMessage(err);
@@ -319,7 +319,7 @@ QString createPoll(const CommandContext &ctx)
     return "";
 }
 
-QString endPollHelix(const CommandContext &ctx)
+static QString endPollHelix(const CommandContext &ctx)
 {
     if (ctx.twitchChannel == nullptr)
     {
@@ -419,7 +419,7 @@ QString endPollHelix(const CommandContext &ctx)
     return "";
 }
 
-QString cancelPollHelix(const CommandContext &ctx)
+static QString cancelPollHelix(const CommandContext &ctx)
 {
     if (ctx.twitchChannel == nullptr)
     {
@@ -488,15 +488,17 @@ QString endPoll(const CommandContext &ctx)
 
     withActiveMoltorinoPoll(
         ctx, "ending polls",
-        [](ChannelPtr channel, std::shared_ptr<TwitchChannel> twitchChannel,
-           TwitchChannel::PollEvent poll, const MoltorinoAuthToken &token) {
+        [](const ChannelPtr &channel,
+           const std::shared_ptr<TwitchChannel> &twitchChannel,
+           const TwitchChannel::PollEvent &poll,
+           const MoltorinoAuthToken &token) {
             const auto weak = twitchChannel->weak_from_this();
             const auto userId = poll.currentUserId.isEmpty()
                                     ? token.userId
                                     : poll.currentUserId;
             const auto channelLogin = twitchChannel->getName();
             const auto tokenText = token.token;
-            const auto originalPoll = poll;
+            const auto &originalPoll = poll;
             TwitchGql::terminatePoll(
                 poll.id, userId, tokenText,
                 [channel, weak, originalPoll]() mutable {
@@ -561,8 +563,10 @@ QString cancelPoll(const CommandContext &ctx)
 
     withActiveMoltorinoPoll(
         ctx, "deleting polls",
-        [](ChannelPtr channel, std::shared_ptr<TwitchChannel> twitchChannel,
-           TwitchChannel::PollEvent poll, const MoltorinoAuthToken &token) {
+        [](const ChannelPtr &channel,
+           const std::shared_ptr<TwitchChannel> &twitchChannel,
+           const TwitchChannel::PollEvent &poll,
+           const MoltorinoAuthToken &token) {
             const auto weak = twitchChannel->weak_from_this();
             TwitchGql::archivePoll(
                 poll.id, token.token,

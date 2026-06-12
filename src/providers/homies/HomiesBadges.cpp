@@ -1,7 +1,6 @@
 #include "providers/homies/HomiesBadges.hpp"
 
 #include "Application.hpp"
-#include "common/Literals.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
@@ -16,12 +15,13 @@
 
 #include <algorithm>
 #include <chrono>
+#include <utility>
 
 namespace chatterino {
 
 namespace {
 
-using namespace chatterino::literals;
+using namespace Qt::StringLiterals;
 
 using BadgeMap = std::unordered_map<QString, int>;
 using BadgeStorage = std::vector<EmotePtr>;
@@ -40,7 +40,7 @@ QJsonArray extractBadgesArray(const NetworkResult &result,
         return object.value("badges").toArray();
     }
 
-    const auto array = result.parseJsonArray();
+    auto array = result.parseJsonArray();
     if (!array.isEmpty())
     {
         return array;
@@ -62,9 +62,11 @@ EmotePtr createBadgeEmote(const QString &sourceTag, const QString &badgeName,
     }
 
     const auto tooltip = badgeJson.value("tooltip").toString().trimmed();
-    const auto resolvedName = !badgeName.trimmed().isEmpty()
-                                  ? badgeName.trimmed()
-                                  : (!tooltip.isEmpty() ? tooltip : u"badge"_s);
+    const auto resolvedName =
+        !badgeName.trimmed().isEmpty()
+            ? badgeName.trimmed()
+            // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
+            : (!tooltip.isEmpty() ? tooltip : u"badge"_s);
 
     auto makeImage = [](const QString &url, qreal scale) {
         if (url.isEmpty())
@@ -103,7 +105,7 @@ void storeUserCentricBadges(const QJsonArray &badges, const QString &sourceTag,
     badgeMap.reserve(badges.size());
     emotes.reserve(badges.size());
 
-    for (const auto &badgeValue : badges)
+    for (const auto badgeValue : badges)
     {
         const auto badgeJson = badgeValue.toObject();
         const auto userId = badgeJson.value("userId").toString().trimmed();
@@ -128,7 +130,7 @@ void storeBadgeCentricBadges(const QJsonArray &badges, const QString &sourceTag,
                              BadgeMap &badgeMap, BadgeStorage &emotes)
 {
     qsizetype userCountEstimate = 0;
-    for (const auto &badgeValue : badges)
+    for (const auto badgeValue : badges)
     {
         userCountEstimate +=
             badgeValue.toObject().value("users").toArray().size();
@@ -140,7 +142,7 @@ void storeBadgeCentricBadges(const QJsonArray &badges, const QString &sourceTag,
         std::max<qsizetype>(badges.size(), userCountEstimate)));
     emotes.reserve(badges.size());
 
-    for (const auto &badgeValue : badges)
+    for (const auto badgeValue : badges)
     {
         const auto badgeJson = badgeValue.toObject();
         auto emote = createBadgeEmote(
@@ -153,7 +155,7 @@ void storeBadgeCentricBadges(const QJsonArray &badges, const QString &sourceTag,
         const int index = static_cast<int>(emotes.size());
         emotes.push_back(std::move(emote));
 
-        for (const auto &userValue : badgeJson.value("users").toArray())
+        for (const auto userValue : badgeJson.value("users").toArray())
         {
             const auto userId = userValue.toString().trimmed();
             if (!userId.isEmpty())
@@ -319,19 +321,22 @@ std::array<EmotePtr, 3> HomiesBadges::getBadges(const QString &userId) const
 
     std::shared_lock lock(this->mutex_);
     return {
-        this->lookupBadge(this->badgeMap_, this->emotes_, userId),
-        this->lookupBadge(this->badgeMap2_, this->emotes2_, userId),
-        this->lookupBadge(this->badgeMap3_, this->emotes3_, userId),
+        chatterino::HomiesBadges::lookupBadge(this->badgeMap_, this->emotes_,
+                                              userId),
+        chatterino::HomiesBadges::lookupBadge(this->badgeMap2_, this->emotes2_,
+                                              userId),
+        chatterino::HomiesBadges::lookupBadge(this->badgeMap3_, this->emotes3_,
+                                              userId),
     };
 }
 
 EmotePtr HomiesBadges::lookupBadge(const BadgeMap &badgeMap,
                                    const BadgeStorage &emotes,
-                                   const QString &userId) const
+                                   const QString &userId)
 {
     const auto it = badgeMap.find(userId);
     if (it != badgeMap.end() && it->second >= 0 &&
-        it->second < static_cast<int>(emotes.size()))
+        std::cmp_less(it->second, emotes.size()))
     {
         return emotes.at(it->second);
     }

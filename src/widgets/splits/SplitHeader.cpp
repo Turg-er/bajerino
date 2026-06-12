@@ -49,6 +49,8 @@
 
 #include <cmath>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -368,7 +370,7 @@ SplitHeader::SplitHeader(Split *split)
     getSettings()->showAnonymousChannelIndicator.connect(
         _, this->managedConnections_);
     getSettings()->showFollowButtonInSplitHeader.connect(
-        [this](bool enabled, auto) {
+        [this](bool enabled, const auto &) {
             if (enabled)
             {
                 if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
@@ -384,7 +386,7 @@ SplitHeader::SplitHeader(Split *split)
         },
         this->managedConnections_);
     getSettings()->moltorinoAuthAccounts.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
                     this->split_->getSelectedChannel().get());
                 twitchChannel != nullptr && !twitchChannel->isEmpty() &&
@@ -1106,10 +1108,10 @@ void SplitHeader::toggleFollow()
 
     const auto command =
         twitchChannel->isFollowingStatusKnown() && twitchChannel->isFollowing()
-            ? QStringLiteral("/unfollow")
-            : QStringLiteral("/follow");
+            ? u"/unfollow"_s
+            : u"/follow"_s;
 
-    if (command == QStringLiteral("/unfollow") &&
+    if (command == u"/unfollow"_s &&
         getSettings()->confirmUnfollowFromSplitHeader)
     {
         const auto displayName = channel->getLocalizedName().isEmpty()
@@ -1142,9 +1144,8 @@ void SplitHeader::toggleFollow()
         .twitchChannel = twitchChannel,
         .kickChannel = nullptr,
     };
-    const auto text = command == QStringLiteral("/unfollow")
-                          ? commands::unfollow(ctx)
-                          : commands::follow(ctx);
+    const auto text = command == u"/unfollow"_s ? commands::unfollow(ctx)
+                                                : commands::follow(ctx);
     if (!text.isEmpty())
     {
         channel->sendMessage(text);

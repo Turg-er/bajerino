@@ -1,7 +1,6 @@
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 
 #include "Application.hpp"
-#include "common/Literals.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
@@ -21,18 +20,20 @@
 #include <QVariant>
 
 #include <algorithm>
+#include <cstddef>
 #include <mutex>
 
 namespace chatterino {
 
 namespace {
 
-using namespace literals;
+using namespace Qt::StringLiterals;
 
 constexpr auto ENDPOINT = "https://api.moltorino.com/badges";
 constexpr auto CACHE_FILE = "moltorino-supporter-badges.json";
 constexpr int PASSIVE_REFRESH_THROTTLE_MS = 60000;
-constexpr qsizetype MAX_PAYLOAD_BYTES = 8 * 1024 * 1024;
+constexpr qsizetype MAX_PAYLOAD_BYTES =
+    static_cast<const qsizetype>(8 * 1024 * 1024);
 constexpr int MAX_CATEGORIES = 64;
 constexpr int MAX_ASSIGNMENTS = 250000;
 constexpr QSize BADGE_BASE_SIZE(18, 18);
@@ -160,7 +161,8 @@ void addBadgeAssignment(ParsedPayload &parsed, const QString &userId,
         return;
     }
 
-    badges.emplace_back(MoltorinoSupporterBadge{categoryId, emote});
+    badges.emplace_back(
+        MoltorinoSupporterBadge{.categoryId = categoryId, .emote = emote});
 }
 
 bool parsePayload(const QByteArray &payload, ParsedPayload &parsed)
@@ -193,9 +195,10 @@ bool parsePayload(const QByteArray &payload, ParsedPayload &parsed)
         categories = root.value("categories").toArray();
     }
 
-    parsed.userBadges.reserve(std::min<int>(categories.size() * 64, 4096));
+    parsed.userBadges.reserve(
+        std::min<int>(static_cast<int>(categories.size() * 64), 4096));
 
-    for (const auto &categoryValue : categories)
+    for (const auto categoryValue : categories)
     {
         if (parsed.categoryCount >= MAX_CATEGORIES ||
             parsed.assignmentCount >= MAX_ASSIGNMENTS)
@@ -222,7 +225,7 @@ bool parsePayload(const QByteArray &payload, ParsedPayload &parsed)
         if (usersValue.isArray())
         {
             const auto users = usersValue.toArray();
-            for (const auto &userValue : users)
+            for (const auto userValue : users)
             {
                 if (parsed.assignmentCount >= MAX_ASSIGNMENTS)
                 {
@@ -395,7 +398,8 @@ void MoltorinoSupporterBadges::refreshInternal(
 
             if (this->applyPayload(result.getData(), false, minimumVersion))
             {
-                this->saveCache(result.getData());
+                chatterino::MoltorinoSupporterBadges::saveCache(
+                    result.getData());
             }
         })
         .onError([](const NetworkResult &result) {
@@ -441,7 +445,7 @@ void MoltorinoSupporterBadges::loadCache()
     this->applyPayload(file.readAll(), true);
 }
 
-void MoltorinoSupporterBadges::saveCache(const QByteArray &payload) const
+void MoltorinoSupporterBadges::saveCache(const QByteArray &payload)
 {
     QSaveFile file(cachePath());
     if (!file.open(QIODevice::WriteOnly))

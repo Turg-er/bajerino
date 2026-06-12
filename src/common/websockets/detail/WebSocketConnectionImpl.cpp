@@ -207,6 +207,10 @@ std::string WebSocketConnectionHelper<Derived, Inner>::targetHostAndPort() const
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::doHttpProxyHandshake()
 {
+    if (!this->options.proxy)
+    {
+        return;
+    }
     const auto target = this->targetHostAndPort();
 
     this->proxyBuffer.clear();
@@ -281,19 +285,23 @@ void WebSocketConnectionHelper<Derived, Inner>::onHttpProxyRead(
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::doSocksProxyHandshake()
 {
+    if (!this->options.proxy)
+    {
+        return;
+    }
     this->proxyWriteBuffer.clear();
-    this->proxyWriteBuffer.append(char(0x05));
+    this->proxyWriteBuffer.append(static_cast<char>(0x05));
     if (!this->options.proxy->user.isEmpty() ||
         !this->options.proxy->password.isEmpty())
     {
-        this->proxyWriteBuffer.append(char(0x02));
-        this->proxyWriteBuffer.append(char(0x00));
-        this->proxyWriteBuffer.append(char(0x02));
+        this->proxyWriteBuffer.append(static_cast<char>(0x02));
+        this->proxyWriteBuffer.append(static_cast<char>(0x00));
+        this->proxyWriteBuffer.append(static_cast<char>(0x02));
     }
     else
     {
-        this->proxyWriteBuffer.append(char(0x01));
-        this->proxyWriteBuffer.append(char(0x00));
+        this->proxyWriteBuffer.append(static_cast<char>(0x01));
+        this->proxyWriteBuffer.append(static_cast<char>(0x00));
     }
 
     beast::get_lowest_layer(this->stream)
@@ -335,7 +343,7 @@ void WebSocketConnectionHelper<Derived, Inner>::onSocksGreetingRead(
         return;
     }
 
-    if (this->proxyReadBuffer[0] != char(0x05))
+    if (this->proxyReadBuffer[0] != static_cast<char>(0x05))
     {
         this->fail("Invalid SOCKS5 greeting version", u"SOCKS5 greeting");
         return;
@@ -360,6 +368,10 @@ void WebSocketConnectionHelper<Derived, Inner>::onSocksGreetingRead(
 template <typename Derived, typename Inner>
 void WebSocketConnectionHelper<Derived, Inner>::doSocksAuth()
 {
+    if (!this->options.proxy)
+    {
+        return;
+    }
     const auto user = this->options.proxy->user.toUtf8();
     const auto password = this->options.proxy->password.toUtf8();
     if (user.size() > 255 || password.size() > 255)
@@ -369,7 +381,7 @@ void WebSocketConnectionHelper<Derived, Inner>::doSocksAuth()
     }
 
     this->proxyWriteBuffer.clear();
-    this->proxyWriteBuffer.append(char(0x01));
+    this->proxyWriteBuffer.append(static_cast<char>(0x01));
     this->proxyWriteBuffer.append(char(user.size()));
     this->proxyWriteBuffer.append(user);
     this->proxyWriteBuffer.append(char(password.size()));
@@ -410,8 +422,8 @@ void WebSocketConnectionHelper<Derived, Inner>::onSocksAuthRead(
         return;
     }
 
-    if (this->proxyReadBuffer[0] != char(0x01) ||
-        this->proxyReadBuffer[1] != char(0x00))
+    if (this->proxyReadBuffer[0] != static_cast<char>(0x01) ||
+        this->proxyReadBuffer[1] != static_cast<char>(0x00))
     {
         this->fail("SOCKS5 username/password authentication failed",
                    u"SOCKS5 auth");
@@ -433,10 +445,10 @@ void WebSocketConnectionHelper<Derived, Inner>::doSocksConnect()
     }
 
     this->proxyWriteBuffer.clear();
-    this->proxyWriteBuffer.append(char(0x05));
-    this->proxyWriteBuffer.append(char(0x01));
-    this->proxyWriteBuffer.append(char(0x00));
-    this->proxyWriteBuffer.append(char(0x03));
+    this->proxyWriteBuffer.append(static_cast<char>(0x05));
+    this->proxyWriteBuffer.append(static_cast<char>(0x01));
+    this->proxyWriteBuffer.append(static_cast<char>(0x00));
+    this->proxyWriteBuffer.append(static_cast<char>(0x03));
     this->proxyWriteBuffer.append(char(host.size()));
     this->proxyWriteBuffer.append(host.data(), qsizetype(host.size()));
     this->proxyWriteBuffer.append(char((port >> 8) & 0xff));
@@ -479,13 +491,13 @@ void WebSocketConnectionHelper<Derived, Inner>::onSocksConnectHeaderRead(
         return;
     }
 
-    if (this->proxyReadBuffer[0] != char(0x05))
+    if (this->proxyReadBuffer[0] != static_cast<char>(0x05))
     {
         this->fail("Invalid SOCKS5 connect response version",
                    u"SOCKS5 connect");
         return;
     }
-    if (this->proxyReadBuffer[1] != char(0x00))
+    if (this->proxyReadBuffer[1] != static_cast<char>(0x00))
     {
         this->fail("SOCKS5 proxy failed to connect to target",
                    u"SOCKS5 connect");

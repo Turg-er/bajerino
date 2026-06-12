@@ -142,7 +142,7 @@ private:
     /**
      * @brief Opens a Twitch channel's stream in your default browser's player (opens a formatted link)
      */
-    void openChannelInBrowserPlayer(ChannelPtr channel);
+    static void openChannelInBrowserPlayer(const ChannelPtr &channel);
     /**
      * @brief Opens a Twitch channel's stream in streamlink (if the stream's live, and streamlink's installed)
      */
@@ -154,7 +154,7 @@ private:
     /**
      * @brief Opens a Twitch channel's chat in a new tab
      */
-    void joinChannelInNewTab(const ChannelPtr &channel);
+    static void joinChannelInNewTab(const ChannelPtr &channel);
 
     /**
      * @brief Refresh moderation mode layouts/buttons

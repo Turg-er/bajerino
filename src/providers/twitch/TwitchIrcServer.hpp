@@ -205,7 +205,7 @@ protected:
 
     void onReadConnected(IrcConnection *connection);
     void onAnonymousReadConnected(IrcConnection *connection);
-    void onWriteConnected(IrcConnection *connection);
+    static void onWriteConnected(IrcConnection *connection);
     void onDisconnected();
     void onAnonymousDisconnected();
     void markChannelsConnected();

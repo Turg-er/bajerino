@@ -44,7 +44,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <functional>
 
@@ -76,8 +75,7 @@ QString normalizeMoltorinoAuthError(const QString &action, const QString &error)
 
 QString normalizePredictionCreateError(const QString &error)
 {
-    const auto authError =
-        normalizeMoltorinoAuthError("creating predictions", error);
+    auto authError = normalizeMoltorinoAuthError("creating predictions", error);
     if (authError != error)
     {
         return authError;
@@ -99,21 +97,26 @@ struct DurationOption {
     int seconds;
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
 constexpr DurationOption DURATION_OPTIONS[] = {
-    {"30 seconds", 30},   {"1 minute", 60},    {"2 minutes", 120},
-    {"5 minutes", 300},   {"10 minutes", 600}, {"15 minutes", 900},
-    {"30 minutes", 1800},
+    {.label = "30 seconds", .seconds = 30},
+    {.label = "1 minute", .seconds = 60},
+    {.label = "2 minutes", .seconds = 120},
+    {.label = "5 minutes", .seconds = 300},
+    {.label = "10 minutes", .seconds = 600},
+    {.label = "15 minutes", .seconds = 900},
+    {.label = "30 minutes", .seconds = 1800},
 };
 
-const char *SVG_CHEVRON_LEFT =
+const char *const SVG_CHEVRON_LEFT =
     R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>)";
-const char *SVG_POINTS =
+const char *const SVG_POINTS =
     R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 16c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>)";
-const char *SVG_TROPHY =
+const char *const SVG_TROPHY =
     R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0 0 11 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 0 0 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>)";
-const char *SVG_USERS =
+const char *const SVG_USERS =
     R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>)";
-const char *SVG_CROWN =
+const char *const SVG_CROWN =
     R"(<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M5 16l-1-9.5 5 4L12 3l3 7.5 5-4L19 16H5zm14 2H5v2h14v-2z"/></svg>)";
 
 QPixmap renderSvgIcon(const QString &svgData, const QColor &color, int size)
@@ -152,6 +155,7 @@ public:
     }
 
 protected:
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     bool eventFilter(QObject *obj, QEvent *ev) override
     {
         if (ev->type() == QEvent::Resize || ev->type() == QEvent::LayoutRequest)
@@ -187,13 +191,19 @@ QColor outcomeColor(int index, const QString &explicitColor = QString())
 {
     // For 2-outcome predictions, honour the explicit Twitch color strings.
     if (explicitColor == "PINK")
-        return QColor("#e9198b");
+    {
+        return {"#e9198b"};
+    }
     if (explicitColor == "GREEN")
-        return QColor("#16a34a");
+    {
+        return {"#16a34a"};
+    }
     if (explicitColor == "BLUE" && index == 0)
-        return QColor("#1f8fff");
+    {
+        return {"#1f8fff"};
+    }
 
-    return QColor(OUTCOME_PALETTE[index % OUTCOME_PALETTE.size()]);
+    return {OUTCOME_PALETTE[index % OUTCOME_PALETTE.size()]};
 }
 
 QString formatStatus(const QString &status)
@@ -221,21 +231,21 @@ QColor statusColor(const QString &status)
 {
     if (status == "ACTIVE")
     {
-        return QColor("#9147ff");
+        return {"#9147ff"};
     }
     if (status == "LOCKED")
     {
-        return QColor("#d99024");
+        return {"#d99024"};
     }
     if (status == "RESOLVED")
     {
-        return QColor("#22c55e");
+        return {"#22c55e"};
     }
     if (status == "CANCELED")
     {
-        return QColor("#9ca3af");
+        return {"#9ca3af"};
     }
-    return QColor("#64748b");
+    return {"#64748b"};
 }
 
 QString formatCompact(qlonglong value)
@@ -276,17 +286,18 @@ float contentScale(float scale)
 {
     const float taper = std::clamp((scale - 1.0F) / 0.6F, 0.0F, 1.0F);
     const float multiplier =
-        CONTENT_SCALE_MULTIPLIER - taper * MAX_CONTENT_SCALE_TAPER;
+        CONTENT_SCALE_MULTIPLIER - (taper * MAX_CONTENT_SCALE_TAPER);
     return scale * multiplier;
 }
 
 int scaledSeparatorHeight(float scale)
 {
-    return std::max(1, int(HEADER_SEPARATOR_HEIGHT * scale));
+    return std::max(1, static_cast<int>(HEADER_SEPARATOR_HEIGHT * scale));
 }
 
 }  // namespace
 
+// NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
 class PredictionTemplatePicker : public QWidget
 {
 public:
@@ -338,6 +349,7 @@ public:
         this->input_->setText(text);
     }
 
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
     void setFont(const QFont &font)
     {
         QWidget::setFont(font);
@@ -345,6 +357,7 @@ public:
         this->button_->setFont(font);
     }
 
+    // NOLINTNEXTLINE(bugprone-derived-method-shadowing-base-method)
     void setFixedHeight(int height)
     {
         QWidget::setFixedHeight(height);
@@ -450,6 +463,7 @@ public:
     std::function<void(int)> activated;
 
 protected:
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     bool eventFilter(QObject *object, QEvent *event) override
     {
         if (this->popup_ == nullptr)
@@ -527,7 +541,7 @@ private:
         }
         const int frame = this->popup_->frameWidth() * 2;
         this->popup_->setFixedSize(this->width(),
-                                   rowHeight * itemCount + frame);
+                                   (rowHeight * itemCount) + frame);
         this->popup_->move(this->mapToGlobal(QPoint(0, this->height())));
     }
 
@@ -543,6 +557,10 @@ std::vector<QPointer<PredictionDialog>> PredictionDialog::activeDialogs_;
 PredictionDialog::PredictionDialog(TwitchChannel *channel, QWidget *parent)
     : DraggablePopup(true, parent)
     , channel_(channel)
+    , headerTitleLabel_(new QLabel(this->headerWidget_))
+    , headerSubtitleLabel_(new QLabel(this->headerWidget_))
+    , pinButton_(this->createPinButton())
+    , modToggleButton_(new QPushButton(this->headerWidget_))
 {
     this->setAttribute(Qt::WA_DeleteOnClose);
     this->setObjectName("PredictionDialog");
@@ -568,11 +586,9 @@ PredictionDialog::PredictionDialog(TwitchChannel *channel, QWidget *parent)
     auto *headerTextLayout = new QVBoxLayout();
     headerTextLayout->setContentsMargins(0, 0, 0, 0);
 
-    this->headerTitleLabel_ = new QLabel(this->headerWidget_);
     this->headerTitleLabel_->setObjectName("PredictionHeaderTitle");
     headerTextLayout->addWidget(this->headerTitleLabel_);
 
-    this->headerSubtitleLabel_ = new QLabel(this->headerWidget_);
     this->headerSubtitleLabel_->setObjectName("PredictionHeaderSubtitle");
     headerTextLayout->addWidget(this->headerSubtitleLabel_);
 
@@ -581,7 +597,6 @@ PredictionDialog::PredictionDialog(TwitchChannel *channel, QWidget *parent)
 
     this->modBettingView_ = (getSettings()->predictionModAction == 0);
 
-    this->modToggleButton_ = new QPushButton(this->headerWidget_);
     this->modToggleButton_->setObjectName("PredictionModToggleButton");
     this->modToggleButton_->setCursor(Qt::PointingHandCursor);
     this->modToggleButton_->hide();
@@ -592,7 +607,6 @@ PredictionDialog::PredictionDialog(TwitchChannel *channel, QWidget *parent)
                      });
     headerLayout->addWidget(this->modToggleButton_);
 
-    this->pinButton_ = this->createPinButton();
     this->pinButton_->setToolTip("Pin Prediction Popup");
     this->pinButton_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     if (!getSettings()->predictionCloseOnFocusLoss)
@@ -704,7 +718,7 @@ void PredictionDialog::showDialog(
 
     auto *dialog = new PredictionDialog(channel, parent);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
-    activeDialogs_.push_back(dialog);
+    activeDialogs_.emplace_back(dialog);
 
     if (prediction.has_value())
     {
@@ -745,14 +759,11 @@ void PredictionDialog::setPrediction(
             prediction->outcomes.size();
 
     this->currentPrediction_ = prediction;
-    if (broadcasterView || !this->currentPrediction_.has_value() ||
-        this->currentPrediction_->outcomes.size() <= 2)
-    {
-        this->selectedBettingOutcomeId_.clear();
-    }
-    else if (!this->selectedBettingOutcomeId_.isEmpty() &&
-             findPredictionOutcome(*this->currentPrediction_,
-                                   this->selectedBettingOutcomeId_) == nullptr)
+    if ((broadcasterView || !this->currentPrediction_.has_value() ||
+         this->currentPrediction_->outcomes.size() <= 2) ||
+        (!this->selectedBettingOutcomeId_.isEmpty() &&
+         findPredictionOutcome(*this->currentPrediction_,
+                               this->selectedBettingOutcomeId_) == nullptr))
     {
         this->selectedBettingOutcomeId_.clear();
     }
@@ -788,16 +799,18 @@ void PredictionDialog::updateInPlace()
     // Snapshot old bar widths before computing new targets
     QHash<QString, int> newTargets;
 
-    for (int i = 0; i < static_cast<int>(prediction.outcomes.size()); ++i)
+    for (const auto &outcome : prediction.outcomes)
     {
-        const auto &outcome = prediction.outcomes.at(i);
         const int pct =
             totalPoints > 0
-                ? static_cast<int>((outcome.totalPoints * 100.0) / totalPoints)
+                ? static_cast<int>(
+                      (static_cast<double>(outcome.totalPoints) * 100.0) /
+                      static_cast<double>(totalPoints))
                 : 0;
         const double multiplier =
             outcome.totalPoints > 0
-                ? static_cast<double>(totalPoints) / outcome.totalPoints
+                ? static_cast<double>(totalPoints) /
+                      static_cast<double>(outcome.totalPoints)
                 : 0.0;
 
         // Update percentage labels (both 2-outcome and multi-outcome views)
@@ -888,8 +901,9 @@ void PredictionDialog::updateInPlace()
         }
 
         // Calculate and store target bar width for animation
-        int fillW =
-            std::max(16, int(80 * (std::max(1, pct) / 100.0) * effectiveScale));
+        int fillW = std::max(
+            16,
+            static_cast<int>(80 * (std::max(1, pct) / 100.0) * effectiveScale));
         newTargets[outcome.id] = fillW;
     }
 
@@ -971,6 +985,7 @@ void PredictionDialog::resizeEvent(QResizeEvent *event)
     });
 }
 
+// NOLINTNEXTLINE(misc-override-with-different-visibility)
 bool PredictionDialog::eventFilter(QObject *watched, QEvent *event)
 {
     // Block wheel events on the outer scroll area when scrolling is disabled.
@@ -1140,19 +1155,23 @@ void PredictionDialog::applySizeConstraints(bool preserveCurrentPosition)
     }
 
     const auto available = screen->availableGeometry();
-    const int screenMargin = std::max(12, int(16 * this->scale()));
-    const int maxWidth = std::max(1, available.width() - screenMargin * 2);
-    const int maxHeight = std::max(1, available.height() - screenMargin * 2);
+    const int screenMargin = std::max(12, static_cast<int>(16 * this->scale()));
+    const int maxWidth = std::max(1, available.width() - (screenMargin * 2));
+    const int maxHeight = std::max(1, available.height() - (screenMargin * 2));
     // All views with an active prediction use content-driven height.
     // Create mode (no prediction) uses the fixed scale-independent size.
     const bool createMode = !hasOpenPrediction(this->currentPrediction_) &&
                             this->channel_->hasModRights();
     const bool useContentDrivenHeight =
         this->currentPrediction_.has_value() && !createMode;
-    const int targetWidth =
-        std::min(int(this->scaleIndependentWidth() * this->scale()), maxWidth);
+    const int targetWidth = std::min(
+        static_cast<int>(static_cast<float>(this->scaleIndependentWidth()) *
+                         this->scale()),
+        maxWidth);
     int targetHeight = std::min(
-        int(this->scaleIndependentHeight() * this->scale()), maxHeight);
+        static_cast<int>(static_cast<float>(this->scaleIndependentHeight()) *
+                         this->scale()),
+        maxHeight);
 
     if (useContentDrivenHeight)
     {
@@ -1223,7 +1242,7 @@ void PredictionDialog::applySizeConstraints(bool preserveCurrentPosition)
             {
                 activeHeight = this->activeWidget_->sizeHint().height();
             }
-            activeHeight += std::max(2, int(3 * this->scale()));
+            activeHeight += std::max(2, static_cast<int>(3 * this->scale()));
             contentHeight += activeHeight;
         }
 
@@ -1260,7 +1279,7 @@ void PredictionDialog::applySizeConstraints(bool preserveCurrentPosition)
             // because sizeHint() can over-reserve after rapid zoom changes.
         }
 
-        contentHeight += std::max(4, int(6 * this->scale()));
+        contentHeight += std::max(4, static_cast<int>(6 * this->scale()));
 
         if (contentHeight > 0)
         {
@@ -1344,10 +1363,12 @@ void PredictionDialog::refreshHeader()
                 this->modToggleButton_->setText(
                     this->modBettingView_
                         ? "Manage"
+                        // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
                         : (broadcasterView ? "Overview" : "Bet"));
                 this->modToggleButton_->setToolTip(
                     this->modBettingView_
                         ? "Switch to manage view (lock/resolve/cancel)"
+                        // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
                         : (broadcasterView ? "Switch to prediction overview"
                                            : "Switch to betting view"));
                 this->modToggleButton_->show();
@@ -1380,14 +1401,11 @@ void PredictionDialog::updateUI()
     const bool broadcasterView = this->isBroadcasterView();
     this->renderedBroadcasterView_ = broadcasterView;
 
-    if (broadcasterView || !this->currentPrediction_.has_value() ||
-        this->currentPrediction_->outcomes.size() <= 2)
-    {
-        this->selectedBettingOutcomeId_.clear();
-    }
-    else if (!this->selectedBettingOutcomeId_.isEmpty() &&
-             findPredictionOutcome(*this->currentPrediction_,
-                                   this->selectedBettingOutcomeId_) == nullptr)
+    if ((broadcasterView || !this->currentPrediction_.has_value() ||
+         this->currentPrediction_->outcomes.size() <= 2) ||
+        (!this->selectedBettingOutcomeId_.isEmpty() &&
+         findPredictionOutcome(*this->currentPrediction_,
+                               this->selectedBettingOutcomeId_) == nullptr))
     {
         this->selectedBettingOutcomeId_.clear();
     }
@@ -1419,8 +1437,8 @@ void PredictionDialog::updateUI()
     this->activeWidget_->setSizePolicy(QSizePolicy::Ignored,
                                        QSizePolicy::Preferred);
 
-    const int spacing = std::max(2, int(3 * rawScale));
-    const int margin = std::max(3, int(5 * rawScale));
+    const int spacing = std::max(2, static_cast<int>(3 * rawScale));
+    const int margin = std::max(3, static_cast<int>(5 * rawScale));
 
     auto *layout = new QVBoxLayout(this->activeWidget_);
     const bool createMode = !hasOpenPrediction(this->currentPrediction_) &&
@@ -1428,7 +1446,7 @@ void PredictionDialog::updateUI()
     const int topMargin = margin;
     const int bottomMargin = this->currentPrediction_.has_value()
                                  ? margin
-                                 : std::max(6, int(10 * rawScale));
+                                 : std::max(6, static_cast<int>(10 * rawScale));
 
     layout->setContentsMargins(margin, topMargin, margin, bottomMargin);
     layout->setSpacing(spacing);
@@ -1540,6 +1558,7 @@ void PredictionDialog::buildCreateUI()
 {
     this->ensureCreateDraft();
 
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
     auto *layout = static_cast<QVBoxLayout *>(this->activeWidget_->layout());
     const float rawScale = this->scale();
     const float effectiveScale = contentScale(rawScale);
@@ -1551,33 +1570,36 @@ void PredictionDialog::buildCreateUI()
         FontStyle::UiMediumBold, effectiveScale * 1.08F);
     const QFontMetrics uiMetrics(uiFont);
     const QFontMetrics buttonMetrics(buttonFont);
-    const int rowSpacing = std::max(1, int(3 * effectiveScale));
-    const int sectionSpacing = std::max(1, int(4 * effectiveScale));
-    const int sectionPad = std::max(1, int(4 * effectiveScale));
-    const int optionBottomInset = std::max(2, int(std::ceil(2 * rawScale)));
-    const int accentWidth = std::max(1, int(2 * effectiveScale));
-    const int visibleOutcomeRows =
-        std::min(rawScale <= 0.65F   ? 2
-                 : rawScale <= 0.85F ? 3
-                                     : CREATE_VISIBLE_OUTCOME_ROWS,
-                 MAX_OUTCOMES);
-    const int outcomeRowHeight = std::max(
-        10,
-        std::max(int(20 * effectiveScale),
-                 uiMetrics.height() + std::max(1, int(2 * effectiveScale))));
+    const int rowSpacing = std::max(1, static_cast<int>(3 * effectiveScale));
+    const int sectionSpacing =
+        std::max(1, static_cast<int>(4 * effectiveScale));
+    const int sectionPad = std::max(1, static_cast<int>(4 * effectiveScale));
+    const int optionBottomInset =
+        std::max(2, static_cast<int>(std::ceil(2 * rawScale)));
+    const int accentWidth = std::max(1, static_cast<int>(2 * effectiveScale));
+    const int visibleOutcomeRows = std::min(
+        rawScale <= 0.65F ? 2
+        // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
+        : rawScale <= 0.85F ? 3
+                            : CREATE_VISIBLE_OUTCOME_ROWS,
+        MAX_OUTCOMES);
+    const int outcomeRowHeight =
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  uiMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
     const int compactControlHeight =
-        std::max(10, std::max(int(20 * effectiveScale),
-                              buttonMetrics.height() +
-                                  std::max(1, int(2 * effectiveScale))));
-    const int titleInputHeight = std::max(
-        10,
-        std::max(int(20 * effectiveScale),
-                 uiMetrics.height() + std::max(1, int(2 * effectiveScale))));
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  buttonMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
+    const int titleInputHeight =
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  uiMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
     const int accentHeight =
-        std::max(8, outcomeRowHeight - std::max(2, int(rawScale)));
+        std::max(8, outcomeRowHeight - std::max(2, static_cast<int>(rawScale)));
     const int outcomesListHeight =
-        visibleOutcomeRows * outcomeRowHeight +
-        std::max(0, visibleOutcomeRows - 1) * rowSpacing + sectionPad * 2 +
+        (visibleOutcomeRows * outcomeRowHeight) +
+        (std::max(0, visibleOutcomeRows - 1) * rowSpacing) + (sectionPad * 2) +
         optionBottomInset;
 
     // ── Title ──────────────────────────────────────────────
@@ -1804,7 +1826,7 @@ void PredictionDialog::buildCreateUI()
     }
 
     // ── Bottom bar (pinned below scroll area) ──────────────
-    const int pad = std::max(1, int(3 * effectiveScale));
+    const int pad = std::max(1, static_cast<int>(3 * effectiveScale));
     this->bottomWidget_ = new QWidget();
     this->bottomWidget_->setObjectName("PredictionBottomBar");
     this->bottomWidget_->setFont(uiFont);
@@ -1830,7 +1852,7 @@ void PredictionDialog::buildCreateUI()
         durationCombo->setSizePolicy(QSizePolicy::Expanding,
                                      QSizePolicy::Fixed);
         int currentIndex = 0;
-        for (int i = 0; i < static_cast<int>(std::size(DURATION_OPTIONS)); ++i)
+        for (int i = 0; std::cmp_less(i, std::size(DURATION_OPTIONS)); ++i)
         {
             durationCombo->addItem(DURATION_OPTIONS[i].label,
                                    DURATION_OPTIONS[i].seconds);
@@ -1908,9 +1930,9 @@ bool PredictionDialog::populatePredictionTemplates(
         {
             QStringList labels;
             labels.reserve(this->predictionTemplates_.size());
-            for (int i = 0; i < this->predictionTemplates_.size(); ++i)
+            for (const auto &predictionTemplate : this->predictionTemplates_)
             {
-                labels.push_back(this->predictionTemplates_.at(i).title);
+                labels.push_back(predictionTemplate.title);
             }
             picker->setItems(labels);
         }
@@ -2080,6 +2102,11 @@ void PredictionDialog::startPrediction()
 
 void PredictionDialog::buildManageUI()
 {
+    if (!this->currentPrediction_)
+    {
+        return;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
     auto *layout = static_cast<QVBoxLayout *>(this->activeWidget_->layout());
     const auto &prediction = *this->currentPrediction_;
     const float rawScale = this->scale();
@@ -2092,26 +2119,27 @@ void PredictionDialog::buildManageUI()
         FontStyle::UiMediumBold, effectiveScale * 1.18F);
     const QFontMetrics uiMetrics(uiFont);
     const QFontMetrics buttonMetrics(buttonFont);
-    const int rowSpacing = std::max(1, int(3 * effectiveScale));
-    const int sectionPad = std::max(1, int(4 * effectiveScale));
-    const int accentWidth = std::max(1, int(2 * effectiveScale));
+    const int rowSpacing = std::max(1, static_cast<int>(3 * effectiveScale));
+    const int sectionPad = std::max(1, static_cast<int>(4 * effectiveScale));
+    const int accentWidth = std::max(1, static_cast<int>(2 * effectiveScale));
     const int compactControlHeight =
-        std::max(10, std::max(int(20 * effectiveScale),
-                              buttonMetrics.height() +
-                                  std::max(1, int(2 * effectiveScale))));
-    const int outcomeRowHeight = std::max(
-        10,
-        std::max(int(20 * effectiveScale),
-                 uiMetrics.height() + std::max(1, int(2 * effectiveScale))));
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  buttonMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
+    const int outcomeRowHeight =
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  uiMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
     const int accentHeight =
-        std::max(8, outcomeRowHeight - std::max(2, int(rawScale)));
-    const int visibleOutcomeRows = rawScale <= 0.65F ? 2
-                                   : rawScale <= 0.85F
-                                       ? 4
-                                       : MANAGE_VISIBLE_OUTCOME_ROWS;
+        std::max(8, outcomeRowHeight - std::max(2, static_cast<int>(rawScale)));
+    const int visibleOutcomeRows =
+        rawScale <= 0.65F ? 2
+        // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
+        : rawScale <= 0.85F ? 4
+                            : MANAGE_VISIBLE_OUTCOME_ROWS;
     const int outcomesListHeight =
-        visibleOutcomeRows * outcomeRowHeight +
-        std::max(0, visibleOutcomeRows - 1) * rowSpacing + sectionPad * 2;
+        (visibleOutcomeRows * outcomeRowHeight) +
+        (std::max(0, visibleOutcomeRows - 1) * rowSpacing) + (sectionPad * 2);
     const auto locale = QLocale();
 
     // ── Title ──────────────────────────────────────────────
@@ -2187,12 +2215,14 @@ void PredictionDialog::buildManageUI()
     outcomesLayout->setAlignment(Qt::AlignTop);
     outcomesLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
-    for (int i = 0; i < static_cast<int>(prediction.outcomes.size()); ++i)
+    for (int i = 0; std::cmp_less(i, prediction.outcomes.size()); ++i)
     {
         const auto &outcome = prediction.outcomes.at(i);
         const int percentage =
             totalPoints > 0
-                ? static_cast<int>((outcome.totalPoints * 100.0) / totalPoints)
+                ? static_cast<int>(
+                      (static_cast<double>(outcome.totalPoints) * 100.0) /
+                      static_cast<double>(totalPoints))
                 : 0;
 
         auto *rowWidget = new QWidget(outcomesWidget);
@@ -2243,7 +2273,7 @@ void PredictionDialog::buildManageUI()
         pctLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         pctLabel->setFixedWidth(
             QFontMetrics(buttonFont).horizontalAdvance("100%") +
-            std::max(4, int(6 * effectiveScale)));
+            std::max(4, static_cast<int>(6 * effectiveScale)));
         cardLayout->addWidget(pctLabel, 0, Qt::AlignVCenter);
 
         row->addWidget(card, 1);
@@ -2265,7 +2295,7 @@ void PredictionDialog::buildManageUI()
     layout->addWidget(outcomesPanel);
 
     // ── Bottom bar (pinned below scroll area) ──────────────
-    const int pad = std::max(1, int(3 * effectiveScale));
+    const int pad = std::max(1, static_cast<int>(3 * effectiveScale));
     this->bottomWidget_ = new QWidget();
     this->bottomWidget_->setObjectName("PredictionBottomBar");
     this->bottomWidget_->setFont(uiFont);
@@ -2503,6 +2533,11 @@ void PredictionDialog::buildManageUI()
 
 void PredictionDialog::buildBettingUI()
 {
+    if (!this->currentPrediction_)
+    {
+        return;
+    }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
     auto *layout = static_cast<QVBoxLayout *>(this->activeWidget_->layout());
     const auto &prediction = *this->currentPrediction_;
     const bool broadcasterView = this->isBroadcasterView();
@@ -2519,14 +2554,15 @@ void PredictionDialog::buildBettingUI()
     const auto statFont = getApp()->getFonts()->getFont(FontStyle::UiMedium,
                                                         effectiveScale * 0.92F);
     const QFontMetrics buttonMetrics(buttonFont);
-    const int rowSpacing = std::max(1, int(3 * effectiveScale));
-    const int sectionSpacing = std::max(1, int(4 * effectiveScale));
-    const int sectionPad = std::max(1, int(4 * effectiveScale));
-    const int contentSectionGap = std::max(1, int(2 * rawScale));
+    const int rowSpacing = std::max(1, static_cast<int>(3 * effectiveScale));
+    const int sectionSpacing =
+        std::max(1, static_cast<int>(4 * effectiveScale));
+    const int sectionPad = std::max(1, static_cast<int>(4 * effectiveScale));
+    const int contentSectionGap = std::max(1, static_cast<int>(2 * rawScale));
     const int compactControlHeight =
-        std::max(10, std::max(int(20 * effectiveScale),
-                              buttonMetrics.height() +
-                                  std::max(1, int(2 * effectiveScale))));
+        std::max({10, static_cast<int>(20 * effectiveScale),
+                  buttonMetrics.height() +
+                      std::max(1, static_cast<int>(2 * effectiveScale))});
     const auto locale = QLocale();
 
     qlonglong totalPoints = 0;
@@ -2544,7 +2580,7 @@ void PredictionDialog::buildBettingUI()
     int selectedOutcomeIndex = -1;
     if (selectedOutcome != nullptr)
     {
-        for (int i = 0; i < static_cast<int>(prediction.outcomes.size()); ++i)
+        for (int i = 0; std::cmp_less(i, prediction.outcomes.size()); ++i)
         {
             if (prediction.outcomes.at(i).id == selectedOutcome->id)
             {
@@ -2559,11 +2595,12 @@ void PredictionDialog::buildBettingUI()
     questionCard->setObjectName("PredictionQuestionCard");
     questionCard->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     auto *questionCardLayout = new QVBoxLayout(questionCard);
-    const int questionPad = std::max(1, int(4 * rawScale));
+    const int questionPad = std::max(1, static_cast<int>(4 * rawScale));
     questionCardLayout->setContentsMargins(
-        questionPad * 2, std::max(2, int(5 * effectiveScale)), questionPad * 2,
-        std::max(1, int(3 * effectiveScale)));
-    questionCardLayout->setSpacing(std::max(1, int(2 * effectiveScale)));
+        questionPad * 2, std::max(2, static_cast<int>(5 * effectiveScale)),
+        questionPad * 2, std::max(1, static_cast<int>(3 * effectiveScale)));
+    questionCardLayout->setSpacing(
+        std::max(1, static_cast<int>(2 * effectiveScale)));
 
     auto *titleLabel = new QLabel(prediction.title, questionCard);
     titleLabel->setObjectName("PredictionCurrentTitle");
@@ -2641,7 +2678,8 @@ void PredictionDialog::buildBettingUI()
         auto *cardsRow = new QHBoxLayout(cardsContainer);
         cardsRow->setContentsMargins(sectionPad, std::max(1, rowSpacing / 2),
                                      sectionPad, std::max(1, rowSpacing / 2));
-        cardsRow->setSpacing(std::max(sectionSpacing, int(8 * effectiveScale)));
+        cardsRow->setSpacing(
+            std::max(sectionSpacing, static_cast<int>(8 * effectiveScale)));
 
         const auto largePctFont = getApp()->getFonts()->getFont(
             FontStyle::UiMediumBold, effectiveScale * 2.65F);
@@ -2652,12 +2690,14 @@ void PredictionDialog::buildBettingUI()
             const QColor color = outcomeColor(i, outcome.color);
             const int percentage =
                 totalPoints > 0
-                    ? static_cast<int>((outcome.totalPoints * 100.0) /
-                                       totalPoints)
+                    ? static_cast<int>(
+                          (static_cast<double>(outcome.totalPoints) * 100.0) /
+                          static_cast<double>(totalPoints))
                     : 0;
             const double multiplier =
                 outcome.totalPoints > 0
-                    ? static_cast<double>(totalPoints) / outcome.totalPoints
+                    ? static_cast<double>(totalPoints) /
+                          static_cast<double>(outcome.totalPoints)
                     : 0.0;
             const bool isLeft = (i == 0);
 
@@ -2667,7 +2707,7 @@ void PredictionDialog::buildBettingUI()
             auto *halfLayout = new QHBoxLayout(halfWidget);
             halfLayout->setContentsMargins(0, 0, 0, 0);
             halfLayout->setSpacing(
-                std::max(rowSpacing, int(4 * effectiveScale)));
+                std::max(rowSpacing, static_cast<int>(4 * effectiveScale)));
 
             // ── Stats Block ──
             auto *statsWidget = new QWidget(halfWidget);
@@ -2675,7 +2715,8 @@ void PredictionDialog::buildBettingUI()
                                        QSizePolicy::Fixed);
             auto *statsLayout = new QVBoxLayout(statsWidget);
             statsLayout->setContentsMargins(0, 0, 0, 0);
-            statsLayout->setSpacing(std::max(1, int(1.5 * effectiveScale)));
+            statsLayout->setSpacing(
+                std::max(1, static_cast<int>(1.5 * effectiveScale)));
 
             // icons: ○ = points, ⚔ = multiplier, ⚑ = users, ♛ = pool share
             auto addStatRow = [&](const QString &svgData, const QString &value,
@@ -2687,7 +2728,8 @@ void PredictionDialog::buildBettingUI()
                 rowLay->setSpacing(rowSpacing);
 
                 auto *iconLabel = new QLabel(row);
-                const int iconSize = std::max(10, int(12 * effectiveScale));
+                const int iconSize =
+                    std::max(10, static_cast<int>(12 * effectiveScale));
                 iconLabel->setPixmap(renderSvgIcon(svgData, color, iconSize));
                 iconLabel->setFixedSize(iconSize, iconSize);
 
@@ -2736,8 +2778,8 @@ void PredictionDialog::buildBettingUI()
                                        QSizePolicy::Fixed);
             auto *innerLayout = new QVBoxLayout(innerWidget);
             innerLayout->setContentsMargins(
-                0, std::max(2, int(4 * effectiveScale)), 0,
-                std::max(2, int(4 * effectiveScale)));
+                0, std::max(2, static_cast<int>(4 * effectiveScale)), 0,
+                std::max(2, static_cast<int>(4 * effectiveScale)));
             innerLayout->setSpacing(0);
 
             auto *nameLabel = new QLabel(outcome.title, innerWidget);
@@ -2776,16 +2818,16 @@ void PredictionDialog::buildBettingUI()
             barLay->setSpacing(0);
 
             int fillW = std::max(
-                16,
-                int(80 * (std::max(1, percentage) / 100.0) * effectiveScale));
+                16, static_cast<int>(80 * (std::max(1, percentage) / 100.0) *
+                                     effectiveScale));
             auto *filledBar = new QWidget(barContainer);
             filledBar->setObjectName("PredictionBar_" + outcome.id);
-            filledBar->setFixedSize(fillW,
-                                    std::max(4, int(5 * effectiveScale)));
+            filledBar->setFixedSize(
+                fillW, std::max(4, static_cast<int>(5 * effectiveScale)));
             filledBar->setStyleSheet(
                 QString("background: %1; border-radius: %2px;")
                     .arg(color.name())
-                    .arg(std::max(2, int(2.5 * effectiveScale))));
+                    .arg(std::max(2, static_cast<int>(2.5 * effectiveScale))));
 
             if (isLeft)
             {
@@ -2827,7 +2869,8 @@ void PredictionDialog::buildBettingUI()
                 auto *divider = new QWidget(dividerContainer);
                 divider->setObjectName("PredictionDivider");
                 divider->setFixedWidth(1);
-                divider->setFixedHeight(std::max(40, int(52 * effectiveScale)));
+                divider->setFixedHeight(
+                    std::max(40, static_cast<int>(52 * effectiveScale)));
                 dividerLayout->addWidget(divider, 0,
                                          Qt::AlignHCenter | Qt::AlignBottom);
                 cardsRow->addWidget(dividerContainer, 0);
@@ -2845,17 +2888,19 @@ void PredictionDialog::buildBettingUI()
             const auto compactPctFont = getApp()->getFonts()->getFont(
                 FontStyle::UiMediumBold, effectiveScale * 1.08F);
             const QFontMetrics uiMetrics(uiFont);
-            const int accentWidth = std::max(2, int(3 * effectiveScale));
+            const int accentWidth =
+                std::max(2, static_cast<int>(3 * effectiveScale));
             const int outcomeRowHeight = std::max(
-                10, std::max(int(26 * effectiveScale),
-                             uiMetrics.height() +
-                                 std::max(6, int(7 * effectiveScale))));
+                {10, static_cast<int>(26 * effectiveScale),
+                 uiMetrics.height() +
+                     std::max(6, static_cast<int>(7 * effectiveScale))});
             const int accentHeight = std::max(
-                12, outcomeRowHeight - std::max(6, int(8 * effectiveScale)));
+                12, outcomeRowHeight -
+                        std::max(6, static_cast<int>(8 * effectiveScale)));
             const int visibleRows = rawScale <= 0.65F ? 4 : 5;
-            const int listHeight = visibleRows * outcomeRowHeight +
-                                   std::max(0, visibleRows - 1) * rowSpacing +
-                                   sectionPad * 2;
+            const int listHeight = (visibleRows * outcomeRowHeight) +
+                                   (std::max(0, visibleRows - 1) * rowSpacing) +
+                                   (sectionPad * 2);
 
             auto *outcomesPanel = new QWidget(this->activeWidget_);
             this->bettingOutcomesPanel_ = outcomesPanel;
@@ -2893,19 +2938,21 @@ void PredictionDialog::buildBettingUI()
             outcomesLayout->setSpacing(rowSpacing);
             outcomesLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
-            for (int i = 0; i < static_cast<int>(prediction.outcomes.size());
-                 ++i)
+            for (int i = 0; std::cmp_less(i, prediction.outcomes.size()); ++i)
             {
                 const auto &outcome = prediction.outcomes.at(i);
                 const QColor color = outcomeColor(i, outcome.color);
                 const int pct =
                     totalPoints > 0
-                        ? static_cast<int>((outcome.totalPoints * 100.0) /
-                                           totalPoints)
+                        ? static_cast<int>(
+                              (static_cast<double>(outcome.totalPoints) *
+                               100.0) /
+                              static_cast<double>(totalPoints))
                         : 0;
                 const double multiplier =
                     outcome.totalPoints > 0
-                        ? static_cast<double>(totalPoints) / outcome.totalPoints
+                        ? static_cast<double>(totalPoints) /
+                              static_cast<double>(outcome.totalPoints)
                         : 0.0;
 
                 auto installSelectionTarget = [&](QObject *target) {
@@ -2945,9 +2992,12 @@ void PredictionDialog::buildBettingUI()
                 installSelectionTarget(card);
                 auto *cardLayout = new QHBoxLayout(card);
                 cardLayout->setContentsMargins(
-                    sectionPad, std::max(1, int(1 * effectiveScale)),
-                    sectionPad, std::max(1, int(1 * effectiveScale)));
-                cardLayout->setSpacing(std::max(4, int(5 * effectiveScale)));
+                    sectionPad,
+                    std::max(1, static_cast<int>(1 * effectiveScale)),
+                    sectionPad,
+                    std::max(1, static_cast<int>(1 * effectiveScale)));
+                cardLayout->setSpacing(
+                    std::max(4, static_cast<int>(5 * effectiveScale)));
 
                 auto *nameLabel = new QLabel(outcome.title, card);
                 nameLabel->setObjectName("PredictionOutcomeName");
@@ -2966,7 +3016,8 @@ void PredictionDialog::buildBettingUI()
                 installSelectionTarget(metaWidget);
                 auto *metaLayout = new QHBoxLayout(metaWidget);
                 metaLayout->setContentsMargins(0, 0, 0, 0);
-                metaLayout->setSpacing(std::max(3, int(4 * effectiveScale)));
+                metaLayout->setSpacing(
+                    std::max(3, static_cast<int>(4 * effectiveScale)));
 
                 auto *returnValue = new QLabel(
                     QString::number(multiplier, 'f', 1) + "x", metaWidget);
@@ -3020,13 +3071,16 @@ void PredictionDialog::buildBettingUI()
                 outcomeColor(selectedOutcomeIndex, selectedOutcome->color);
             const int pct =
                 totalPoints > 0
-                    ? static_cast<int>((selectedOutcome->totalPoints * 100.0) /
-                                       totalPoints)
+                    ? static_cast<int>(
+                          (static_cast<double>(selectedOutcome->totalPoints) *
+                           100.0) /
+                          static_cast<double>(totalPoints))
                     : 0;
-            const double multiplier = selectedOutcome->totalPoints > 0
-                                          ? static_cast<double>(totalPoints) /
-                                                selectedOutcome->totalPoints
-                                          : 0.0;
+            const double multiplier =
+                selectedOutcome->totalPoints > 0
+                    ? static_cast<double>(totalPoints) /
+                          static_cast<double>(selectedOutcome->totalPoints)
+                    : 0.0;
             const auto focusedTitleFont = getApp()->getFonts()->getFont(
                 FontStyle::UiMediumBold, effectiveScale * 1.26F);
             const auto focusedPctFont = getApp()->getFonts()->getFont(
@@ -3035,7 +3089,8 @@ void PredictionDialog::buildBettingUI()
                 FontStyle::UiMedium, effectiveScale * 0.82F);
             const auto metaValueFont = getApp()->getFonts()->getFont(
                 FontStyle::UiMediumBold, effectiveScale * 1.02F);
-            const int iconSize = std::max(10, int(12 * effectiveScale));
+            const int iconSize =
+                std::max(10, static_cast<int>(12 * effectiveScale));
 
             auto *detailOuter = new QWidget(this->activeWidget_);
             detailOuter->setMinimumWidth(0);
@@ -3071,8 +3126,10 @@ void PredictionDialog::buildBettingUI()
             detailLayout->addWidget(selectedTitle);
 
             {
-                const int navIconSize = std::max(11, int(13 * effectiveScale));
-                const int navBtnSize = std::max(18, int(22 * effectiveScale));
+                const int navIconSize =
+                    std::max(11, static_cast<int>(13 * effectiveScale));
+                const int navBtnSize =
+                    std::max(18, static_cast<int>(22 * effectiveScale));
 
                 QColor normalIconColor = selectedColor;
                 normalIconColor.setAlpha(
@@ -3135,7 +3192,7 @@ void PredictionDialog::buildBettingUI()
                     int titleY = selectedTitle->y();
                     int titleH = selectedTitle->height();
                     int btnH = navButton->height();
-                    navButton->move(sectionPad, titleY + (titleH - btnH) / 2);
+                    navButton->move(sectionPad, titleY + ((titleH - btnH) / 2));
                     navButton->raise();
                 };
                 QTimer::singleShot(0, detailCard, repositionNav);
@@ -3154,7 +3211,7 @@ void PredictionDialog::buildBettingUI()
 
             auto *statsRow = new QHBoxLayout();
             statsRow->setSpacing(
-                std::max(sectionSpacing, int(8 * effectiveScale)));
+                std::max(sectionSpacing, static_cast<int>(8 * effectiveScale)));
 
             auto addDetailStat = [&](const QString &svgData,
                                      const QString &label, const QString &value,
@@ -3166,12 +3223,13 @@ void PredictionDialog::buildBettingUI()
                 auto *columnLayout = new QVBoxLayout(column);
                 columnLayout->setContentsMargins(0, 0, 0, 0);
                 columnLayout->setSpacing(
-                    std::max(1, int(1.5 * effectiveScale)));
+                    std::max(1, static_cast<int>(1.5 * effectiveScale)));
 
                 auto *header = new QWidget(column);
                 auto *headerLayout = new QHBoxLayout(header);
                 headerLayout->setContentsMargins(0, 0, 0, 0);
-                headerLayout->setSpacing(std::max(2, int(3 * effectiveScale)));
+                headerLayout->setSpacing(
+                    std::max(2, static_cast<int>(3 * effectiveScale)));
 
                 auto *iconLabel = new QLabel(header);
                 iconLabel->setPixmap(
@@ -3239,7 +3297,7 @@ void PredictionDialog::buildBettingUI()
         (!multiOutcomeBetting || selectedOutcome != nullptr))
     {
         const qint64 balance = this->channel_->channelPointBalance();
-        const int maxBet = int(std::max<qint64>(
+        const int maxBet = static_cast<int>(std::max<qint64>(
             0, std::min<qint64>(balance > 0 ? balance : 250000, 250000)));
 
         this->bottomWidget_ = new QWidget();
@@ -3248,8 +3306,9 @@ void PredictionDialog::buildBettingUI()
         this->bottomWidget_->setSizePolicy(QSizePolicy::Preferred,
                                            QSizePolicy::Fixed);
         auto *bottomLayout = new QVBoxLayout(this->bottomWidget_);
-        bottomLayout->setContentsMargins(sectionPad * 2, sectionPad * 1.5,
-                                         sectionPad * 2, sectionPad * 1.5);
+        bottomLayout->setContentsMargins(
+            sectionPad * 2, static_cast<int>(sectionPad * 1.5), sectionPad * 2,
+            static_cast<int>(sectionPad * 1.5));
         bottomLayout->setSpacing(sectionSpacing);
 
         // ── Wager + Balance header ──
@@ -3293,7 +3352,7 @@ void PredictionDialog::buildBettingUI()
             }
             QObject::connect(amountInput, &QLineEdit::textChanged, this,
                              [this](const QString &text) {
-                                 bool ok;
+                                 bool ok = false;
                                  int val = text.toInt(&ok);
                                  this->bettingWagerAmount_ = ok ? val : 0;
                              });
@@ -3303,8 +3362,10 @@ void PredictionDialog::buildBettingUI()
                 const char *label;
                 int pct;
             };
-            const QuickPct quickPcts[] = {
-                {"10%", 10}, {"25%", 25}, {"50%", 50}};
+            // NOLINTNEXTLINE(cppcoreguidelines-avoid-c-arrays)
+            const QuickPct quickPcts[] = {{.label = "10%", .pct = 10},
+                                          {.label = "25%", .pct = 25},
+                                          {.label = "50%", .pct = 50}};
             for (const auto &qp : quickPcts)
             {
                 auto *btn = new QPushButton(qp.label, this->bottomWidget_);
@@ -3370,8 +3431,8 @@ void PredictionDialog::buildBettingUI()
             }
             else if (!multiOutcomeBetting)
             {
-                for (int i = 0;
-                     i < static_cast<int>(prediction.outcomes.size()); ++i)
+                for (int i = 0; std::cmp_less(i, prediction.outcomes.size());
+                     ++i)
                 {
                     const auto &outcome = prediction.outcomes.at(i);
                     const auto outcomeId = outcome.id;
@@ -3385,12 +3446,13 @@ void PredictionDialog::buildBettingUI()
                     voteBtn->setSizePolicy(QSizePolicy::Expanding,
                                            QSizePolicy::Fixed);
 
-                    const int voteRadius = std::max(1, int(2 * rawScale));
+                    const int voteRadius =
+                        std::max(1, static_cast<int>(2 * rawScale));
                     const int votePaddingY = 0;
                     const int votePaddingX =
-                        std::max(4, int(5 * effectiveScale));
+                        std::max(4, static_cast<int>(5 * effectiveScale));
                     const int voteMinHeight =
-                        std::max(14, int(20 * effectiveScale));
+                        std::max(14, static_cast<int>(20 * effectiveScale));
                     voteBtn->setStyleSheet(
                         QString("QPushButton {"
                                 "background: %1;"
@@ -3489,7 +3551,7 @@ void PredictionDialog::buildBettingUI()
                                             mutatedPrediction->selfOutcomeId =
                                                 outcomeId;
                                             self->channel_->setActivePrediction(
-                                                std::move(*mutatedPrediction));
+                                                std::move(mutatedPrediction));
                                         }
                                     }
 
@@ -3534,11 +3596,13 @@ void PredictionDialog::buildBettingUI()
             {
                 const QColor selectedColor =
                     outcomeColor(selectedOutcomeIndex, selectedOutcome->color);
-                const int voteRadius = std::max(1, int(2 * rawScale));
+                const int voteRadius =
+                    std::max(1, static_cast<int>(2 * rawScale));
                 const int votePaddingY = 0;
-                const int votePaddingX = std::max(4, int(5 * effectiveScale));
+                const int votePaddingX =
+                    std::max(4, static_cast<int>(5 * effectiveScale));
                 const int voteMinHeight =
-                    std::max(14, int(20 * effectiveScale));
+                    std::max(14, static_cast<int>(20 * effectiveScale));
                 const auto selectedOutcomeId = selectedOutcome->id;
                 const auto selectedOutcomeTitle = selectedOutcome->title;
                 auto *voteBtn = new QPushButton("Vote", this->bottomWidget_);
@@ -3627,7 +3691,7 @@ void PredictionDialog::buildBettingUI()
                                         mutatedPrediction->selfOutcomeId =
                                             selectedOutcomeId;
                                         self->channel_->setActivePrediction(
-                                            std::move(*mutatedPrediction));
+                                            std::move(mutatedPrediction));
                                     }
                                 }
 
@@ -3681,20 +3745,29 @@ void PredictionDialog::refreshStyle()
 {
     const float rawScale = this->scale();
     const float effectiveScale = contentScale(rawScale);
-    const int radius = std::max(1, int(2 * rawScale));
-    const int smallRadius = std::max(1, int(2 * rawScale));
+    const int radius = std::max(1, static_cast<int>(2 * rawScale));
+    const int smallRadius = std::max(1, static_cast<int>(2 * rawScale));
     const int inputPaddingY = 0;
-    const int inputPaddingX = std::max(4, int(5 * effectiveScale));
-    const int inputMinHeight = std::max(14, int(20 * effectiveScale));
-    const int controlPaddingY = std::max(1, int(2 * effectiveScale));
-    const int controlPaddingX = std::max(4, int(6 * effectiveScale));
-    const int controlMinHeight = std::max(16, int(24 * effectiveScale));
+    const int inputPaddingX = std::max(4, static_cast<int>(5 * effectiveScale));
+    const int inputMinHeight =
+        std::max(14, static_cast<int>(20 * effectiveScale));
+    const int controlPaddingY =
+        std::max(1, static_cast<int>(2 * effectiveScale));
+    const int controlPaddingX =
+        std::max(4, static_cast<int>(6 * effectiveScale));
+    const int controlMinHeight =
+        std::max(16, static_cast<int>(24 * effectiveScale));
     const int compactControlPaddingY = 0;
-    const int compactControlPaddingX = std::max(4, int(5 * effectiveScale));
-    const int compactControlMinHeight = std::max(14, int(20 * effectiveScale));
-    const int scrollbarWidth = std::max(3, int(4 * effectiveScale));
-    const int scrollbarRadius = std::max(1, int(2 * effectiveScale));
-    const int scrollbarMinHeight = std::max(12, int(16 * effectiveScale));
+    const int compactControlPaddingX =
+        std::max(4, static_cast<int>(5 * effectiveScale));
+    const int compactControlMinHeight =
+        std::max(14, static_cast<int>(20 * effectiveScale));
+    const int scrollbarWidth =
+        std::max(3, static_cast<int>(4 * effectiveScale));
+    const int scrollbarRadius =
+        std::max(1, static_cast<int>(2 * effectiveScale));
+    const int scrollbarMinHeight =
+        std::max(12, static_cast<int>(16 * effectiveScale));
 
     auto windowBackground = this->theme->window.background;
     auto textColor = this->theme->window.text;
@@ -3718,13 +3791,18 @@ void PredictionDialog::refreshStyle()
         getApp()->getFonts()->getFont(FontStyle::UiMedium, effectiveScale));
 
     this->headerWidget_->layout()->setContentsMargins(
-        std::max(2, int(4 * rawScale)), std::max(2, int(3 * rawScale)),
-        std::max(2, int(4 * rawScale)), std::max(2, int(3 * rawScale)));
-    this->headerWidget_->layout()->setSpacing(std::max(2, int(3 * rawScale)));
+        std::max(2, static_cast<int>(4 * rawScale)),
+        std::max(2, static_cast<int>(3 * rawScale)),
+        std::max(2, static_cast<int>(4 * rawScale)),
+        std::max(2, static_cast<int>(3 * rawScale)));
+    this->headerWidget_->layout()->setSpacing(
+        std::max(2, static_cast<int>(3 * rawScale)));
 
     this->mainLayout_->setContentsMargins(
-        std::max(3, int(5 * rawScale)), std::max(3, int(5 * rawScale)),
-        std::max(3, int(5 * rawScale)), std::max(3, int(5 * rawScale)));
+        std::max(3, static_cast<int>(5 * rawScale)),
+        std::max(3, static_cast<int>(5 * rawScale)),
+        std::max(3, static_cast<int>(5 * rawScale)),
+        std::max(3, static_cast<int>(5 * rawScale)));
     this->mainLayout_->setSpacing(0);
     if (auto *separator =
             this->findChild<QWidget *>("PredictionDialogSeparator"))

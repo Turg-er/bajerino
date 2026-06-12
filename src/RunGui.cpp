@@ -36,6 +36,8 @@
 #include <cstdlib>
 #include <tuple>
 
+using namespace Qt::StringLiterals;
+
 #ifdef USEWINSDK
 #    include "util/WindowsHelper.hpp"
 #endif
@@ -58,8 +60,8 @@ QString guiActivationServerName(const Paths &paths)
 {
     const auto hash = QCryptographicHash::hash(
         paths.rootAppDataDirectory.toUtf8(), QCryptographicHash::Sha256);
-    return QStringLiteral("moltorino-gui-activate-%1")
-        .arg(QString::fromLatin1(hash.toHex().left(24)));
+    return u"moltorino-gui-activate-%1"_s.arg(
+        QString::fromLatin1(hash.toHex().left(24)));
 }
 
 void restoreGuiInstance()
@@ -344,7 +346,7 @@ bool activateExistingGuiInstance(const Paths &paths)
     return true;
 }
 
-void runGui(QApplication &a, const Paths &paths, Settings &settings,
+void runGui(QApplication & /*a*/, const Paths &paths, Settings &settings,
             const Args &args, Updates &updates)
 {
     initQt(args);

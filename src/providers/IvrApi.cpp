@@ -36,15 +36,16 @@ void IvrApi::getSubage(QString userName, QString channelName,
 }
 
 void IvrApi::getModVip(
-    QString channelName,
-    ResultCallback<std::vector<HelixModerator>, std::vector<HelixVip>>
-        successCallback,
-    IvrFailureCallback failureCallback)
+    const QString &channelName,
+    const ResultCallback<std::vector<HelixModerator>, std::vector<HelixVip>>
+        &successCallback,
+    const IvrFailureCallback &failureCallback)
 {
     assert(!channelName.isEmpty());
 
-    this->makeRequest(QString("twitch/modvip/%1").arg(channelName), {})
-        .onSuccess([successCallback, failureCallback](auto result) {
+    chatterino::IvrApi::makeRequest(
+        QString("twitch/modvip/%1").arg(channelName), {})
+        .onSuccess([successCallback, failureCallback](const auto &result) {
             auto root = result.parseJson();
             const auto modsValue = root.value("mods");
             const auto vipsValue = root.value("vips");
@@ -79,7 +80,7 @@ void IvrApi::getModVip(
 
             successCallback(std::move(mods), std::move(vips));
         })
-        .onError([failureCallback](auto result) {
+        .onError([failureCallback](const auto &result) {
             qCWarning(chatterinoIvr)
                 << "Failed IVR modvip API call!" << result.formatError()
                 << QString(result.getData());
@@ -89,14 +90,15 @@ void IvrApi::getModVip(
 }
 
 void IvrApi::getFounders(
-    QString channelName,
-    ResultCallback<std::vector<HelixModerator>> successCallback,
-    IvrFailureCallback failureCallback)
+    const QString &channelName,
+    const ResultCallback<std::vector<HelixModerator>> &successCallback,
+    const IvrFailureCallback &failureCallback)
 {
     assert(!channelName.isEmpty());
 
-    this->makeRequest(QString("twitch/founders/%1").arg(channelName), {})
-        .onSuccess([successCallback, failureCallback](auto result) {
+    chatterino::IvrApi::makeRequest(
+        QString("twitch/founders/%1").arg(channelName), {})
+        .onSuccess([successCallback, failureCallback](const auto &result) {
             auto root = result.parseJson();
             const auto foundersValue = root.value("founders");
 
@@ -119,7 +121,7 @@ void IvrApi::getFounders(
 
             successCallback(std::move(founders));
         })
-        .onError([failureCallback](auto result) {
+        .onError([failureCallback](const auto &result) {
             qCWarning(chatterinoIvr)
                 << "Failed IVR founders API call!" << result.formatError()
                 << QString(result.getData());
@@ -128,17 +130,17 @@ void IvrApi::getFounders(
         .execute();
 }
 
-void IvrApi::getUser(QString userName,
-                     ResultCallback<IvrUserProfile> successCallback,
-                     IvrFailureCallback failureCallback)
+void IvrApi::getUser(const QString &userName,
+                     const ResultCallback<IvrUserProfile> &successCallback,
+                     const IvrFailureCallback &failureCallback)
 {
     assert(!userName.isEmpty());
 
     QUrlQuery query;
     query.addQueryItem("login", userName);
 
-    this->makeRequest("twitch/user", query)
-        .onSuccess([successCallback, failureCallback](auto result) {
+    chatterino::IvrApi::makeRequest("twitch/user", query)
+        .onSuccess([successCallback, failureCallback](const auto &result) {
             const auto root = result.parseJsonArray();
             if (root.isEmpty() || !root.first().isObject())
             {
@@ -148,7 +150,7 @@ void IvrApi::getUser(QString userName,
 
             successCallback(IvrUserProfile(root.first().toObject()));
         })
-        .onError([failureCallback](auto result) {
+        .onError([failureCallback](const auto &result) {
             qCWarning(chatterinoIvr)
                 << "Failed IVR user API call!" << result.formatError()
                 << QString(result.getData());
@@ -157,7 +159,8 @@ void IvrApi::getUser(QString userName,
         .execute();
 }
 
-NetworkRequest IvrApi::makeRequest(QString url, QUrlQuery urlQuery)
+NetworkRequest IvrApi::makeRequest(const QString &url,
+                                   const QUrlQuery &urlQuery)
 {
     assert(!url.startsWith("/"));
 

@@ -21,6 +21,8 @@
 #include <QTimeZone>
 #include <QUuid>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 const QString ZERO_WIDTH_JOINER = QStringLiteral("\u200D");
@@ -212,11 +214,11 @@ QString formatCompactNumber(qint64 number)
 {
     const auto locale = getSystemLocale();
     const bool negative = number < 0;
-    const quint64 absolute =
-        negative ? quint64(-(number + 1)) + 1U : quint64(number);
+    const quint64 absolute = negative ? static_cast<quint64>(-(number + 1)) + 1U
+                                      : static_cast<quint64>(number);
 
-    auto withSign = [negative](QString text) {
-        return negative ? QStringLiteral("-") + text : text;
+    auto withSign = [negative](const QString &text) {
+        return negative ? u"-"_s + text : text;
     };
 
     if (absolute < 1000)
@@ -226,8 +228,8 @@ QString formatCompactNumber(qint64 number)
 
     if (absolute < 10'000)
     {
-        return withSign(
-            formatCompactWithSuffix(absolute / 1000.0, u'k', locale));
+        return withSign(formatCompactWithSuffix(
+            static_cast<double>(absolute) / 1000.0, u'k', locale));
     }
 
     if (absolute < 1'000'000)
@@ -237,8 +239,8 @@ QString formatCompactNumber(qint64 number)
 
     if (absolute < 10'000'000)
     {
-        return withSign(
-            formatCompactWithSuffix(absolute / 1'000'000.0, u'm', locale));
+        return withSign(formatCompactWithSuffix(
+            static_cast<double>(absolute) / 1'000'000.0, u'm', locale));
     }
 
     if (absolute < 1'000'000'000)
@@ -248,8 +250,8 @@ QString formatCompactNumber(qint64 number)
 
     if (absolute < 10'000'000'000)
     {
-        return withSign(
-            formatCompactWithSuffix(absolute / 1'000'000'000.0, u'b', locale));
+        return withSign(formatCompactWithSuffix(
+            static_cast<double>(absolute) / 1'000'000'000.0, u'b', locale));
     }
 
     if (absolute < 1'000'000'000'000)
@@ -259,8 +261,8 @@ QString formatCompactNumber(qint64 number)
 
     if (absolute < 10'000'000'000'000)
     {
-        return withSign(formatCompactWithSuffix(absolute / 1'000'000'000'000.0,
-                                                u'T', locale));
+        return withSign(formatCompactWithSuffix(
+            static_cast<double>(absolute) / 1'000'000'000'000.0, u'T', locale));
     }
 
     return withSign(locale.toString(absolute / 1'000'000'000'000) + QChar('T'));
@@ -270,7 +272,7 @@ QString formatChannelPoints(qint64 points)
 {
     if (points < 0)
     {
-        return QStringLiteral("...");
+        return u"..."_s;
     }
 
     if (points >= 100'000'000)

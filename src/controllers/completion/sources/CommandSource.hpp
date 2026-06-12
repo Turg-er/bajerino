@@ -54,8 +54,8 @@ private:
     ActionCallback callback_;
     const Channel *channel_ = nullptr;
 
-    std::vector<CommandItem> items_{};
-    std::vector<CommandItem> output_{};
+    std::vector<CommandItem> items_;
+    std::vector<CommandItem> output_;
 };
 
 }  // namespace chatterino::completion

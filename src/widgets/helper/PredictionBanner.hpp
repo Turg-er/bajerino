@@ -50,8 +50,8 @@ private:
     void updateLayout();
     void updateLabelStyles();
     void openPredictionDialog();
-    QString dismissalKey(
-        const TwitchChannel::PredictionEvent &prediction) const;
+    static QString dismissalKey(
+        const TwitchChannel::PredictionEvent &prediction);
 
     SvgButton *icon_{};
     QLabel *metadataLabel_{};

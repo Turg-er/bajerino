@@ -1,6 +1,5 @@
 #include "controllers/commands/builtin/twitch/BlockedTerms.hpp"
 
-#include "common/Channel.hpp"
 #include "controllers/commands/CommandContext.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
@@ -10,13 +9,15 @@
 #include <algorithm>
 #include <optional>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
 
 QString usage(const QString &command)
 {
-    return QStringLiteral("Usage: %1 <phrase>").arg(command);
+    return u"Usage: %1 <phrase>"_s.arg(command);
 }
 
 QString phraseFromCommand(const CommandContext &ctx, const QString &command)
@@ -85,16 +86,15 @@ std::optional<GqlBlockedTerm> findBlockedTerm(
     const QVector<GqlBlockedTerm> &terms, const QString &phrase)
 {
     const auto needle = phrase.trimmed();
-    auto found =
-        std::find_if(terms.begin(), terms.end(), [&](const auto &term) {
-            return term.phrase.trimmed() == needle;
-        });
+    auto found = std::ranges::find_if(terms, [&](const auto &term) {
+        return term.phrase.trimmed() == needle;
+    });
     if (found != terms.end())
     {
         return *found;
     }
 
-    found = std::find_if(terms.begin(), terms.end(), [&](const auto &term) {
+    found = std::ranges::find_if(terms, [&](const auto &term) {
         return term.phrase.trimmed().compare(needle, Qt::CaseInsensitive) == 0;
     });
     if (found != terms.end())
@@ -123,10 +123,10 @@ QString blockTerm(const CommandContext &ctx)
         return "";
     }
 
-    const auto phrase = phraseFromCommand(ctx, QStringLiteral("/blockterm"));
+    const auto phrase = phraseFromCommand(ctx, u"/blockterm"_s);
     if (phrase.isEmpty())
     {
-        ctx.channel->addSystemMessage(usage(QStringLiteral("/blockterm")));
+        ctx.channel->addSystemMessage(usage(u"/blockterm"_s));
         return "";
     }
 
@@ -138,7 +138,7 @@ QString blockTerm(const CommandContext &ctx)
 
     TwitchGql::addChannelBlockedTerm(
         ctx.twitchChannel->roomId(), phrase, *token,
-        [](GqlAddBlockedTermResult result) {
+        [](const GqlAddBlockedTermResult &result) {
             (void)result;
         },
         [channel{ctx.channel}](const QString &error) {
@@ -169,10 +169,10 @@ QString unblockTerm(const CommandContext &ctx)
         return "";
     }
 
-    const auto phrase = phraseFromCommand(ctx, QStringLiteral("/unblockterm"));
+    const auto phrase = phraseFromCommand(ctx, u"/unblockterm"_s);
     if (phrase.isEmpty())
     {
-        ctx.channel->addSystemMessage(usage(QStringLiteral("/unblockterm")));
+        ctx.channel->addSystemMessage(usage(u"/unblockterm"_s));
         return "";
     }
 
@@ -186,7 +186,7 @@ QString unblockTerm(const CommandContext &ctx)
     TwitchGql::getChannelBlockedTerms(
         channelId, *token,
         [channel{ctx.channel}, channelId, phrase,
-         token = *token](QVector<GqlBlockedTerm> terms) {
+         token = *token](const QVector<GqlBlockedTerm> &terms) {
             const auto term = findBlockedTerm(terms, phrase);
             if (!term)
             {
@@ -194,8 +194,7 @@ QString unblockTerm(const CommandContext &ctx)
                     if (channel != nullptr)
                     {
                         channel->addSystemMessage(
-                            QStringLiteral(
-                                "Could not find a blocked term matching \"%1\"")
+                            u"Could not find a blocked term matching \"%1\""_s
                                 .arg(phrase));
                     }
                 });

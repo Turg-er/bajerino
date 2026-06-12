@@ -18,6 +18,8 @@
 #include <optional>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 using namespace std::chrono_literals;
 
 namespace chatterino {
@@ -27,9 +29,9 @@ namespace {
 QString authenticatedTopicUserID(const QString &topic)
 {
     const QStringList prefixes{
-        QStringLiteral("predictions-user-v1."),
-        QStringLiteral("community-points-user-v1."),
-        QStringLiteral("chatrooms-user-v1."),
+        u"predictions-user-v1."_s,
+        u"community-points-user-v1."_s,
+        u"chatrooms-user-v1."_s,
     };
 
     for (const auto &prefix : prefixes)

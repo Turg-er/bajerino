@@ -50,6 +50,8 @@
 #include <functional>
 #include <mutex>
 
+using namespace Qt::StringLiterals;
+
 using namespace std::chrono_literals;
 
 namespace {
@@ -76,27 +78,26 @@ QString makeWebClientNonce()
     auto *random = QRandomGenerator::global();
     for (int i = 0; i < 4; ++i)
     {
-        nonce += QStringLiteral("%1").arg(random->generate(), 8, 16,
-                                          QLatin1Char('0'));
+        nonce += u"%1"_s.arg(random->generate(), 8, 16, QLatin1Char('0'));
     }
 
     return nonce.toLower();
 }
 
-thread_local bool preferAnonymousTwitchChannels = false;
+thread_local bool PREFER_ANONYMOUS_TWITCH_CHANNELS = false;
 
 class ScopedAnonymousTwitchLookup
 {
 public:
     explicit ScopedAnonymousTwitchLookup(bool enabled)
-        : previous_(preferAnonymousTwitchChannels)
+        : previous_(PREFER_ANONYMOUS_TWITCH_CHANNELS)
     {
-        preferAnonymousTwitchChannels = enabled;
+        PREFER_ANONYMOUS_TWITCH_CHANNELS = enabled;
     }
 
     ~ScopedAnonymousTwitchLookup()
     {
-        preferAnonymousTwitchChannels = this->previous_;
+        PREFER_ANONYMOUS_TWITCH_CHANNELS = this->previous_;
     }
 
 private:
@@ -107,24 +108,22 @@ QStringList makeIrcTags(QStringList tags = {})
 {
     if (getSettings()->spoofIrcMessagesAsWeb)
     {
-        tags.prepend(QStringLiteral("client-nonce=") + makeWebClientNonce());
+        tags.prepend(u"client-nonce="_s + makeWebClientNonce());
     }
 
     return tags;
 }
 
 QString makePrivmsg(const QString &channelName, const QString &message,
-                    QStringList tags = {})
+                    const QStringList &tags = {})
 {
     QString prefix;
     if (!tags.isEmpty())
     {
-        prefix = QStringLiteral("@") + tags.join(QLatin1Char(';')) +
-                 QStringLiteral(" ");
+        prefix = u"@"_s + tags.join(QLatin1Char(';')) + u" "_s;
     }
 
-    return prefix + QStringLiteral("PRIVMSG #") + channelName +
-           QStringLiteral(" :") + message;
+    return prefix + u"PRIVMSG #"_s + channelName + u" :"_s + message;
 }
 
 void sendHelixMessage(const std::shared_ptr<TwitchChannel> &channel,
@@ -249,7 +248,7 @@ TwitchIrcServer::TwitchIrcServer()
     this->joinBucket_.reset(new RatelimitBucket(
         JOIN_RATELIMIT_BUDGET, JOIN_RATELIMIT_COOLDOWN, actuallyJoin, this));
 
-    auto actuallyJoinAnonymous = [&](QString message) {
+    auto actuallyJoinAnonymous = [&](const QString &message) {
         if (!this->anonymousChannels.contains(message) ||
             !this->anonymousReadConnection_)
         {
@@ -541,9 +540,8 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
 
     if (anonymous)
     {
-        username =
-            QStringLiteral("justinfan%1")
-                .arg(QRandomGenerator::global()->bounded(100000, 1000000));
+        username = u"justinfan%1"_s.arg(
+            QRandomGenerator::global()->bounded(100000, 1000000));
     }
 
     if (!anonymous && !oauthToken.startsWith("oauth:"))
@@ -822,7 +820,7 @@ void TwitchIrcServer::onAnonymousReadConnected(IrcConnection *connection)
 
     std::vector<ChannelPtr> activeChannels;
     {
-        std::lock_guard lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
 
         activeChannels.reserve(this->anonymousChannels.size());
         for (const auto &weak : this->anonymousChannels)
@@ -904,13 +902,13 @@ void TwitchIrcServer::onDisconnected()
 
 void TwitchIrcServer::onAnonymousDisconnected()
 {
-    std::lock_guard<std::mutex> lock(this->channelMutex);
+    std::scoped_lock lock(this->channelMutex);
 
     MessageBuilder b(systemMessage, "anonymous disconnected");
     b->flags.set(MessageFlag::DisconnectedMessage);
     auto disconnectedMsg = b.release();
 
-    for (std::weak_ptr<Channel> &weak : this->anonymousChannels.values())
+    for (std::weak_ptr<Channel> const &weak : this->anonymousChannels.values())
     {
         std::shared_ptr<Channel> chan = weak.lock();
         if (!chan)
@@ -1203,8 +1201,7 @@ void TwitchIrcServer::onReplySendRequested(
     {
         this->sendRawMessage(makePrivmsg(
             channel->getName(), message,
-            makeIrcTags(QStringList{QStringLiteral("reply-parent-msg-id=") +
-                                    replyId})));
+            makeIrcTags(QStringList{u"reply-parent-msg-id="_s + replyId})));
     }
     sent = true;
 }
@@ -1536,9 +1533,9 @@ void TwitchIrcServer::markChannelsConnected()
     // Only the authed channels read from the authed connection whose heartbeat
     // drives this; anonymous channels are handled by
     // markAnonymousChannelsConnected.
-    std::lock_guard<std::mutex> lock(this->channelMutex);
+    std::scoped_lock lock(this->channelMutex);
 
-    for (std::weak_ptr<Channel> &weak : this->channels.values())
+    for (std::weak_ptr<Channel> const &weak : this->channels.values())
     {
         auto chan = weak.lock();
         if (!chan)
@@ -1555,9 +1552,9 @@ void TwitchIrcServer::markChannelsConnected()
 
 void TwitchIrcServer::markAnonymousChannelsConnected()
 {
-    std::lock_guard<std::mutex> lock(this->channelMutex);
+    std::scoped_lock lock(this->channelMutex);
 
-    for (std::weak_ptr<Channel> &weak : this->anonymousChannels.values())
+    for (std::weak_ptr<Channel> const &weak : this->anonymousChannels.values())
     {
         auto chan = weak.lock();
         if (!chan)
@@ -1576,7 +1573,7 @@ void TwitchIrcServer::ensureAnonymousReadConnection()
 {
     bool shouldStart = false;
     {
-        std::lock_guard<std::mutex> locker(this->connectionMutex_);
+        std::scoped_lock locker(this->connectionMutex_);
 
         if (this->anonymousReadConnection_ &&
             !this->anonymousReadConnection_->isConnected() &&
@@ -1600,7 +1597,7 @@ void TwitchIrcServer::ensureReadConnection()
 {
     bool shouldStart = false;
     {
-        std::lock_guard<std::mutex> locker(this->connectionMutex_);
+        std::scoped_lock locker(this->connectionMutex_);
 
         if (this->readConnection_ && !this->readConnection_->isConnected() &&
             !this->readConnectionStarted_)
@@ -1623,22 +1620,17 @@ void TwitchIrcServer::ensureReadConnection()
 
 bool TwitchIrcServer::hasAuthedChannels()
 {
-    std::lock_guard<std::mutex> lock(this->channelMutex);
-    for (const auto &weak : this->channels)
-    {
-        if (weak.lock())
-        {
-            return true;
-        }
-    }
-    return false;
+    std::scoped_lock lock(this->channelMutex);
+    return std::ranges::any_of(this->channels, [](const auto &weak) {
+        return weak.lock() != nullptr;
+    });
 }
 
 void TwitchIrcServer::reevaluateChannelRouting()
 {
     // Re-partition all open channels by their current effective anonymity.
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
 
         QMap<QString, std::weak_ptr<Channel>> authed;
         QMap<QString, std::weak_ptr<Channel>> anonymous;
@@ -1675,7 +1667,7 @@ void TwitchIrcServer::reevaluateChannelRouting()
     // Reconnect (or tear down) the anonymous connection for the new set.
     bool hasAnonymous = false;
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
         for (const auto &weak : this->anonymousChannels)
         {
             if (weak.lock())
@@ -1691,7 +1683,7 @@ void TwitchIrcServer::reevaluateChannelRouting()
     }
     else
     {
-        std::lock_guard<std::mutex> lock(this->connectionMutex_);
+        std::scoped_lock lock(this->connectionMutex_);
         this->anonymousReadConnectionStarted_ = false;
         if (this->anonymousReadConnection_)
         {
@@ -1727,7 +1719,7 @@ void TwitchIrcServer::addGlobalSystemMessage(const QString &messageText)
 
     for (auto *map : {&this->channels, &this->anonymousChannels})
     {
-        for (std::weak_ptr<Channel> &weak : map->values())
+        for (std::weak_ptr<Channel> const &weak : map->values())
         {
             std::shared_ptr<Channel> chan = weak.lock();
             if (!chan)
@@ -1742,13 +1734,13 @@ void TwitchIrcServer::addGlobalSystemMessage(const QString &messageText)
 
 void TwitchIrcServer::forEachChannel(std::function<void(ChannelPtr)> func)
 {
-    std::lock_guard<std::mutex> lock(this->channelMutex);
+    std::scoped_lock lock(this->channelMutex);
 
     // Covers both authed and anonymous channels; either map may hold a channel
     // depending on its effective anonymity.
     for (auto *map : {&this->channels, &this->anonymousChannels})
     {
-        for (std::weak_ptr<Channel> &weak : map->values())
+        for (std::weak_ptr<Channel> const &weak : map->values())
         {
             ChannelPtr chan = weak.lock();
             if (!chan)
@@ -1780,7 +1772,7 @@ void TwitchIrcServer::connect()
     if (this->hasAuthedChannels())
     {
         {
-            std::lock_guard<std::mutex> locker(this->connectionMutex_);
+            std::scoped_lock locker(this->connectionMutex_);
             this->readConnectionStarted_ = true;
         }
         this->initializeConnection(this->writeConnection_.get(),
@@ -1792,7 +1784,7 @@ void TwitchIrcServer::connect()
 
 void TwitchIrcServer::disconnect()
 {
-    std::lock_guard<std::mutex> locker(this->connectionMutex_);
+    std::scoped_lock locker(this->connectionMutex_);
 
     this->readConnectionStarted_ = false;
     this->readConnection_->close();
@@ -1822,7 +1814,7 @@ void TwitchIrcServer::onChannelDestroyed(const QString &channelName)
     bool authedEmpty = false;
     bool anonymousEmpty = false;
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
         wasAuthed = this->channels.remove(channelName) > 0;
         wasAnonymous = this->anonymousChannels.remove(channelName) > 0;
         authedEmpty = this->channels.isEmpty();
@@ -1836,7 +1828,7 @@ void TwitchIrcServer::onChannelDestroyed(const QString &channelName)
         return;
     }
 
-    std::lock_guard<std::mutex> lock(this->connectionMutex_);
+    std::scoped_lock lock(this->connectionMutex_);
     if (wasAuthed && this->readConnection_)
     {
         this->readConnection_->sendRaw("PART #" + channelName);
@@ -1876,7 +1868,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     // either map depending on its effective anonymity.
     ChannelPtr existing;
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
         for (auto *map : {&this->channels, &this->anonymousChannels})
         {
             auto it = map->find(channelName);
@@ -1907,7 +1899,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     bool anonymous = false;
     ChannelPtr chan;
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
 
         chan = this->createChannel(channelName, anonymousOverride);
         auto *twitchChannel = dynamic_cast<TwitchChannel *>(chan.get());
@@ -1938,7 +1930,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     {
         this->ensureAnonymousReadConnection();
 
-        std::lock_guard<std::mutex> lock2(this->connectionMutex_);
+        std::scoped_lock lock2(this->connectionMutex_);
         if (this->anonymousReadConnection_ &&
             this->anonymousReadConnection_->isConnected() &&
             !channelName.startsWith("/"))
@@ -1950,7 +1942,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     {
         this->ensureReadConnection();
 
-        std::lock_guard<std::mutex> lock2(this->connectionMutex_);
+        std::scoped_lock lock2(this->connectionMutex_);
         if (this->readConnection_ && this->readConnection_->isConnected() &&
             !channelName.startsWith("/"))
         {
@@ -1980,7 +1972,7 @@ ChannelPtr TwitchIrcServer::getChannelOrEmpty(const QString &dirtyChannelName)
         return chan;
     }
 
-    if (preferAnonymousTwitchChannels)
+    if (PREFER_ANONYMOUS_TWITCH_CHANNELS)
     {
         auto anonymous = this->anonymousChannels.find(channelName);
         if (anonymous != this->anonymousChannels.end())
@@ -2006,7 +1998,7 @@ ChannelPtr TwitchIrcServer::getChannelOrEmpty(const QString &dirtyChannelName)
         }
     }
 
-    if (!preferAnonymousTwitchChannels)
+    if (!PREFER_ANONYMOUS_TWITCH_CHANNELS)
     {
         auto anonymous = this->anonymousChannels.find(channelName);
         if (anonymous != this->anonymousChannels.end())
@@ -2028,7 +2020,7 @@ ChannelPtr TwitchIrcServer::getAnonymousChannelOrEmpty(
 {
     auto channelName = cleanChannelName(dirtyChannelName);
 
-    std::lock_guard<std::mutex> lock(this->channelMutex);
+    std::scoped_lock lock(this->channelMutex);
 
     auto it = this->anonymousChannels.find(channelName);
     if (it != this->anonymousChannels.end())
@@ -2045,7 +2037,7 @@ ChannelPtr TwitchIrcServer::getAnonymousChannelOrEmpty(
 void TwitchIrcServer::reconnectAnonymousChannels()
 {
     {
-        std::lock_guard<std::mutex> lock(this->channelMutex);
+        std::scoped_lock lock(this->channelMutex);
         if (this->anonymousChannels.isEmpty())
         {
             return;
@@ -2053,7 +2045,7 @@ void TwitchIrcServer::reconnectAnonymousChannels()
     }
 
     {
-        std::lock_guard<std::mutex> lock(this->connectionMutex_);
+        std::scoped_lock lock(this->connectionMutex_);
         this->anonymousReadConnectionStarted_ = false;
         if (this->anonymousReadConnection_)
         {
@@ -2068,7 +2060,7 @@ void TwitchIrcServer::reconnectAnonymousChannels()
 
 void TwitchIrcServer::open(ConnectionType type)
 {
-    std::lock_guard<std::mutex> lock(this->connectionMutex_);
+    std::scoped_lock lock(this->connectionMutex_);
 
     if (type == ConnectionType::Write)
     {

@@ -97,7 +97,10 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 constexpr QStringView TEXT_FOLLOWERS = u"Followers: %1";
@@ -119,14 +122,13 @@ using namespace chatterino;
 
 QString chatVaultTwitchChannelUrl(const QString &login)
 {
-    return QStringLiteral("https://chatvau.lt/channel/twitch/%1")
-        .arg(QString::fromLatin1(QUrl::toPercentEncoding(login.toLower())));
+    return u"https://chatvau.lt/channel/twitch/%1"_s.arg(
+        QString::fromLatin1(QUrl::toPercentEncoding(login.toLower())));
 }
 
 QString sevenTVUserCacheKey(const QString &userID, bool isKick)
 {
-    return (isKick ? QStringLiteral("kick:") : QStringLiteral("twitch:")) +
-           userID;
+    return (isKick ? u"kick:"_s : u"twitch:"_s) + userID;
 }
 
 QHash<QString, QString> &sevenTVUserIDCache()
@@ -138,8 +140,8 @@ QHash<QString, QString> &sevenTVUserIDCache()
 class NameHistoryMenuRow final : public QWidget
 {
 public:
-    NameHistoryMenuRow(QString login, QString leftText, QString rightText,
-                       QWidget *parent)
+    NameHistoryMenuRow(QString login, const QString &leftText,
+                       const QString &rightText, QWidget *parent)
         : QWidget(parent)
         , login_(std::move(login))
     {
@@ -165,7 +167,7 @@ public:
         loginLabel->setToolTip(this->login_);
         layout->addWidget(loginLabel, 0, 0, Qt::AlignVCenter);
 
-        auto *leftLabel = new QLabel(std::move(leftText), this);
+        auto *leftLabel = new QLabel(leftText, this);
         leftLabel->setFixedWidth(dateWidth);
         leftLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         leftLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
@@ -177,14 +179,15 @@ public:
         dashLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         layout->addWidget(dashLabel, 0, 2, Qt::AlignVCenter);
 
-        auto *rightLabel = new QLabel(std::move(rightText), this);
+        auto *rightLabel = new QLabel(rightText, this);
         rightLabel->setFixedWidth(dateWidth);
         rightLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         rightLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
         layout->addWidget(rightLabel, 0, 3, Qt::AlignVCenter);
 
         const auto height = std::max(metrics.height() + 6, 22);
-        this->setFixedSize(loginWidth + dateWidth * 2 + dashWidth + 36, height);
+        this->setFixedSize(loginWidth + (dateWidth * 2) + dashWidth + 36,
+                           height);
     }
 
 protected:
@@ -357,7 +360,7 @@ void createUsercardColorRow(LayoutCreator<QVBoxLayout> &vbox, QWidget **rowOut,
 QPixmap renderUsercardStatusIcon(const QString &path, int size, qreal scale)
 {
     static QHash<QString, QPixmap> cache;
-    const auto key = QStringLiteral("%1:%2:%3").arg(path).arg(size).arg(scale);
+    const auto key = u"%1:%2:%3"_s.arg(path).arg(size).arg(scale);
     if (auto it = cache.find(key); it != cache.end())
     {
         return *it;
@@ -415,7 +418,8 @@ int completeCalendarMonthsBetween(const QDate &from, const QDate &to)
         return 0;
     }
 
-    auto months = (to.year() - from.year()) * 12 + (to.month() - from.month());
+    auto months =
+        ((to.year() - from.year()) * 12) + (to.month() - from.month());
     if (to.day() < from.day())
     {
         --months;
@@ -426,8 +430,8 @@ int completeCalendarMonthsBetween(const QDate &from, const QDate &to)
 
 QString formatUsercardCount(int count, const QString &unit)
 {
-    return QStringLiteral("%1 %2%3").arg(count).arg(unit).arg(
-        count == 1 ? QString() : QStringLiteral("s"));
+    return u"%1 %2%3"_s.arg(count).arg(unit).arg(count == 1 ? QString()
+                                                            : u"s"_s);
 }
 
 QString formatUsercardYearsMonths(int totalMonths)
@@ -439,13 +443,13 @@ QString formatUsercardYearsMonths(int totalMonths)
 
     const auto years = totalMonths / 12;
     const auto months = totalMonths % 12;
-    auto result = QStringLiteral("%1y").arg(years);
+    auto result = u"%1y"_s.arg(years);
     if (months > 0)
     {
-        result += QStringLiteral(" %1m").arg(months);
+        result += u" %1m"_s.arg(months);
     }
 
-    return QStringLiteral(" (%1)").arg(result);
+    return u" (%1)"_s.arg(result);
 }
 
 QString formatUsercardFollowRelativeTime(const QDate &followedDate)
@@ -463,23 +467,22 @@ QString formatUsercardFollowRelativeTime(const QDate &followedDate)
     }
     if (months >= 1)
     {
-        return QStringLiteral(" (%1)").arg(
-            formatUsercardCount(months, QStringLiteral("month")));
+        return u" (%1)"_s.arg(formatUsercardCount(months, u"month"_s));
     }
 
     const auto days = followedDate.daysTo(today);
     if (days >= 14)
     {
-        return QStringLiteral(" (%1)").arg(
-            formatUsercardCount(days / 7, QStringLiteral("week")));
+        return u" (%1)"_s.arg(
+            formatUsercardCount(static_cast<int>(days / 7), u"week"_s));
     }
     if (days > 0)
     {
-        return QStringLiteral(" (%1)").arg(
-            formatUsercardCount(days, QStringLiteral("day")));
+        return u" (%1)"_s.arg(
+            formatUsercardCount(static_cast<int>(days), u"day"_s));
     }
 
-    return QStringLiteral(" (today)");
+    return u" (today)"_s;
 }
 
 QString formatUsercardStatus(const IvrUserProfile &profile)
@@ -500,7 +503,7 @@ QString formatUsercardStatus(const IvrUserProfile &profile)
     return "Non Affiliate";
 }
 
-bool checkMessageUserName(const QString &userName, MessagePtr message)
+bool checkMessageUserName(const QString &userName, const MessagePtr &message)
 {
     if (message->flags.has(MessageFlag::Whisper))
     {
@@ -523,18 +526,14 @@ bool checkMessageUserName(const QString &userName, MessagePtr message)
 bool messageHasTwitchBadge(const Message &message, QStringView badge)
 {
     const auto badgeName = badge.toString();
-    for (const auto &twitchBadge : message.twitchBadges)
-    {
-        if (twitchBadge.key_.compare(badgeName, Qt::CaseInsensitive) == 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
+    return std::ranges::any_of(
+        message.twitchBadges, [&](const auto &twitchBadge) {
+            return twitchBadge.key_.compare(badgeName, Qt::CaseInsensitive) ==
+                   0;
+        });
 }
 
-ChannelPtr filterMessages(const QString &userName, ChannelPtr channel)
+ChannelPtr filterMessages(const QString &userName, const ChannelPtr &channel)
 {
     std::vector<MessagePtr> snapshot = channel->getMessageSnapshot();
 
@@ -562,11 +561,11 @@ ChannelPtr filterMessages(const QString &userName, ChannelPtr channel)
 
 QString escapeIrcTagValue(QString value)
 {
-    value.replace(QChar(u'\\'), QStringLiteral("\\\\"));
-    value.replace(QChar(u';'), QStringLiteral("\\:"));
-    value.replace(QChar(u' '), QStringLiteral("\\s"));
-    value.replace(QChar(u'\r'), QStringLiteral("\\r"));
-    value.replace(QChar(u'\n'), QStringLiteral("\\n"));
+    value.replace(QChar(u'\\'), u"\\\\"_s);
+    value.replace(QChar(u';'), u"\\:"_s);
+    value.replace(QChar(u' '), u"\\s"_s);
+    value.replace(QChar(u'\r'), u"\\r"_s);
+    value.replace(QChar(u'\n'), u"\\n"_s);
     return value;
 }
 
@@ -608,44 +607,40 @@ MessagePtr makeUsercardModLogMessage(const GqlUsercardMessage &message,
         QStringList tags;
         if (!message.id.isEmpty())
         {
-            tags << QStringLiteral("id=") + escapeIrcTagValue(message.id);
+            tags << u"id="_s + escapeIrcTagValue(message.id);
         }
         if (!userId.isEmpty())
         {
-            tags << QStringLiteral("user-id=") + escapeIrcTagValue(userId);
+            tags << u"user-id="_s + escapeIrcTagValue(userId);
         }
         if (!message.senderColor.isEmpty())
         {
-            tags << QStringLiteral("color=") +
-                        escapeIrcTagValue(message.senderColor);
+            tags << u"color="_s + escapeIrcTagValue(message.senderColor);
         }
         if (!message.senderBadges.isEmpty())
         {
-            tags << QStringLiteral("badges=") +
-                        escapeIrcTagValue(message.senderBadges);
+            tags << u"badges="_s + escapeIrcTagValue(message.senderBadges);
         }
         if (!twitchChannel->roomId().isEmpty())
         {
-            tags << QStringLiteral("room-id=") +
-                        escapeIrcTagValue(twitchChannel->roomId());
+            tags << u"room-id="_s + escapeIrcTagValue(twitchChannel->roomId());
         }
         if (!displayName.isEmpty())
         {
-            tags << QStringLiteral("display-name=") +
-                        escapeIrcTagValue(displayName);
+            tags << u"display-name="_s + escapeIrcTagValue(displayName);
         }
-        tags << QStringLiteral("login=") + escapeIrcTagValue(login);
+        tags << u"login="_s + escapeIrcTagValue(login);
         if (sentAt.isValid())
         {
-            tags << QStringLiteral("tmi-sent-ts=") +
+            tags << u"tmi-sent-ts="_s +
                         QString::number(sentAt.toMSecsSinceEpoch());
         }
 
         const auto tagsText =
             tags.isEmpty() ? QString() : u"@" % tags.join(';') % u" ";
         const auto fakeIrcData =
-            QStringLiteral("%1:%2!%2@%2.tmi.twitch.tv PRIVMSG #%3 :%4")
-                .arg(tagsText, login, twitchChannel->getName(), body);
+            u"%1:%2!%2@%2.tmi.twitch.tv PRIVMSG #%3 :%4"_s.arg(
+                tagsText, login, twitchChannel->getName(), body);
 
         auto *fakeMessage =
             Communi::IrcMessage::fromData(fakeIrcData.toUtf8(), nullptr);
@@ -687,7 +682,7 @@ MessagePtr makeUsercardModLogMessage(const GqlUsercardMessage &message,
     builder->displayName = displayName;
     builder->userID = userId;
     builder->messageText = body;
-    builder->searchText = displayName + QStringLiteral(": ") + body;
+    builder->searchText = displayName + u": "_s + body;
     builder->channelName = channelName;
     builder->serverReceivedTime = sentAt;
     builder->usernameColor = color;
@@ -701,7 +696,7 @@ MessagePtr makeUsercardModLogMessage(const GqlUsercardMessage &message,
 
     builder.emplace<TimestampElement>(sentAt.time());
     builder
-        .emplace<TextElement>(displayName + QStringLiteral(":"),
+        .emplace<TextElement>(displayName + u":"_s,
                               MessageElementFlag::Username, userColor,
                               FontStyle::ChatMediumBold)
         ->setLink({Link::UserInfo, message.senderLogin});
@@ -739,9 +734,9 @@ qreal usercardMessagePreloadDistance(const Scrollbar &scrollbar)
     return std::clamp<qreal>(scrollbar.getPageSize() * 0.75, 8.0, 24.0);
 }
 
-const auto borderColor = QColor(255, 255, 255, 80);
+const auto BORDER_COLOR = QColor(255, 255, 255, 80);
 
-int calculateTimeoutDuration(TimeoutButton timeout)
+int calculateTimeoutDuration(const TimeoutButton &timeout)
 {
     static const QMap<QString, int> durations{
         {"s", 1}, {"m", 60}, {"h", 3600}, {"d", 86400}, {"w", 604800},
@@ -866,7 +861,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                         "moderation action to execute, see description in the "
                         "editor";
              }
-             auto target = arguments.at(0);
+             const auto &target = arguments.at(0);
              UsercardModerationRequest request;
 
              // these can't have /timeout/ buttons because they are not timeouts
@@ -920,7 +915,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
              return "";
          }},
         {"openProfilePictureMenu",
-         [this](std::vector<QString> /*arguments*/) -> QString {
+         [this](const std::vector<QString> & /*arguments*/) -> QString {
              return this->showProfilePictureContextMenu();
          }},
 
@@ -1338,7 +1333,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         // we only connect once
         std::ignore = this->userStateChanged_.connect([this, mod, unmod, vip,
                                                        unvip, roles]() mutable {
-            TwitchChannel *twitchChannel =
+            auto const *twitchChannel =
                 dynamic_cast<TwitchChannel *>(this->underlyingChannel_.get());
 
             bool visibilityModButtons = false;
@@ -1443,7 +1438,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         this->ui_.latestMessages->setSizePolicy(QSizePolicy::Expanding,
                                                 QSizePolicy::Expanding);
 
-        auto loadMore =
+        auto *loadMore =
             new LabelButton("Load more messages", this, QSize{8, 2});
         loadMore->setVisible(false);
         loadMore->setToolTip("Load older messages from Twitch mod logs");
@@ -1841,7 +1836,7 @@ void UserInfoPopup::updateLatestMessages()
     this->refreshConnection_ =
         std::make_unique<pajlada::Signals::ScopedConnection>(
             this->underlyingChannel_->messageAppended.connect(
-                [this](auto message, auto) {
+                [this](const auto &message, auto) {
                     if (this->updateTargetModerationStatusFromMessage(message))
                     {
                         this->userStateChanged_.invoke();
@@ -1878,8 +1873,8 @@ void UserInfoPopup::updateUsercardMessagesVisibility()
                                    this->ui_.loadMoreMessages->isVisible();
     const auto previousNoMessagesText = this->ui_.noMessagesLabel->getText();
     const auto noMessagesText = this->usercardMessagesLoading_
-                                    ? QStringLiteral("Loading messages...")
-                                    : QStringLiteral("No recent messages");
+                                    ? u"Loading messages..."_s
+                                    : u"No recent messages"_s;
 
     this->ui_.latestMessages->setVisible(hasMessages);
     this->ui_.noMessagesLabel->setText(noMessagesText);
@@ -2038,9 +2033,8 @@ void UserInfoPopup::fetchMoreUsercardMessages(int emptyPageSkipsLeft,
     if (!auth.hasToken() || (auth.legacy && !twitchChannel->hasModRights()))
     {
         this->usercardMessagesError_ =
-            authError.isEmpty()
-                ? QStringLiteral("No saved Moltorino moderator login found.")
-                : authError;
+            authError.isEmpty() ? u"No saved Moltorino moderator login found."_s
+                                : authError;
         this->usercardMessagesLazyLoadEnabled_ = false;
         this->usercardMessagesLoading_ = false;
         this->updateUsercardMessagesVisibility();
@@ -2060,7 +2054,7 @@ void UserInfoPopup::fetchMoreUsercardMessages(int emptyPageSkipsLeft,
         channelId, targetUserId, cursor, auth.token,
         [self, generation, targetUserId, channelName, emptyPageSkipsLeft,
          oldestLoadedMessage,
-         enableLazyLoadOnSuccess](GqlUsercardMessagePage page) mutable {
+         enableLazyLoadOnSuccess](const GqlUsercardMessagePage &page) mutable {
             if (!self ||
                 generation != self->usercardMessagesRequestGeneration_ ||
                 self->userId_ != targetUserId)
@@ -2086,23 +2080,22 @@ void UserInfoPopup::fetchMoreUsercardMessages(int emptyPageSkipsLeft,
             messages.reserve(static_cast<size_t>(page.messages.size()));
             auto *renderChannel =
                 dynamic_cast<TwitchChannel *>(self->underlyingChannel_.get());
-            for (auto it = page.messages.crbegin(); it != page.messages.crend();
-                 ++it)
+            for (const auto &message : std::views::reverse(page.messages))
             {
-                const auto sentAt = parseIvrTimestamp(it->sentAt);
+                const auto sentAt = parseIvrTimestamp(message.sentAt);
                 if (oldestLoadedMessage.isValid() && sentAt.isValid() &&
                     sentAt >= oldestLoadedMessage)
                 {
                     continue;
                 }
 
-                if (self->usercardMessagesChannel_->findMessageByID(it->id))
+                if (self->usercardMessagesChannel_->findMessageByID(message.id))
                 {
                     continue;
                 }
 
                 messages.push_back(makeUsercardModLogMessage(
-                    *it, renderChannel, channelName, targetUserId));
+                    message, renderChannel, channelName, targetUserId));
             }
 
             if (!messages.empty())
@@ -2567,7 +2560,7 @@ void UserInfoPopup::updateUserData()
         {
             getApp()->getPronouns()->getUserPronoun(
                 user.login,
-                [this, isCurrentRequest](const auto userPronoun) {
+                [this, isCurrentRequest](const auto &userPronoun) {
                     runInGuiThread([this, isCurrentRequest,
                                     userPronoun = std::move(userPronoun)]() {
                         if (!isCurrentRequest() ||
@@ -3169,7 +3162,7 @@ QString UserInfoPopup::showProfilePictureContextMenu()
         ChannelPtr channel = getApp()->getTwitch()->getOrAddChannel(loginName);
         auto &notebook = getApp()->getWindows()->getMainWindow().getNotebook();
         SplitContainer *container = notebook.addPage(true);
-        Split *split = new Split(container);
+        auto *split = new Split(container);
         split->setChannel(channel);
         container->insertSplit(split);
     });
@@ -3973,7 +3966,7 @@ UserInfoPopup::TimeoutWidget::TimeoutWidget()
             a->setText(QString::number(item.second) + item.first);
 
             a->setScaleIndependentSize(buttonWidth, buttonHeight);
-            a->setBorderColor(borderColor);
+            a->setBorderColor(BORDER_COLOR);
 
             const auto duration = calculateTimeoutDuration(item);
             const auto reason = timeoutButtonReason(index);
@@ -4009,7 +4002,7 @@ UserInfoPopup::TimeoutWidget::TimeoutWidget()
     addButton(UsercardModerationAction::Ban, "Ban", getResources().buttons.ban);
 }
 
-void UserInfoPopup::TimeoutWidget::paintEvent(QPaintEvent *)
+void UserInfoPopup::TimeoutWidget::paintEvent(QPaintEvent * /*event*/)
 {
     //    QPainter painter(this);
 

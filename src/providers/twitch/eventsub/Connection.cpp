@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <chrono>
 #include <optional>
+#include <ranges>
 
 namespace {
 
@@ -68,7 +69,7 @@ struct RecentRoleMod {
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-QVector<RecentRoleMod> recentRoleMods;
+QVector<RecentRoleMod> RECENT_ROLE_MODS;
 
 QString roleEventKey(const channel_moderate::Event &event,
                      const lib::String &targetLogin)
@@ -89,12 +90,13 @@ QString roleEventKey(const channel_moderate::Event &event,
 
 void pruneRecentRoleMods(const QDateTime &now)
 {
-    recentRoleMods.erase(
-        std::remove_if(recentRoleMods.begin(), recentRoleMods.end(),
-                       [&now](const auto &entry) {
-                           return entry.expiresAt <= now;
-                       }),
-        recentRoleMods.end());
+    RECENT_ROLE_MODS.erase(std::ranges::remove_if(RECENT_ROLE_MODS,
+                                                  [&now](const auto &entry) {
+                                                      return entry.expiresAt <=
+                                                             now;
+                                                  })
+                               .begin(),
+                           RECENT_ROLE_MODS.end());
 }
 
 void rememberRecentRoleMod(const QString &key)
@@ -102,7 +104,7 @@ void rememberRecentRoleMod(const QString &key)
     const auto now = QDateTime::currentDateTimeUtc();
     pruneRecentRoleMods(now);
 
-    recentRoleMods.push_back({key, now.addMSecs(2500)});
+    RECENT_ROLE_MODS.push_back({.key = key, .expiresAt = now.addMSecs(2500)});
 }
 
 bool hasRecentRoleMod(const QString &key)
@@ -110,10 +112,9 @@ bool hasRecentRoleMod(const QString &key)
     const auto now = QDateTime::currentDateTimeUtc();
     pruneRecentRoleMods(now);
 
-    return std::any_of(recentRoleMods.cbegin(), recentRoleMods.cend(),
-                       [&key](const auto &entry) {
-                           return entry.key == key;
-                       });
+    return std::ranges::any_of(RECENT_ROLE_MODS, [&key](const auto &entry) {
+        return entry.key == key;
+    });
 }
 
 std::optional<QString> deletedMessageID(const MessagePtr &message)
@@ -135,7 +136,7 @@ std::optional<QString> deletedMessageID(const MessagePtr &message)
     return std::nullopt;
 }
 
-void addOrReplaceDeleteAction(TwitchChannel *channel, MessagePtr message)
+void addOrReplaceDeleteAction(TwitchChannel *channel, const MessagePtr &message)
 {
     const auto messageID = deletedMessageID(message);
     if (!messageID)
@@ -152,7 +153,7 @@ void addOrReplaceDeleteAction(TwitchChannel *channel, MessagePtr message)
 
     const auto messages = channel->getMessageSnapshot();
     auto it =
-        std::find_if(messages.rbegin(), messages.rend(), [&](const auto &m) {
+        std::ranges::find_if(std::views::reverse(messages), [&](const auto &m) {
             const auto existingID = deletedMessageID(m);
             return existingID && *existingID == *messageID;
         });

@@ -28,7 +28,7 @@ private:
     void updateAuthInstructions(const QString &text, bool isError = false);
     void updateAuthStatus(const QString &text, bool isValid,
                           bool isError = false);
-    void revealBotBadgeSettings(bool forceReveal = false);
+    void revealBotBadgeSettings(bool revealed = false);
     void syncBotBadgeVisibility();
     void populateBotBadgeFieldsFromSettings();
     void updateBotBadgeStatus(const QString &text, bool isValid = false,

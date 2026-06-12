@@ -26,7 +26,10 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <ranges>
 #include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -50,6 +53,7 @@ constexpr int NUKE_DELETE_INTERVAL_MS = 80;
 constexpr int NUKE_MODERATION_INTERVAL_MS = 150;
 constexpr int NUKE_RATE_LIMIT_BACKOFF_MS = 1200;
 
+// NOLINTNEXTLINE(performance-enum-size)
 enum class NukeAction {
     Timeout,
     Ban,
@@ -125,8 +129,8 @@ struct SpamJob {
     QSet<QString> normalizedMessages;
     QString senderLogin;
     QString senderUserID;
-    QString label = QStringLiteral("Spam");
-    QString commandName = QStringLiteral("/spam");
+    QString label = u"Spam"_s;
+    QString commandName = u"/spam"_s;
     pajlada::Signals::ScopedConnection messageConnection;
     int total = 0;
     int sent = 0;
@@ -154,21 +158,21 @@ QHash<QString, std::shared_ptr<SpamJob>> &activeSpams()
 
 QString usage()
 {
-    return QStringLiteral(
-        "Usage: /nuke <text> <timeout|ban|delete> <range>, for example /nuke "
-        "bots 10m 30s. Use /nuke stop to cancel active nukes.");
+    return u"Usage: /nuke <text> <timeout|ban|delete> <range>, for example "
+           u"/nuke "
+           "bots 10m 30s. Use /nuke stop to cancel active nukes."_s;
 }
 
 QString spamUsage()
 {
-    return QStringLiteral("Usage: /spam <count> <message>, for example /spam "
-                          "50 get in the predict. Use /spam stop to cancel.");
+    return u"Usage: /spam <count> <message>, for example /spam "
+           "50 get in the predict. Use /spam stop to cancel."_s;
 }
 
 QString pyramidUsage()
 {
-    return QStringLiteral("Usage: /pyramid <height> <message>, for example "
-                          "/pyramid 6 Kappa. Use /pyramid stop to cancel.");
+    return u"Usage: /pyramid <height> <message>, for example "
+           "/pyramid 6 Kappa. Use /pyramid stop to cancel."_s;
 }
 
 QString actionName(const ParseResult &plan)
@@ -176,12 +180,12 @@ QString actionName(const ParseResult &plan)
     switch (plan.action)
     {
         case NukeAction::Ban:
-            return QStringLiteral("banned");
+            return u"banned"_s;
         case NukeAction::Delete:
-            return QStringLiteral("deleted");
+            return u"deleted"_s;
         case NukeAction::Timeout:
         default:
-            return QStringLiteral("timed out");
+            return u"timed out"_s;
     }
 }
 
@@ -189,10 +193,10 @@ QString formatNukeRange(int seconds)
 {
     if (seconds % 60 == 0)
     {
-        return QStringLiteral("%1m").arg(seconds / 60);
+        return u"%1m"_s.arg(seconds / 60);
     }
 
-    return QStringLiteral("%1s").arg(seconds);
+    return u"%1s"_s.arg(seconds);
 }
 
 bool isInvisibleCodePoint(uint codePoint)
@@ -358,10 +362,13 @@ bool tokenMatches(const QString &needle, const QString &candidate)
 
     if (candidate.startsWith(needle))
     {
-        const auto maxExtraChars = needle.size() <= 3   ? 1
-                                   : needle.size() <= 5 ? 2
-                                   : needle.size() <= 7 ? 3
-                                                        : 4;
+        const auto maxExtraChars =
+            needle.size() <= 3 ? 1
+            // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
+            : needle.size() <= 5 ? 2
+            // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
+            : needle.size() <= 7 ? 3
+                                 : 4;
         return candidate.size() <= needle.size() + maxExtraChars;
     }
 
@@ -384,10 +391,9 @@ bool looseMessageMatches(const QString &target, const QString &message)
 
     if (targetTokens.size() == 1)
     {
-        return std::any_of(messageTokens.begin(), messageTokens.end(),
-                           [&](const QString &token) {
-                               return tokenMatches(targetTokens.front(), token);
-                           });
+        return std::ranges::any_of(messageTokens, [&](const QString &token) {
+            return tokenMatches(targetTokens.front(), token);
+        });
     }
 
     qsizetype searchFrom = 0;
@@ -441,22 +447,21 @@ bool hasBadge(const MessagePtr &message, const QString &badgeName)
         return false;
     }
 
-    return std::any_of(
-        message->twitchBadges.begin(), message->twitchBadges.end(),
-        [&](const TwitchBadge &badge) {
+    return std::ranges::any_of(
+        message->twitchBadges, [&](const TwitchBadge &badge) {
             return badge.key_.compare(badgeName, Qt::CaseInsensitive) == 0;
         });
 }
 
 bool isModeratorMessage(const MessagePtr &message)
 {
-    return hasBadge(message, QStringLiteral("moderator")) ||
-           hasBadge(message, QStringLiteral("lead_moderator"));
+    return hasBadge(message, u"moderator"_s) ||
+           hasBadge(message, u"lead_moderator"_s);
 }
 
 bool isBroadcasterMessage(const MessagePtr &message, const ChannelPtr &channel)
 {
-    if (hasBadge(message, QStringLiteral("broadcaster")))
+    if (hasBadge(message, u"broadcaster"_s))
     {
         return true;
     }
@@ -502,13 +507,13 @@ bool isFatalForwardedModerationError(const QString &message)
 
 bool parseActionText(const QString &actionText, ParseResult &result)
 {
-    if (actionText == QStringLiteral("ban"))
+    if (actionText == u"ban"_s)
     {
         result.action = NukeAction::Ban;
         result.timeoutSeconds = 0;
         return true;
     }
-    if (actionText == QStringLiteral("delete"))
+    if (actionText == u"delete"_s)
     {
         result.action = NukeAction::Delete;
         result.timeoutSeconds = 0;
@@ -522,7 +527,8 @@ bool parseActionText(const QString &actionText, ParseResult &result)
     }
 
     result.action = NukeAction::Timeout;
-    result.timeoutSeconds = std::min<int64_t>(duration, MAX_TIMEOUT_SECONDS);
+    result.timeoutSeconds =
+        static_cast<int>(std::min<int64_t>(duration, MAX_TIMEOUT_SECONDS));
     return true;
 }
 
@@ -548,7 +554,7 @@ void addMatch(NukeMatches &matches, const ParseResult &plan,
         return;
     }
 
-    if (getSettings()->nukeSkipVips && hasBadge(message, QStringLiteral("vip")))
+    if (getSettings()->nukeSkipVips && hasBadge(message, u"vip"_s))
     {
         matches.skippedVips++;
         return;
@@ -590,9 +596,8 @@ NukeMatches collectPastMatches(const ParseResult &plan,
         QDateTime::currentDateTimeUtc().addSecs(-plan.rangeSeconds);
     const auto snapshot = channel->getMessageSnapshot();
 
-    for (auto it = snapshot.rbegin(); it != snapshot.rend(); ++it)
+    for (const auto &message : std::views::reverse(snapshot))
     {
-        const auto &message = *it;
         if (message == nullptr)
         {
             continue;
@@ -629,7 +634,7 @@ ParseResult parseNukeInput(const QString &input, bool allowPartialPreview)
 {
     ParseResult result;
     const auto trimmed = input.trimmed();
-    if (!trimmed.startsWith(QStringLiteral("/nuke"), Qt::CaseInsensitive))
+    if (!trimmed.startsWith(u"/nuke"_s, Qt::CaseInsensitive))
     {
         return result;
     }
@@ -637,7 +642,7 @@ ParseResult parseNukeInput(const QString &input, bool allowPartialPreview)
     const auto firstSpace = trimmed.indexOf(u' ');
     const auto commandName =
         firstSpace < 0 ? trimmed : trimmed.left(firstSpace).trimmed();
-    if (commandName.compare(QStringLiteral("/nuke"), Qt::CaseInsensitive) != 0)
+    if (commandName.compare(u"/nuke"_s, Qt::CaseInsensitive) != 0)
     {
         return result;
     }
@@ -646,7 +651,7 @@ ParseResult parseNukeInput(const QString &input, bool allowPartialPreview)
 
     const auto words = QProcess::splitCommand(trimmed);
     if (words.size() == 2 &&
-        words.at(1).compare(QStringLiteral("stop"), Qt::CaseInsensitive) == 0)
+        words.at(1).compare(u"stop"_s, Qt::CaseInsensitive) == 0)
     {
         result.isStop = true;
         result.complete = true;
@@ -727,19 +732,19 @@ ParseResult parseNukeInput(const QString &input, bool allowPartialPreview)
 
     if (!hasCompleteAction)
     {
-        result.error = QStringLiteral(
-            "Invalid /nuke action. Use a timeout duration, ban, or delete.");
+        result.error =
+            u"Invalid /nuke action. Use a timeout duration, ban, or delete."_s;
         return result;
     }
 
     if (range <= 0)
     {
-        result.error = QStringLiteral("Invalid /nuke range.");
+        result.error = u"Invalid /nuke range."_s;
         return result;
     }
     if (range > MAX_NUKE_RANGE_SECONDS)
     {
-        result.error = QStringLiteral("/nuke range is limited to 10 minutes.");
+        result.error = u"/nuke range is limited to 10 minutes."_s;
         return result;
     }
     result.rangeSeconds = static_cast<int>(range);
@@ -752,22 +757,21 @@ QString previewStatus(const ParseResult &plan, const NukeMatches &matches)
     const auto rangeText = formatNukeRange(plan.rangeSeconds);
     if (matches.highlightedMessageIDs.isEmpty())
     {
-        return QStringLiteral("Nuke preview: no matching messages in last %1")
-            .arg(rangeText);
+        return u"Nuke preview: no matching messages in last %1"_s.arg(
+            rangeText);
     }
 
     QString targetCount;
     if (plan.action == NukeAction::Delete)
     {
         targetCount =
-            QStringLiteral("%1 message%2")
-                .arg(matches.highlightedMessageIDs.size())
+            u"%1 message%2"_s.arg(matches.highlightedMessageIDs.size())
                 .arg(matches.highlightedMessageIDs.size() == 1 ? "" : "s");
     }
     else
     {
         targetCount =
-            QStringLiteral("%1 message%2 from %3 user%4")
+            u"%1 message%2 from %3 user%4"_s
                 .arg(matches.highlightedMessageIDs.size())
                 .arg(matches.highlightedMessageIDs.size() == 1 ? "" : "s")
                 .arg(matches.userTargets.size())
@@ -777,30 +781,27 @@ QString previewStatus(const ParseResult &plan, const NukeMatches &matches)
     QStringList skipped;
     if (matches.skippedBroadcaster > 0)
     {
-        skipped.append(
-            QStringLiteral("%1 broadcaster").arg(matches.skippedBroadcaster));
+        skipped.append(u"%1 broadcaster"_s.arg(matches.skippedBroadcaster));
     }
     if (matches.skippedMods > 0)
     {
-        skipped.append(QStringLiteral("%1 mod%2")
-                           .arg(matches.skippedMods)
+        skipped.append(u"%1 mod%2"_s.arg(matches.skippedMods)
                            .arg(matches.skippedMods == 1 ? "" : "s"));
     }
     if (matches.skippedVips > 0)
     {
-        skipped.append(QStringLiteral("%1 VIP%2")
-                           .arg(matches.skippedVips)
+        skipped.append(u"%1 VIP%2"_s.arg(matches.skippedVips)
                            .arg(matches.skippedVips == 1 ? "" : "s"));
     }
 
     if (skipped.isEmpty())
     {
-        return QStringLiteral("Nuke preview: %1 targeted in last %2")
-            .arg(targetCount, rangeText);
+        return u"Nuke preview: %1 targeted in last %2"_s.arg(targetCount,
+                                                             rangeText);
     }
 
-    return QStringLiteral("Nuke preview: %1 targeted in last %2, %3 skipped")
-        .arg(targetCount, rangeText, skipped.join(QStringLiteral(", ")));
+    return u"Nuke preview: %1 targeted in last %2, %3 skipped"_s.arg(
+        targetCount, rangeText, skipped.join(u", "_s));
 }
 
 QString channelKey(TwitchChannel *channel)
@@ -855,41 +856,37 @@ void maybeFinishNukeJob(const std::shared_ptr<NukeJob> &job)
         QStringList parts;
         if (job->plan.action == NukeAction::Delete)
         {
-            parts.append(QStringLiteral("%1 message%2 deleted")
-                             .arg(job->completedActions)
+            parts.append(u"%1 message%2 deleted"_s.arg(job->completedActions)
                              .arg(job->completedActions == 1 ? "" : "s"));
         }
         else
         {
-            parts.append(QStringLiteral("%1 user%2 %3")
-                             .arg(job->completedActions)
+            parts.append(u"%1 user%2 %3"_s.arg(job->completedActions)
                              .arg(job->completedActions == 1 ? "" : "s")
                              .arg(actionName(job->plan)));
         }
         if (job->failedActions > 0)
         {
-            parts.append(QStringLiteral("%1 failed").arg(job->failedActions));
+            parts.append(u"%1 failed"_s.arg(job->failedActions));
         }
         if (job->skippedBroadcaster > 0)
         {
-            parts.append(QStringLiteral("%1 broadcaster skipped")
-                             .arg(job->skippedBroadcaster));
+            parts.append(
+                u"%1 broadcaster skipped"_s.arg(job->skippedBroadcaster));
         }
         if (job->skippedMods > 0)
         {
-            parts.append(QStringLiteral("%1 mod%2 skipped")
-                             .arg(job->skippedMods)
+            parts.append(u"%1 mod%2 skipped"_s.arg(job->skippedMods)
                              .arg(job->skippedMods == 1 ? "" : "s"));
         }
         if (job->skippedVips > 0)
         {
-            parts.append(QStringLiteral("%1 VIP%2 skipped")
-                             .arg(job->skippedVips)
+            parts.append(u"%1 VIP%2 skipped"_s.arg(job->skippedVips)
                              .arg(job->skippedVips == 1 ? "" : "s"));
         }
 
-        channel->addSystemMessage(QStringLiteral("Nuke finished: %1")
-                                      .arg(parts.join(QStringLiteral(", "))));
+        channel->addSystemMessage(
+            u"Nuke finished: %1"_s.arg(parts.join(u", "_s)));
     }
 
     removeNukeJob(job);
@@ -1113,9 +1110,8 @@ void stopNukesForChannel(TwitchChannel *channel)
     }
 
     channel->addSystemMessage(
-        jobs.isEmpty() ? QStringLiteral("No active nukes in this channel.")
-                       : QStringLiteral("Stopped %1 active nuke%2.")
-                             .arg(jobs.size())
+        jobs.isEmpty() ? u"No active nukes in this channel."_s
+                       : u"Stopped %1 active nuke%2."_s.arg(jobs.size())
                              .arg(jobs.size() == 1 ? "" : "s"));
 }
 
@@ -1164,8 +1160,7 @@ void startNukeJob(const CommandContext &ctx, const ParseResult &plan)
                                  ? pastMatches.messageTargets.size()
                                  : pastMatches.userTargets.size();
     ctx.channel->addSystemMessage(
-        QStringLiteral("Nuke armed for %1s: %2 past target%3 queued.")
-            .arg(plan.rangeSeconds)
+        u"Nuke armed for %1s: %2 past target%3 queued."_s.arg(plan.rangeSeconds)
             .arg(targetCount)
             .arg(targetCount == 1 ? "" : "s"));
 
@@ -1198,16 +1193,15 @@ void stopSpamJobForSendFailure(const std::shared_ptr<SpamJob> &job,
             error.contains("sending messages too quickly", Qt::CaseInsensitive);
         channel->addSystemMessage(
             error.isEmpty()
-                ? QStringLiteral(
-                      "%1 stopped because a message could not be sent.")
-                      .arg(job->label)
+                ? u"%1 stopped because a message could not be sent."_s.arg(
+                      job->label)
+            // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
             : rateLimited
-                ? QStringLiteral("%1 stopped: Twitch rate-limited this account "
-                                 "in this channel. "
-                                 "Fast bursts usually only work reliably when "
-                                 "the account is mod, VIP, or broadcaster.")
-                      .arg(job->label)
-                : QStringLiteral("%1 stopped: %2").arg(job->label, error));
+                ? u"%1 stopped: Twitch rate-limited this account "
+                  "in this channel. "
+                  "Fast bursts usually only work reliably when "
+                  "the account is mod, VIP, or broadcaster."_s.arg(job->label)
+                : u"%1 stopped: %2"_s.arg(job->label, error));
     }
     removeSpamJob(job);
 }
@@ -1225,8 +1219,7 @@ void finishSpamJob(const std::shared_ptr<SpamJob> &job)
         if (getSettings()->showSpamPyramidStatusMessages)
         {
             channel->addSystemMessage(
-                QStringLiteral("%1 finished: sent %2 message%3.")
-                    .arg(job->label)
+                u"%1 finished: sent %2 message%3."_s.arg(job->label)
                     .arg(job->sent)
                     .arg(job->sent == 1 ? "" : "s"));
         }
@@ -1315,8 +1308,7 @@ void stopSpamForChannel(TwitchChannel *channel, const QString &requestedLabel)
     if (it == jobs.end())
     {
         channel->addSystemMessage(
-            QStringLiteral("No active %1 in this channel.")
-                .arg(requestedLabel));
+            u"No active %1 in this channel."_s.arg(requestedLabel));
         return;
     }
 
@@ -1325,10 +1317,9 @@ void stopSpamForChannel(TwitchChannel *channel, const QString &requestedLabel)
     it.value()->stopped = true;
     it.value()->messageConnection = pajlada::Signals::ScopedConnection();
     jobs.erase(it);
-    channel->addSystemMessage(QStringLiteral("Stopped %1 after %2 message%3.")
-                                  .arg(label)
-                                  .arg(sent)
-                                  .arg(sent == 1 ? "" : "s"));
+    channel->addSystemMessage(
+        u"Stopped %1 after %2 message%3."_s.arg(label).arg(sent).arg(
+            sent == 1 ? "" : "s"));
 }
 
 void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
@@ -1345,8 +1336,7 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     if (currentUser->isAnon())
     {
         ctx.channel->addSystemMessage(
-            QStringLiteral("You must be logged in to use %1.")
-                .arg(commandName));
+            u"You must be logged in to use %1."_s.arg(commandName));
         return;
     }
 
@@ -1355,9 +1345,8 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     {
         const auto active = activeSpams().value(key);
         ctx.channel->addSystemMessage(
-            QStringLiteral(
-                "%1 is already running in this channel. Use %2 stop first.")
-                .arg(active->label, active->commandName));
+            u"%1 is already running in this channel. Use %2 stop first."_s.arg(
+                active->label, active->commandName));
         return;
     }
 
@@ -1369,7 +1358,7 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     job->senderUserID = currentUser->getUserId();
     job->label = label;
     job->commandName = commandName;
-    job->total = job->messages.size();
+    job->total = static_cast<int>(job->messages.size());
     job->intervalMs =
         std::clamp(getSettings()->spamCommandIntervalMs.getValue(),
                    minIntervalMs, MAX_SPAM_INTERVAL_MS);
@@ -1409,7 +1398,7 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
         return;
     }
 
-    if (commandName == QStringLiteral("/pyramid"))
+    if (commandName == u"/pyramid"_s)
     {
         ctx.channel->addSystemMessage(
             "Building pyramid... Use /pyramid stop to cancel.");
@@ -1417,13 +1406,11 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     else
     {
         ctx.channel->addSystemMessage(
-            QStringLiteral("%1 %2 message%3 through %4 every %5 ms. Use %6 "
-                           "stop to cancel.")
-                .arg(startVerb)
+            u"%1 %2 message%3 through %4 every %5 ms. Use %6 "
+            "stop to cancel."_s.arg(startVerb)
                 .arg(job->total)
                 .arg(job->total == 1 ? "" : "s")
-                .arg(job->useIrc ? QStringLiteral("IRC")
-                                 : QStringLiteral("Helix"))
+                .arg(job->useIrc ? u"IRC"_s : u"Helix"_s)
                 .arg(job->intervalMs)
                 .arg(commandName));
     }
@@ -1517,10 +1504,9 @@ QString sendSpam(const CommandContext &ctx)
     }
 
     if (ctx.words.size() >= 2 &&
-        ctx.words.at(1).compare(QStringLiteral("stop"), Qt::CaseInsensitive) ==
-            0)
+        ctx.words.at(1).compare(u"stop"_s, Qt::CaseInsensitive) == 0)
     {
-        stopSpamForChannel(ctx.twitchChannel, QStringLiteral("spam"));
+        stopSpamForChannel(ctx.twitchChannel, u"spam"_s);
         return "";
     }
 
@@ -1553,9 +1539,8 @@ QString sendSpam(const CommandContext &ctx)
         return "";
     }
 
-    startChatMessageJob(ctx, repeatedMessages(message, cappedCount),
-                        QStringLiteral("Spam"), QStringLiteral("/spam"),
-                        QStringLiteral("Spamming"),
+    startChatMessageJob(ctx, repeatedMessages(message, cappedCount), u"Spam"_s,
+                        u"/spam"_s, u"Spamming"_s,
                         getSettings()->spamCommandUseIrc);
     return "";
 }
@@ -1574,10 +1559,9 @@ QString sendPyramid(const CommandContext &ctx)
     }
 
     if (ctx.words.size() >= 2 &&
-        ctx.words.at(1).compare(QStringLiteral("stop"), Qt::CaseInsensitive) ==
-            0)
+        ctx.words.at(1).compare(u"stop"_s, Qt::CaseInsensitive) == 0)
     {
-        stopSpamForChannel(ctx.twitchChannel, QStringLiteral("pyramid"));
+        stopSpamForChannel(ctx.twitchChannel, u"pyramid"_s);
         return "";
     }
 
@@ -1620,8 +1604,7 @@ QString sendPyramid(const CommandContext &ctx)
     }
 
     startChatMessageJob(ctx, buildPyramidMessages(message, cappedHeight),
-                        QStringLiteral("Pyramid"), QStringLiteral("/pyramid"),
-                        QStringLiteral("Building pyramid with"),
+                        u"Pyramid"_s, u"/pyramid"_s, u"Building pyramid with"_s,
                         getSettings()->spamCommandUseIrc,
                         ctx.twitchChannel->hasHighRateLimit()
                             ? MIN_SPAM_INTERVAL_MS

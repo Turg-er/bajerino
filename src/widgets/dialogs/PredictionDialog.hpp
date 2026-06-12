@@ -46,6 +46,7 @@ protected:
     void scaleChangedEvent(float scale) override;
     void showEvent(QShowEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
@@ -107,7 +108,8 @@ private:
     QHash<QString, int> previousBarWidths_;
     QHash<QString, int> targetBarWidths_;
 
-    static std::vector<QPointer<PredictionDialog>> activeDialogs_;
+    static std::vector<QPointer<PredictionDialog>>
+        activeDialogs_;  // NOLINT(readability-identifier-naming)
 };
 
 }  // namespace chatterino

@@ -24,6 +24,8 @@
 #include <limits>
 #include <utility>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 namespace {
@@ -116,7 +118,7 @@ constexpr auto TWITCH_GQL_TV_REFERER = "https://android.tv.twitch.tv/";
 constexpr int TWITCH_GQL_TIMEOUT_MS = 15 * 1000;
 
 NetworkRequest makeGqlRequest(const char *query, const QJsonObject &variables,
-                              std::shared_ptr<TwitchAccount> account)
+                              const std::shared_ptr<TwitchAccount> &account)
 {
     QJsonObject payload;
     payload.insert("query", query);
@@ -170,10 +172,9 @@ NetworkRequest makeGqlRequest(const char *query, const QJsonObject &variables,
     return request;
 }
 
-NetworkRequest makePersistedGqlRequest(const QString &operationName,
-                                       const QString &sha256Hash,
-                                       const QJsonObject &variables,
-                                       std::shared_ptr<TwitchAccount> account)
+NetworkRequest makePersistedGqlRequest(
+    const QString &operationName, const QString &sha256Hash,
+    const QJsonObject &variables, const std::shared_ptr<TwitchAccount> &account)
 {
     QJsonObject payload;
     payload.insert("operationName", operationName);
@@ -425,22 +426,22 @@ bool readInteger(const rapidjson::Value &value, qint64 &out)
     if (value.IsUint64())
     {
         const auto raw = value.GetUint64();
-        if (raw > quint64(std::numeric_limits<qint64>::max()))
+        if (raw > static_cast<quint64>(std::numeric_limits<qint64>::max()))
         {
             return false;
         }
-        out = qint64(raw);
+        out = static_cast<qint64>(raw);
         return true;
     }
     if (value.IsDouble())
     {
         const auto raw = value.GetDouble();
         if (!std::isfinite(raw) || raw < 0 ||
-            raw > double(std::numeric_limits<qint64>::max()))
+            raw > static_cast<double>(std::numeric_limits<qint64>::max()))
         {
             return false;
         }
-        out = qint64(raw);
+        out = static_cast<qint64>(raw);
         return true;
     }
     return false;
@@ -469,7 +470,7 @@ qint64 jsonIntegerValue(const QJsonValue &value, qint64 fallback = -1)
 QString extractFirstGqlErrorMessageFromPayload(const QJsonObject &payload)
 {
     const auto errors = payload.value("errors").toArray();
-    for (const auto &errorValue : errors)
+    for (const auto errorValue : errors)
     {
         const auto error = errorValue.toObject();
         const auto message = error.value("message").toString();
@@ -485,7 +486,7 @@ QString extractFirstGqlErrorMessage(const QJsonValue &value)
 {
     if (value.isArray())
     {
-        for (const auto &payloadValue : value.toArray())
+        for (const auto payloadValue : value.toArray())
         {
             const auto message =
                 extractFirstGqlErrorMessageFromPayload(payloadValue.toObject());
@@ -512,7 +513,7 @@ QJsonObject payloadDataObjectForOperation(const QJsonValue &value,
     if (value.isArray())
     {
         const auto array = value.toArray();
-        for (const auto &payloadValue : array)
+        for (const auto payloadValue : array)
         {
             const auto payload = payloadValue.toObject();
             const auto payloadOperation = payload.value("extensions")
@@ -576,8 +577,8 @@ NetworkRequest makeTvPersistedGqlBatchRequest(const QJsonArray &payloadArray,
 
 void sendTerminatePollRequest(
     const QString &pollId, const QString &currentUserId,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("pollID", pollId);
@@ -643,7 +644,7 @@ GqlChannelSelfData channelSelfDataFromObject(const QJsonObject &self)
     GqlChannelSelfData data;
 
     const auto badges = self.value("displayBadges").toArray();
-    for (const auto &badgeValue : badges)
+    for (const auto badgeValue : badges)
     {
         const auto badge = badgeValue.toObject();
         const auto setId = badge.value("setID").toString();
@@ -676,9 +677,9 @@ QString gqlPayloadErrorMessage(const QJsonValue &value, const QString &fallback)
 
     const auto obj = value.toObject();
     for (const auto &key : {
-             QStringLiteral("code"),
-             QStringLiteral("reason"),
-             QStringLiteral("message"),
+             u"code"_s,
+             u"reason"_s,
+             u"message"_s,
          })
     {
         const auto text = obj.value(key).toString().trimmed();
@@ -691,12 +692,13 @@ QString gqlPayloadErrorMessage(const QJsonValue &value, const QString &fallback)
     return fallback;
 }
 
-void runRoleMutation(const QString &operationName, const QString &hash,
-                     const QString &payloadName, const QString &targetInputName,
-                     const QString &channelId, const QString &targetLogin,
-                     const QString &oauthToken, const QString &fallbackError,
-                     std::function<void()> successCallback,
-                     std::function<void(const QString &)> failureCallback)
+void runRoleMutation(
+    const QString &operationName, const QString &hash,
+    const QString &payloadName, const QString &targetInputName,
+    const QString &channelId, const QString &targetLogin,
+    const QString &oauthToken, const QString &fallbackError,
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -746,14 +748,14 @@ void runRoleMutation(const QString &operationName, const QString &hash,
         .execute();
 }
 
-void runTvRoleMutation(const QString &operationName, const QString &hash,
-                       const QString &payloadName,
-                       const QString &targetInputName, const QString &channelId,
-                       const QString &targetValue, const QString &oauthToken,
-                       const QString &fallbackError, const QString &roleId,
-                       const QString &successFlagName,
-                       std::function<void()> successCallback,
-                       std::function<void(const QString &)> failureCallback)
+void runTvRoleMutation(
+    const QString &operationName, const QString &hash,
+    const QString &payloadName, const QString &targetInputName,
+    const QString &channelId, const QString &targetValue,
+    const QString &oauthToken, const QString &fallbackError,
+    const QString &roleId, const QString &successFlagName,
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -817,12 +819,12 @@ void runTvRoleMutation(const QString &operationName, const QString &hash,
         .execute();
 }
 
-void runFollowMutation(const QString &operationName, const QString &hash,
-                       const QString &payloadName, const QString &targetId,
-                       bool disableNotifications, const QString &oauthToken,
-                       const QString &fallbackError,
-                       std::function<void()> successCallback,
-                       std::function<void(const QString &)> failureCallback)
+void runFollowMutation(
+    const QString &operationName, const QString &hash,
+    const QString &payloadName, const QString &targetId,
+    bool disableNotifications, const QString &oauthToken,
+    const QString &fallbackError, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("targetID", targetId);
@@ -1008,8 +1010,8 @@ GqlChannelPointReward channelPointRewardFromObject(const QJsonObject &obj,
     GqlChannelPointReward reward;
     reward.isAutomatic = automatic;
     reward.id = obj.value("id").toString();
-    reward.rewardType = automatic ? obj.value("type").toString()
-                                  : QStringLiteral("CUSTOM_REWARD");
+    reward.rewardType =
+        automatic ? obj.value("type").toString() : u"CUSTOM_REWARD"_s;
     reward.title = automatic ? automaticRewardTitle(reward.rewardType)
                              : obj.value("title").toString();
     reward.prompt = automatic ? automaticRewardPrompt(reward.rewardType)
@@ -1169,7 +1171,7 @@ QVector<GqlFragmentUser> usersFromFragments(const QJsonArray &fragments)
 QString textFromFragments(const QJsonArray &fragments)
 {
     QString text;
-    for (const auto &fragmentValue : fragments)
+    for (const auto fragmentValue : fragments)
     {
         const auto fragment = fragmentValue.toObject();
         const auto token = fragment.value("token").toObject();
@@ -1395,7 +1397,7 @@ QJsonObject findModeratedChannelsConnection(const QJsonValue &value)
     if (value.isArray())
     {
         const auto array = value.toArray();
-        for (const auto &item : array)
+        for (const auto item : array)
         {
             auto found = findModeratedChannelsConnection(item);
             if (!found.isEmpty())
@@ -1450,7 +1452,7 @@ QString raidObjectString(const QJsonObject &obj,
         }
         if (value.isDouble())
         {
-            return QString::number(qint64(value.toDouble()));
+            return QString::number(static_cast<qint64>(value.toDouble()));
         }
     }
 
@@ -1460,10 +1462,10 @@ QString raidObjectString(const QJsonObject &obj,
 QString raidUserIdFromObject(const QJsonObject &obj)
 {
     return raidObjectString(obj, {
-                                     QStringLiteral("id"),
-                                     QStringLiteral("userID"),
-                                     QStringLiteral("userId"),
-                                     QStringLiteral("user_id"),
+                                     u"id"_s,
+                                     u"userID"_s,
+                                     u"userId"_s,
+                                     u"user_id"_s,
                                  });
 }
 
@@ -1490,71 +1492,62 @@ QString raidErrorMessage(const QJsonValue &value)
     }
     if (!value.isObject())
     {
-        return QStringLiteral("Twitch rejected the raid action");
+        return u"Twitch rejected the raid action"_s;
     }
 
     const auto obj = value.toObject();
     const auto message = raidObjectString(obj, {
-                                                   QStringLiteral("code"),
-                                                   QStringLiteral("reason"),
-                                                   QStringLiteral("message"),
+                                                   u"code"_s,
+                                                   u"reason"_s,
+                                                   u"message"_s,
                                                });
-    return message.isEmpty() ? QStringLiteral("Twitch rejected the raid action")
-                             : message;
+    return message.isEmpty() ? u"Twitch rejected the raid action"_s : message;
 }
 
 QString raidFailureMessage(QString error)
 {
     error = error.trimmed();
-    if (error.startsWith(QStringLiteral("Twitch API Error:"),
-                         Qt::CaseInsensitive))
+    if (error.startsWith(u"Twitch API Error:"_s, Qt::CaseInsensitive))
     {
-        error = error.mid(QStringLiteral("Twitch API Error:").size()).trimmed();
+        error = error.mid(u"Twitch API Error:"_s.size()).trimmed();
     }
 
     if (error.isEmpty())
     {
-        return QStringLiteral("Twitch rejected the raid action");
+        return u"Twitch rejected the raid action"_s;
     }
 
     const auto upper = error.toUpper();
-    if (upper.contains(QStringLiteral("TARGET_SETTINGS_DO_NOT_ALLOW")) ||
-        (upper.contains(QStringLiteral("TARGET")) &&
-         upper.contains(QStringLiteral("SETTING"))))
+    if (upper.contains(u"TARGET_SETTINGS_DO_NOT_ALLOW"_s) ||
+        (upper.contains(u"TARGET"_s) && upper.contains(u"SETTING"_s)))
     {
-        return QStringLiteral(
-            "That channel's raid settings do not allow this raid. "
-            "They may require more viewers than you currently have.");
+        return u"That channel's raid settings do not allow this raid. "
+               "They may require more viewers than you currently have."_s;
     }
 
-    if (upper.contains(QStringLiteral("EDITOR")) ||
-        upper.contains(QStringLiteral("BROADCASTER")) ||
-        upper.contains(QStringLiteral("NOT_AUTHORIZED")) ||
-        upper.contains(QStringLiteral("NOT AUTHORIZED")) ||
-        upper.contains(QStringLiteral("FORBIDDEN")) ||
-        upper.contains(QStringLiteral("PERMISSION")) ||
-        upper == QStringLiteral("SERVICE ERROR"))
+    if (upper.contains(u"EDITOR"_s) || upper.contains(u"BROADCASTER"_s) ||
+        upper.contains(u"NOT_AUTHORIZED"_s) ||
+        upper.contains(u"NOT AUTHORIZED"_s) || upper.contains(u"FORBIDDEN"_s) ||
+        upper.contains(u"PERMISSION"_s) || upper == u"SERVICE ERROR"_s)
     {
-        return QStringLiteral(
-            "You need broadcaster or editor raid permission in this "
-            "channel.");
+        return u"You need broadcaster or editor raid permission in this "
+               "channel."_s;
     }
 
-    if (upper.contains(QStringLiteral("NO_ACTIVE_RAID")) ||
-        upper.contains(QStringLiteral("NO_RAID")) ||
-        upper.contains(QStringLiteral("NO RAID")))
+    if (upper.contains(u"NO_ACTIVE_RAID"_s) || upper.contains(u"NO_RAID"_s) ||
+        upper.contains(u"NO RAID"_s))
     {
-        return QStringLiteral("There is no active raid in this channel.");
+        return u"There is no active raid in this channel."_s;
     }
 
-    if (upper.contains(QStringLiteral("CANT_RAID_YOURSELF")) ||
-        upper.contains(QStringLiteral("CAN'T RAID YOURSELF")) ||
-        upper.contains(QStringLiteral("CANNOT RAID YOURSELF")))
+    if (upper.contains(u"CANT_RAID_YOURSELF"_s) ||
+        upper.contains(u"CAN'T RAID YOURSELF"_s) ||
+        upper.contains(u"CANNOT RAID YOURSELF"_s))
     {
-        return QStringLiteral("A channel cannot raid itself.");
+        return u"A channel cannot raid itself."_s;
     }
 
-    return QStringLiteral("Twitch API Error: ") + error;
+    return u"Twitch API Error: "_s + error;
 }
 
 std::optional<TwitchChannel::PollEvent> parsePollEventFromGql(
@@ -1578,8 +1571,8 @@ std::optional<TwitchChannel::PollEvent> parsePollEventFromGql(
         poll.endsAt = endsAt;
         if (poll.createdAt.isValid())
         {
-            poll.durationSeconds =
-                std::max(0, int(poll.createdAt.secsTo(*poll.endsAt)));
+            poll.durationSeconds = std::max(
+                0, static_cast<int>(poll.createdAt.secsTo(*poll.endsAt)));
         }
     }
 
@@ -1600,8 +1593,8 @@ std::optional<TwitchChannel::PollEvent> parsePollEventFromGql(
             .toInt(topContributor.value("amount").toInt());
 
     const auto choices = viewablePoll.value("choices").toArray();
-    poll.choices.reserve(size_t(choices.size()));
-    for (const auto &choiceValue : choices)
+    poll.choices.reserve(static_cast<size_t>(choices.size()));
+    for (const auto choiceValue : choices)
     {
         const auto choiceObj = choiceValue.toObject();
         TwitchChannel::PollChoice choice;
@@ -1624,8 +1617,8 @@ std::optional<TwitchChannel::PollEvent> parsePollEventFromGql(
     const auto voter =
         viewablePoll.value("self").toObject().value("voter").toObject();
     const auto voterChoices = voter.value("choices").toArray();
-    poll.selfVotes.reserve(size_t(voterChoices.size()));
-    for (const auto &voterChoiceValue : voterChoices)
+    poll.selfVotes.reserve(static_cast<size_t>(voterChoices.size()));
+    for (const auto voterChoiceValue : voterChoices)
     {
         const auto voterChoice = voterChoiceValue.toObject();
         TwitchChannel::PollSelfVote selfVote;
@@ -1650,10 +1643,10 @@ std::optional<TwitchChannel::PollEvent> parsePollEventFromGql(
 
 }  // namespace
 
-void TwitchGql::pinMessage(const QString &channelId, const QString &messageId,
-                           int durationSeconds, const QString &oauthToken,
-                           std::function<void()> successCallback,
-                           std::function<void(const QString &)> failureCallback)
+void TwitchGql::pinMessage(
+    const QString &channelId, const QString &messageId, int durationSeconds,
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -1670,37 +1663,36 @@ void TwitchGql::pinMessage(const QString &channelId, const QString &messageId,
         "PinChatMessage",
         "214191369c21f1ad67ac074795d53832329c70e4088c979040c9f86334a7d736",
         variables, oauthToken)
-        .onSuccess([successCallback,
-                    failureCallback](const NetworkResult &result) {
-            const auto root = result.parseJsonValue();
-            if (root.isUndefined() || root.isNull())
-            {
-                failureCallback("Failed to parse GQL response");
-                return;
-            }
+        .onSuccess(
+            [successCallback, failureCallback](const NetworkResult &result) {
+                const auto root = result.parseJsonValue();
+                if (root.isUndefined() || root.isNull())
+                {
+                    failureCallback("Failed to parse GQL response");
+                    return;
+                }
 
-            const auto gqlError = extractFirstGqlErrorMessage(root);
-            if (!gqlError.isEmpty())
-            {
-                qCDebug(chatterinoTwitch)
-                    << "Twitch API Error in PinChatMessage:" << gqlError;
-                failureCallback("Twitch API Error: " + gqlError);
-                return;
-            }
+                const auto gqlError = extractFirstGqlErrorMessage(root);
+                if (!gqlError.isEmpty())
+                {
+                    qCDebug(chatterinoTwitch)
+                        << "Twitch API Error in PinChatMessage:" << gqlError;
+                    failureCallback("Twitch API Error: " + gqlError);
+                    return;
+                }
 
-            const auto payload =
-                payloadDataObject(root).value("pinChatMessage").toObject();
-            const auto payloadError =
-                gqlPayloadErrorMessage(payload.value("error"),
-                                       QStringLiteral("Failed to pin message"));
-            if (!payloadError.isEmpty())
-            {
-                failureCallback("Twitch API Error: " + payloadError);
-                return;
-            }
+                const auto payload =
+                    payloadDataObject(root).value("pinChatMessage").toObject();
+                const auto payloadError = gqlPayloadErrorMessage(
+                    payload.value("error"), u"Failed to pin message"_s);
+                if (!payloadError.isEmpty())
+                {
+                    failureCallback("Twitch API Error: " + payloadError);
+                    return;
+                }
 
-            successCallback();
-        })
+                successCallback();
+            })
         .onError([failureCallback](const NetworkResult &result) {
             failureCallback("Network Error: " + result.formatError());
         })
@@ -1709,9 +1701,10 @@ void TwitchGql::pinMessage(const QString &channelId, const QString &messageId,
 
 void TwitchGql::getUserByLogin(
     const QString &login, const QString &oauthToken,
-    std::function<void(std::optional<GqlUser>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(std::optional<GqlUser>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
+    // NOLINTNEXTLINE(readability-identifier-naming,cppcoreguidelines-avoid-c-arrays)
     static constexpr char QUERY[] = R"(
         query MoltorinoUserByLogin($login: String!) {
             user(login: $login) {
@@ -1763,36 +1756,35 @@ void TwitchGql::getUserByLogin(
         .execute();
 }
 
-void TwitchGql::followUser(const QString &targetId, const QString &oauthToken,
-                           std::function<void()> successCallback,
-                           std::function<void(const QString &)> failureCallback)
+void TwitchGql::followUser(
+    const QString &targetId, const QString &oauthToken,
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runFollowMutation(
         "FollowButton_FollowUser",
         "800e7346bdf7e5278a3c1d3f21b2b56e2639928f86815677a7126b093b2fdd08",
         "followUser", targetId, false, oauthToken,
-        "Twitch did not follow the user", std::move(successCallback),
-        std::move(failureCallback));
+        "Twitch did not follow the user", successCallback, failureCallback);
 }
 
 void TwitchGql::unfollowUser(
     const QString &targetId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runFollowMutation(
         "FollowButton_UnfollowUser",
         "f7dae976ebf41c755ae2d758546bfd176b4eeb856656098bb40e0a672ca0d880",
         "unfollowUser", targetId, false, oauthToken,
-        "Twitch did not unfollow the user", std::move(successCallback),
-        std::move(failureCallback));
+        "Twitch did not unfollow the user", successCallback, failureCallback);
 }
 
 void TwitchGql::getLatestModLogMessageBySender(
     const QString &channelId, const QString &senderId,
     const QString &oauthToken,
-    std::function<void(std::optional<GqlModLogMessage>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(std::optional<GqlModLogMessage>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -1824,7 +1816,7 @@ void TwitchGql::getLatestModLogMessageBySender(
                                       .value("messages")
                                       .toObject();
             const auto edges = messages.value("edges").toArray();
-            for (const auto &edgeValue : edges)
+            for (const auto edgeValue : edges)
             {
                 const auto node = edgeValue.toObject().value("node").toObject();
                 if (node.value("isDeleted").toBool(false))
@@ -1855,8 +1847,8 @@ void TwitchGql::getLatestModLogMessageBySender(
 void TwitchGql::getUsercardMessagesBySender(
     const QString &channelId, const QString &senderId, const QString &cursor,
     const QString &oauthToken,
-    std::function<void(GqlUsercardMessagePage)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlUsercardMessagePage)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -1900,7 +1892,7 @@ void TwitchGql::getUsercardMessagesBySender(
                                        .toBool(false);
                 page.messages.reserve(edges.size());
 
-                for (const auto &edgeValue : edges)
+                for (const auto edgeValue : edges)
                 {
                     const auto edge = edgeValue.toObject();
                     const auto node = edge.value("node").toObject();
@@ -1926,15 +1918,14 @@ void TwitchGql::getUsercardMessagesBySender(
                     const auto displayBadges =
                         sender.value("displayBadges").toArray();
                     badges.reserve(displayBadges.size());
-                    for (const auto &badgeValue : displayBadges)
+                    for (const auto badgeValue : displayBadges)
                     {
                         const auto badge = badgeValue.toObject();
                         const auto setId = badge.value("setID").toString();
                         const auto version = badge.value("version").toString();
                         if (!setId.isEmpty() && !version.isEmpty())
                         {
-                            badges.push_back(
-                                QStringLiteral("%1/%2").arg(setId, version));
+                            badges.push_back(u"%1/%2"_s.arg(setId, version));
                         }
                     }
                     message.senderBadges = badges.join(u',');
@@ -1968,8 +1959,8 @@ void TwitchGql::getUsercardMessagesBySender(
 
 void TwitchGql::getModerationActionLogs(
     const QString &channelId, const QString &cursor, const QString &oauthToken,
-    std::function<void(GqlModerationActionLogPage)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlModerationActionLogPage)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -2009,7 +2000,7 @@ void TwitchGql::getModerationActionLogs(
             GqlModerationActionLogPage page;
             const auto edges = logs.value("edges").toArray();
             page.actions.reserve(edges.size());
-            for (const auto &edgeValue : edges)
+            for (const auto edgeValue : edges)
             {
                 const auto edge = edgeValue.toObject();
                 auto action = moderationActionFromNode(edge);
@@ -2035,8 +2026,8 @@ void TwitchGql::getModerationActionLogs(
 
 void TwitchGql::unpinMessage(
     const QString &pinId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -2067,8 +2058,7 @@ void TwitchGql::unpinMessage(
             const auto payload =
                 payloadDataObject(root).value("unpinChatMessage").toObject();
             const auto payloadError = gqlPayloadErrorMessage(
-                payload.value("error"),
-                QStringLiteral("Failed to unpin message"));
+                payload.value("error"), u"Failed to unpin message"_s);
             if (!payloadError.isEmpty())
             {
                 failureCallback("Twitch API Error: " + payloadError);
@@ -2085,8 +2075,8 @@ void TwitchGql::unpinMessage(
 
 void TwitchGql::updatePinnedMessage(
     const QString &pinId, std::optional<int> durationSeconds,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -2101,36 +2091,35 @@ void TwitchGql::updatePinnedMessage(
         "UpdatePinnedChatMessage",
         "e69a15a7aaa412857a066fc98f52e74ccefd5b82429c7d2bf747559ab78f6af9",
         variables, oauthToken)
-        .onSuccess(
-            [successCallback, failureCallback](const NetworkResult &result) {
-                const auto root = result.parseJsonValue();
-                if (root.isUndefined() || root.isNull())
-                {
-                    failureCallback("Failed to parse GQL response");
-                    return;
-                }
+        .onSuccess([successCallback,
+                    failureCallback](const NetworkResult &result) {
+            const auto root = result.parseJsonValue();
+            if (root.isUndefined() || root.isNull())
+            {
+                failureCallback("Failed to parse GQL response");
+                return;
+            }
 
-                const auto gqlError = extractFirstGqlErrorMessage(root);
-                if (!gqlError.isEmpty())
-                {
-                    failureCallback("Twitch API Error: " + gqlError);
-                    return;
-                }
+            const auto gqlError = extractFirstGqlErrorMessage(root);
+            if (!gqlError.isEmpty())
+            {
+                failureCallback("Twitch API Error: " + gqlError);
+                return;
+            }
 
-                const auto payload = payloadDataObject(root)
-                                         .value("updatePinnedChatMessage")
-                                         .toObject();
-                const auto payloadError = gqlPayloadErrorMessage(
-                    payload.value("error"),
-                    QStringLiteral("Failed to update pinned message"));
-                if (!payloadError.isEmpty())
-                {
-                    failureCallback("Twitch API Error: " + payloadError);
-                    return;
-                }
+            const auto payload = payloadDataObject(root)
+                                     .value("updatePinnedChatMessage")
+                                     .toObject();
+            const auto payloadError = gqlPayloadErrorMessage(
+                payload.value("error"), u"Failed to update pinned message"_s);
+            if (!payloadError.isEmpty())
+            {
+                failureCallback("Twitch API Error: " + payloadError);
+                return;
+            }
 
-                successCallback();
-            })
+            successCallback();
+        })
         .onError([failureCallback](const NetworkResult &result) {
             failureCallback("Network Error: " + result.formatError());
         })
@@ -2138,10 +2127,11 @@ void TwitchGql::updatePinnedMessage(
 }
 
 void TwitchGql::getCurrentPin(
-    const QString &channelId, std::shared_ptr<TwitchAccount> account,
-    std::function<void(std::optional<TwitchChannel::PinnedMessage>)>
-        successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &channelId,
+    const std::shared_ptr<TwitchAccount> & /*account*/,
+    const std::function<void(std::optional<TwitchChannel::PinnedMessage>)>
+        &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -2246,7 +2236,8 @@ void TwitchGql::getCurrentPin(
                                                 {
                                                     if (badge.IsObject())
                                                     {
-                                                        QString setID, version;
+                                                        QString setID;
+                                                        QString version;
                                                         rj::getSafe(badge,
                                                                     "setID",
                                                                     setID);
@@ -2327,9 +2318,9 @@ void TwitchGql::getCurrentPin(
 
 void TwitchGql::getActivePrediction(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(std::optional<TwitchChannel::PredictionEvent>)>
-        successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(std::optional<TwitchChannel::PredictionEvent>)>
+        &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelLogin", channelLogin);
@@ -2544,11 +2535,13 @@ void TwitchGql::getActivePrediction(
             if (node.HasMember("outcomes") && node["outcomes"].IsArray())
             {
                 const auto &outcomesArr = node["outcomes"];
-                int outcomeCount = outcomesArr.Size();
+                int outcomeCount = static_cast<int>(outcomesArr.Size());
                 for (int i = 0; i < outcomeCount; ++i)
                 {
                     if (!outcomesArr[i].IsObject())
+                    {
                         continue;
+                    }
                     const auto &oObj = outcomesArr[i];
                     TwitchChannel::PredictionOutcome outcome;
                     rj::getSafe(oObj, "id", outcome.id);
@@ -2563,12 +2556,19 @@ void TwitchGql::getActivePrediction(
                     }
 
                     if (outcomeCount == 2)
+                    {
                         outcome.color = (i == 0) ? "BLUE" : "PINK";
+                    }
                     else if (outcomeCount == 3)
+                    {
                         outcome.color =
+                            // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
                             (i == 0) ? "BLUE" : (i == 1 ? "PINK" : "GREEN");
+                    }
                     else
+                    {
                         outcome.color = "BLUE";
+                    }
 
                     if (oObj.HasMember("topPredictors") &&
                         oObj["topPredictors"].IsArray())
@@ -2612,8 +2612,8 @@ void TwitchGql::getActivePrediction(
 
 void TwitchGql::makePrediction(
     const QString &eventID, const QString &outcomeID, int points,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -2746,8 +2746,8 @@ void TwitchGql::makePrediction(
 void TwitchGql::createPredictionEvent(
     const QString &channelId, const QString &title, const QStringList &outcomes,
     int predictionWindowSeconds, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -2756,7 +2756,7 @@ void TwitchGql::createPredictionEvent(
     input.insert("predictionWindowSeconds", predictionWindowSeconds);
 
     QJsonArray outcomesArray;
-    const int outcomeCount = outcomes.size();
+    const int outcomeCount = static_cast<int>(outcomes.size());
     for (int i = 0; i < outcomeCount; ++i)
     {
         QJsonObject outcome;
@@ -2815,6 +2815,7 @@ void TwitchGql::createPredictionEvent(
                 {
                     const auto &payload = data["createPredictionEvent"];
                     if (!payload.IsObject())
+                    // NOLINTNEXTLINE(bugprone-branch-clone)
                     {
                         hasErrors = true;
                     }
@@ -2861,6 +2862,7 @@ void TwitchGql::createPredictionEvent(
                 {
                     const auto &payload = data["createPredictionEvent"];
                     if (!payload.IsObject())
+                    // NOLINTNEXTLINE(bugprone-branch-clone)
                     {
                         hasErrors = true;
                     }
@@ -2919,8 +2921,8 @@ void TwitchGql::createPredictionEvent(
 
 void TwitchGql::getPredictionTemplates(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(QVector<PredictionTemplate>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(QVector<PredictionTemplate>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("count", 5);
@@ -3046,8 +3048,8 @@ void TwitchGql::getPredictionTemplates(
 
 void TwitchGql::lockPrediction(
     const QString &eventId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -3062,12 +3064,9 @@ void TwitchGql::lockPrediction(
                     failureCallback](const NetworkResult &result) {
             auto doc = result.parseRapidJson();
             bool hasErrors = false;
-            if (doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
-                doc[0].HasMember("errors"))
-            {
-                hasErrors = true;
-            }
-            else if (doc.IsObject() && doc.HasMember("errors"))
+            if ((doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
+                 doc[0].HasMember("errors")) ||
+                (doc.IsObject() && doc.HasMember("errors")))
             {
                 hasErrors = true;
             }
@@ -3088,8 +3087,8 @@ void TwitchGql::lockPrediction(
 
 void TwitchGql::cancelPrediction(
     const QString &eventId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -3104,12 +3103,9 @@ void TwitchGql::cancelPrediction(
                     failureCallback](const NetworkResult &result) {
             auto doc = result.parseRapidJson();
             bool hasErrors = false;
-            if (doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
-                doc[0].HasMember("errors"))
-            {
-                hasErrors = true;
-            }
-            else if (doc.IsObject() && doc.HasMember("errors"))
+            if ((doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
+                 doc[0].HasMember("errors")) ||
+                (doc.IsObject() && doc.HasMember("errors")))
             {
                 hasErrors = true;
             }
@@ -3169,8 +3165,8 @@ void TwitchGql::cancelPrediction(
 
 void TwitchGql::resolvePrediction(
     const QString &eventId, const QString &outcomeId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -3186,12 +3182,9 @@ void TwitchGql::resolvePrediction(
             [successCallback, failureCallback](const NetworkResult &result) {
                 auto doc = result.parseRapidJson();
                 bool hasErrors = false;
-                if (doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
-                    doc[0].HasMember("errors"))
-                {
-                    hasErrors = true;
-                }
-                else if (doc.IsObject() && doc.HasMember("errors"))
+                if ((doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
+                     doc[0].HasMember("errors")) ||
+                    (doc.IsObject() && doc.HasMember("errors")))
                 {
                     hasErrors = true;
                 }
@@ -3214,8 +3207,8 @@ void TwitchGql::resolvePrediction(
 void TwitchGql::createPollEvent(
     const QString &channelId, const QString &title, const QStringList &choices,
     int durationSeconds, std::optional<int> pointsPerVote,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -3296,18 +3289,17 @@ void TwitchGql::createPollEvent(
 
 void TwitchGql::terminatePoll(
     const QString &pollId, const QString &currentUserId,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
-    sendTerminatePollRequest(pollId, currentUserId, oauthToken,
-                             std::move(successCallback),
-                             std::move(failureCallback));
+    sendTerminatePollRequest(pollId, currentUserId, oauthToken, successCallback,
+                             failureCallback);
 }
 
 void TwitchGql::archivePoll(
     const QString &pollId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -3356,8 +3348,8 @@ void TwitchGql::archivePoll(
 
 void TwitchGql::addChannelBlockedTerm(
     const QString &channelId, const QString &phrase, const QString &oauthToken,
-    std::function<void(GqlAddBlockedTermResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlAddBlockedTermResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -3392,8 +3384,7 @@ void TwitchGql::addChannelBlockedTerm(
                                      .value("addChannelBlockedTerm")
                                      .toObject();
             const auto payloadError = gqlPayloadErrorMessage(
-                payload.value("error"),
-                QStringLiteral("Twitch rejected the blocked term"));
+                payload.value("error"), u"Twitch rejected the blocked term"_s);
             if (!payloadError.isEmpty())
             {
                 failureCallback("Twitch API Error: " + payloadError);
@@ -3422,8 +3413,8 @@ void TwitchGql::addChannelBlockedTerm(
 
 void TwitchGql::getChannelBlockedTerms(
     const QString &channelId, const QString &oauthToken,
-    std::function<void(QVector<GqlBlockedTerm>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(QVector<GqlBlockedTerm>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -3461,7 +3452,7 @@ void TwitchGql::getChannelBlockedTerms(
             QVector<GqlBlockedTerm> terms;
             const auto edges = blockedTerms.value("edges").toArray();
             terms.reserve(edges.size());
-            for (const auto &edgeValue : edges)
+            for (const auto edgeValue : edges)
             {
                 const auto node = edgeValue.toObject().value("node").toObject();
                 auto term = blockedTermFromObject(node);
@@ -3473,7 +3464,7 @@ void TwitchGql::getChannelBlockedTerms(
 
             const auto nodes = blockedTerms.value("nodes").toArray();
             terms.reserve(terms.size() + nodes.size());
-            for (const auto &nodeValue : nodes)
+            for (const auto nodeValue : nodes)
             {
                 auto term = blockedTermFromObject(nodeValue.toObject());
                 if (!term.id.isEmpty() && !term.phrase.isEmpty())
@@ -3492,8 +3483,8 @@ void TwitchGql::getChannelBlockedTerms(
 
 void TwitchGql::getChannelSelfData(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(GqlChannelSelfData)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelSelfData)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelLogin", channelLogin.trimmed().toLower());
@@ -3537,8 +3528,8 @@ void TwitchGql::getChannelSelfData(
 
 void TwitchGql::deleteChannelBlockedTerm(
     const QString &channelId, const QString &termId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("id", termId);
@@ -3579,7 +3570,7 @@ void TwitchGql::deleteChannelBlockedTerm(
 
                 const auto payloadError = gqlPayloadErrorMessage(
                     payload.value("error"),
-                    QStringLiteral("Twitch rejected the blocked term removal"));
+                    u"Twitch rejected the blocked term removal"_s);
                 if (!payloadError.isEmpty())
                 {
                     failureCallback("Twitch API Error: " + payloadError);
@@ -3594,115 +3585,109 @@ void TwitchGql::deleteChannelBlockedTerm(
         .execute();
 }
 
-void TwitchGql::grantVIP(const QString &channelId, const QString &targetLogin,
-                         const QString &oauthToken,
-                         std::function<void()> successCallback,
-                         std::function<void(const QString &)> failureCallback)
+void TwitchGql::grantVIP(
+    const QString &channelId, const QString &targetLogin,
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runRoleMutation(
         "VIPUser",
         "e8c397f1ed8b1fdbaa201eedac92dd189ecfb2d828985ec159d4ae77f9920170",
         "grantVIP", "granteeLogin", channelId, targetLogin, oauthToken,
-        "Failed to add VIP", std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to add VIP", successCallback, failureCallback);
 }
 
-void TwitchGql::revokeVIP(const QString &channelId, const QString &targetLogin,
-                          const QString &oauthToken,
-                          std::function<void()> successCallback,
-                          std::function<void(const QString &)> failureCallback)
+void TwitchGql::revokeVIP(
+    const QString &channelId, const QString &targetLogin,
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runRoleMutation(
         "UnVIPUser",
         "2ce4fcdf6667d013aa1f820010e699d1d4abdda55e26539ecf4efba8aff2d661",
         "revokeVIP", "revokeeLogin", channelId, targetLogin, oauthToken,
-        "Failed to remove VIP", std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to remove VIP", successCallback, failureCallback);
 }
 
-void TwitchGql::modUser(const QString &channelId, const QString &targetLogin,
-                        const QString &oauthToken,
-                        std::function<void()> successCallback,
-                        std::function<void(const QString &)> failureCallback)
+void TwitchGql::modUser(
+    const QString &channelId, const QString &targetLogin,
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runRoleMutation(
         "ModUser",
         "46da4ec4229593fe4b1bce911c75625c299638e228262ff621f80d5067695a8a",
         "modUser", "targetLogin", channelId, targetLogin, oauthToken,
-        "Failed to add moderator", std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to add moderator", successCallback, failureCallback);
 }
 
-void TwitchGql::unmodUser(const QString &channelId, const QString &targetLogin,
-                          const QString &oauthToken,
-                          std::function<void()> successCallback,
-                          std::function<void(const QString &)> failureCallback)
+void TwitchGql::unmodUser(
+    const QString &channelId, const QString &targetLogin,
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runRoleMutation(
         "UnmodUser",
         "1ed42ccb3bc3a6e79f51e954a2df233827f94491fbbb9bd05b22b1aaaf219b8b",
         "unmodUser", "targetLogin", channelId, targetLogin, oauthToken,
-        "Failed to remove moderator", std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to remove moderator", successCallback, failureCallback);
 }
 
 void TwitchGql::assignLeadModerator(
     const QString &channelId, const QString &targetUserId,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runTvRoleMutation(
         "AssignChannelRole",
         "2d373c90d0d0e6d4fe771bc6136febe6a148eb3d5700d2a0575883a043fbd581",
         "assignChannelRole", "targetUserID", channelId, targetUserId,
         oauthToken, "Failed to add lead moderator", "lead_mod", "isAssigned",
-        std::move(successCallback), std::move(failureCallback));
+        successCallback, failureCallback);
 }
 
 void TwitchGql::unassignLeadModerator(
     const QString &channelId, const QString &targetUserId,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runTvRoleMutation(
         "UnassignChannelRole",
         "5edbf17877acdb91e65243b5148cfd15b98adc6d8f980492dcde9a7f2e8255e2",
         "unassignChannelRole", "targetUserID", channelId, targetUserId,
         oauthToken, "Failed to remove lead moderator", "lead_mod",
-        "isUnassigned", std::move(successCallback), std::move(failureCallback));
+        "isUnassigned", successCallback, failureCallback);
 }
 
 void TwitchGql::addEditorUser(
     const QString &channelId, const QString &targetLogin,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runTvRoleMutation(
         "AddEditorUser",
         "3b52bf904ff9ce1b000ac2358080f538fbd1972c1869804f0d0f345d1a56676c",
         "addEditor", "targetUserLogin", channelId, targetLogin, oauthToken,
-        "Failed to add editor", {}, {}, std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to add editor", {}, {}, successCallback, failureCallback);
 }
 
 void TwitchGql::removeEditorUser(
     const QString &channelId, const QString &targetLogin,
-    const QString &oauthToken, std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const QString &oauthToken, const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     runTvRoleMutation(
         "RemoveEditorUser",
         "4699d38183050854dba547d07e340e72bf1f04578f1037a38a1189fa1827790f",
         "removeEditor", "targetUserLogin", channelId, targetLogin, oauthToken,
-        "Failed to remove editor", {}, {}, std::move(successCallback),
-        std::move(failureCallback));
+        "Failed to remove editor", {}, {}, successCallback, failureCallback);
 }
 
 void TwitchGql::getRaidChannelIDs(
     const QString &sourceLogin, const QString &targetLogin,
     const QString &oauthToken,
-    std::function<void(RaidChannelIDs)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(RaidChannelIDs)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("sourceLogin", normalizedRaidLogin(sourceLogin));
@@ -3748,18 +3733,17 @@ void TwitchGql::getRaidChannelIDs(
             ids.sourceId = raidUserIdFromObject(sourceObject);
             ids.targetId = raidUserIdFromObject(targetObject);
 
-            ids.targetLogin =
+            ids.targetLogin = raidObjectString(targetObject, {
+                                                                 u"login"_s,
+                                                                 u"name"_s,
+                                                             });
+            ids.targetDisplayName =
                 raidObjectString(targetObject, {
-                                                   QStringLiteral("login"),
-                                                   QStringLiteral("name"),
+                                                   u"displayName"_s,
+                                                   u"display_name"_s,
+                                                   u"login"_s,
+                                                   u"name"_s,
                                                });
-            ids.targetDisplayName = raidObjectString(
-                targetObject, {
-                                  QStringLiteral("displayName"),
-                                  QStringLiteral("display_name"),
-                                  QStringLiteral("login"),
-                                  QStringLiteral("name"),
-                              });
             if (ids.targetLogin.isEmpty())
             {
                 ids.targetLogin = normalizedRaidLogin(targetLogin);
@@ -3793,10 +3777,10 @@ void TwitchGql::getRaidChannelIDs(
         .execute();
 }
 
-void TwitchGql::createRaid(const QString &sourceId, const QString &targetId,
-                           const QString &oauthToken,
-                           std::function<void(const QString &)> successCallback,
-                           std::function<void(const QString &)> failureCallback)
+void TwitchGql::createRaid(
+    const QString &sourceId, const QString &targetId, const QString &oauthToken,
+    const std::function<void(const QString &)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("sourceID", sourceId);
@@ -3852,8 +3836,8 @@ void TwitchGql::createRaid(const QString &sourceId, const QString &targetId,
 
 void TwitchGql::sendRaidNow(
     const QString &sourceId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("sourceID", sourceId);
@@ -3891,8 +3875,8 @@ void TwitchGql::sendRaidNow(
 
 void TwitchGql::cancelRaidGql(
     const QString &sourceId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("sourceID", sourceId);
@@ -3928,12 +3912,11 @@ void TwitchGql::cancelRaidGql(
         .execute();
 }
 
-void TwitchGql::voteInPoll(const QString &pollId, const QString &choiceId,
-                           const QString &userId, int extraVotes,
-                           std::optional<int> pointsPerVote,
-                           const QString &oauthToken,
-                           std::function<void()> successCallback,
-                           std::function<void(const QString &)> failureCallback)
+void TwitchGql::voteInPoll(
+    const QString &pollId, const QString &choiceId, const QString &userId,
+    int extraVotes, std::optional<int> pointsPerVote, const QString &oauthToken,
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -4006,8 +3989,8 @@ void TwitchGql::voteInPoll(const QString &pollId, const QString &choiceId,
 
 void TwitchGql::getChannelPoints(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(qint64)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(qint64)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelLogin", channelLogin);
@@ -4037,10 +4020,14 @@ void TwitchGql::getChannelPoints(
             const rapidjson::Value *dataVal = nullptr;
             if (doc.IsArray() && doc.Size() > 0 && doc[0].IsObject() &&
                 doc[0].HasMember("data") && doc[0]["data"].IsObject())
+            {
                 dataVal = &doc[0]["data"];
+            }
             else if (doc.IsObject() && doc.HasMember("data") &&
                      doc["data"].IsObject())
+            {
                 dataVal = &doc["data"];
+            }
 
             if (dataVal && dataVal->HasMember("community") &&
                 (*dataVal)["community"].IsObject())
@@ -4114,13 +4101,12 @@ void TwitchGql::getChannelPoints(
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
 void TwitchGql::getChannelPointRewards(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(GqlChannelPointRewards)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRewards)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelLogin", channelLogin);
-    variables.insert("includeGoalTypes", QJsonArray{QStringLiteral("CREATOR"),
-                                                    QStringLiteral("BOOST")});
+    variables.insert("includeGoalTypes", QJsonArray{u"CREATOR"_s, u"BOOST"_s});
 
     makeTvPersistedGqlRequest(
         "ChannelPointsContext",
@@ -4161,7 +4147,7 @@ void TwitchGql::getChannelPointRewards(
                 community.value("displayName").toString();
             rewards.balance = jsonIntegerValue(points.value("balance"));
 
-            for (const auto &value : settings.value("customRewards").toArray())
+            for (const auto value : settings.value("customRewards").toArray())
             {
                 const auto reward =
                     channelPointRewardFromObject(value.toObject(), false);
@@ -4172,7 +4158,7 @@ void TwitchGql::getChannelPointRewards(
                 rewards.rewards.push_back(reward);
             }
 
-            for (const auto &value :
+            for (const auto value :
                  settings.value("automaticRewards").toArray())
             {
                 const auto reward =
@@ -4195,8 +4181,8 @@ void TwitchGql::getChannelPointRewards(
 void TwitchGql::redeemCustomReward(
     const QString &channelId, const GqlChannelPointReward &reward,
     const QString &textInput, const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4254,8 +4240,8 @@ void TwitchGql::redeemCustomReward(
 void TwitchGql::sendHighlightedChatMessage(
     const QString &channelId, int cost, const QString &message,
     const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4306,8 +4292,8 @@ void TwitchGql::sendHighlightedChatMessage(
 void TwitchGql::sendSubOnlyBypassMessage(
     const QString &channelId, int cost, const QString &message,
     const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4366,8 +4352,8 @@ void TwitchGql::sendSubOnlyBypassMessage(
 
 void TwitchGql::unlockRandomSubscriberEmote(
     const QString &channelId, int cost, const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4415,8 +4401,8 @@ void TwitchGql::unlockRandomSubscriberEmote(
 void TwitchGql::unlockChosenSubscriberEmote(
     const QString &channelId, const QString &emoteId, int cost,
     const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4473,8 +4459,8 @@ void TwitchGql::unlockChosenSubscriberEmote(
 void TwitchGql::unlockModifiedSubscriberEmote(
     const QString &channelId, const QString &modifiedEmoteId, int cost,
     const QString &oauthToken,
-    std::function<void(GqlChannelPointRedeemResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject input;
     input.insert("channelID", channelId);
@@ -4523,8 +4509,8 @@ void TwitchGql::unlockModifiedSubscriberEmote(
 
 void TwitchGql::getAvailableChannelPointEmotes(
     const QString &channelId, const QString &oauthToken,
-    std::function<void(QVector<GqlChannelPointEmote>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(QVector<GqlChannelPointEmote>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelOwnerID", channelId);
@@ -4554,11 +4540,11 @@ void TwitchGql::getAvailableChannelPointEmotes(
             const auto user = payloadDataObject(root).value("user").toObject();
             const auto ownerLogin = user.value("login").toString();
             const auto ownerDisplayName = user.value("displayName").toString();
-            for (const auto &productValue :
+            for (const auto productValue :
                  user.value("subscriptionProducts").toArray())
             {
                 const auto product = productValue.toObject();
-                for (const auto &emoteValue : product.value("emotes").toArray())
+                for (const auto emoteValue : product.value("emotes").toArray())
                 {
                     const auto emoteObj = emoteValue.toObject();
                     GqlChannelPointEmote emote;
@@ -4589,14 +4575,13 @@ void TwitchGql::getAvailableChannelPointEmotes(
 
 void TwitchGql::getModifiableChannelPointEmotes(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(QVector<GqlChannelPointEmote>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(QVector<GqlChannelPointEmote>)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject contextVariables;
     contextVariables.insert("channelLogin", channelLogin);
-    contextVariables.insert(
-        "includeGoalTypes",
-        QJsonArray{QStringLiteral("CREATOR"), QStringLiteral("BOOST")});
+    contextVariables.insert("includeGoalTypes",
+                            QJsonArray{u"CREATOR"_s, u"BOOST"_s});
 
     QJsonArray payloadArray;
     payloadArray.append(persistedPayload(
@@ -4627,11 +4612,10 @@ void TwitchGql::getModifiableChannelPointEmotes(
                 payloadDataObjectForOperation(root, "ModifyEmoteOwnedEmotes")
                     .value("currentUser")
                     .toObject();
-            for (const auto &setValue :
-                 currentUser.value("emoteSets").toArray())
+            for (const auto setValue : currentUser.value("emoteSets").toArray())
             {
                 const auto set = setValue.toObject();
-                for (const auto &emoteValue : set.value("emotes").toArray())
+                for (const auto emoteValue : set.value("emotes").toArray())
                 {
                     const auto emoteObj = emoteValue.toObject();
                     const auto id = emoteObj.value("id").toString();
@@ -4639,7 +4623,7 @@ void TwitchGql::getModifiableChannelPointEmotes(
                     {
                         seenOwnedIds.insert(id);
                     }
-                    for (const auto &modifierValue :
+                    for (const auto modifierValue :
                          emoteObj.value("modifiers").toArray())
                     {
                         const auto code =
@@ -4664,7 +4648,7 @@ void TwitchGql::getModifiableChannelPointEmotes(
             const auto ownerDisplayName =
                 community.value("displayName").toString();
 
-            for (const auto &variantValue :
+            for (const auto variantValue :
                  settings.value("emoteVariants").toArray())
             {
                 const auto variant = variantValue.toObject();
@@ -4673,7 +4657,7 @@ void TwitchGql::getModifiableChannelPointEmotes(
                 emote.id = baseObj.value("id").toString(
                     variant.value("id").toString());
                 emote.token = baseObj.value("token").toString();
-                emote.type = QStringLiteral("CHANNEL_POINTS_VARIANT");
+                emote.type = u"CHANNEL_POINTS_VARIANT"_s;
                 emote.ownerLogin = ownerLogin;
                 emote.ownerDisplayName = ownerDisplayName;
 
@@ -4690,7 +4674,7 @@ void TwitchGql::getModifiableChannelPointEmotes(
                     continue;
                 }
 
-                for (const auto &modificationValue :
+                for (const auto modificationValue :
                      variant.value("modifications").toArray())
                 {
                     const auto modification = modificationValue.toObject();
@@ -4743,8 +4727,9 @@ void TwitchGql::getModifiableChannelPointEmotes(
 
 void TwitchGql::getChannelPointEmoteModifiers(
     const QString &oauthToken,
-    std::function<void(QVector<GqlChannelPointEmoteModifier>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(QVector<GqlChannelPointEmoteModifier>)>
+        &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     makeTvPersistedGqlRequest(
         "ChannelPointsGlobalContext",
@@ -4766,7 +4751,7 @@ void TwitchGql::getChannelPointEmoteModifiers(
                 }
 
                 QVector<GqlChannelPointEmoteModifier> modifiers;
-                for (const auto &value :
+                for (const auto value :
                      payloadDataObject(root).value("emoteModifiers").toArray())
                 {
                     const auto obj = value.toObject();
@@ -4791,9 +4776,9 @@ void TwitchGql::getChannelPointEmoteModifiers(
 void TwitchGql::getChatWarningStatus(
     const QString &channelId, const QString &targetUserId,
     const QString &oauthToken,
-    std::function<void(std::optional<TwitchChannel::ChatWarning>)>
-        successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(std::optional<TwitchChannel::ChatWarning>)>
+        &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("channelID", channelId);
@@ -4847,8 +4832,8 @@ void TwitchGql::getChatWarningStatus(
 
 void TwitchGql::acknowledgeChatWarning(
     const QString &channelId, const QString &oauthToken,
-    std::function<void()> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void()> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     QJsonObject input;
@@ -4885,9 +4870,9 @@ void TwitchGql::acknowledgeChatWarning(
 
 void TwitchGql::getActivePoll(
     const QString &channelLogin, const QString &oauthToken,
-    std::function<void(std::optional<TwitchChannel::PollEvent>)>
-        successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(std::optional<TwitchChannel::PollEvent>)>
+        &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     QJsonObject variables;
     variables.insert("login", channelLogin);
@@ -4932,8 +4917,8 @@ void TwitchGql::getActivePoll(
 
 void TwitchGql::validateCustomAuthToken(
     const QString &oauthToken,
-    std::function<void(CustomAuthValidationResult)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    const std::function<void(CustomAuthValidationResult)> &successCallback,
+    const std::function<void(const QString &)> &failureCallback)
 {
     const auto normalizedToken = normalizeCustomTwitchAuthToken(oauthToken);
     if (normalizedToken.isEmpty())
@@ -5045,6 +5030,7 @@ void TwitchGql::getModeratedChannels(
         std::function<void(const QString &)> failureCallback;
     };
 
+    // NOLINTNEXTLINE(readability-identifier-naming)
     constexpr int MAX_FORWARD_PAGES = 100;
     static constexpr auto FORWARD_QUERY = R"(
 query ModeratedChannels($cursor: Cursor) {
@@ -5080,10 +5066,9 @@ query ModeratedChannels($cursor: Cursor) {
             return false;
         }
 
-        const auto key =
-            channel.id.isEmpty()
-                ? QStringLiteral("login:") + channel.login.toLower()
-                : QStringLiteral("id:") + channel.id;
+        const auto key = channel.id.isEmpty()
+                             ? u"login:"_s + channel.login.toLower()
+                             : u"id:"_s + channel.id;
         if (state->seenChannels.contains(key))
         {
             return false;
@@ -5101,7 +5086,7 @@ query ModeratedChannels($cursor: Cursor) {
         const auto nodes = connection.value("nodes").toArray();
 
         int added = 0;
-        for (const auto &edgeValue : edges)
+        for (const auto edgeValue : edges)
         {
             const auto edge = edgeValue.toObject();
             const auto node = edge.value("node").toObject();
@@ -5110,7 +5095,7 @@ query ModeratedChannels($cursor: Cursor) {
                 ++added;
             }
         }
-        for (const auto &nodeValue : nodes)
+        for (const auto nodeValue : nodes)
         {
             if (appendChannel(state, nodeValue.toObject()))
             {
@@ -5151,7 +5136,7 @@ query ModeratedChannels($cursor: Cursor) {
         requestForwardPage;
     *requestForwardPage = [weakState, weakRequestForwardPage, appendConnection,
                            finishSuccess,
-                           finishFailure](QString cursor) mutable {
+                           finishFailure](const QString &cursor) mutable {
         auto state = weakState.lock();
         if (!state)
         {
@@ -5198,7 +5183,7 @@ query ModeratedChannels($cursor: Cursor) {
 
                 const auto edges = moderatedChannels.value("edges").toArray();
                 QString lastEdgeCursor;
-                for (const auto &edgeValue : edges)
+                for (const auto edgeValue : edges)
                 {
                     const auto cursor =
                         edgeValue.toObject().value("cursor").toString();

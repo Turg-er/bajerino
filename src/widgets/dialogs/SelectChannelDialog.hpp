@@ -56,7 +56,7 @@ public:
 
     /// Sets the per-channel anonymity controls from an override (nullopt means
     /// "follow the global default").
-    void setAnonymousOverrideUi(std::optional<bool> anonymousOverride);
+    void setAnonymousOverrideUi(std::optional<bool> anonymousOverride) const;
 
     pajlada::Signals::NoArgSignal closed;
 

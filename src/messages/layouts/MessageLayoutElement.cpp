@@ -33,9 +33,9 @@ QRectF snapRectToDevicePixels(const QRectF &rect, const QPainter &painter)
         return std::round(value * dpr) / dpr;
     };
 
-    return QRectF(snap(rect.x()), snap(rect.y()),
-                  std::max(1.0 / dpr, snap(rect.width())),
-                  std::max(1.0 / dpr, snap(rect.height())));
+    return {snap(rect.x()), snap(rect.y()),
+            std::max(1.0 / dpr, snap(rect.width())),
+            std::max(1.0 / dpr, snap(rect.height()))};
 }
 
 const QChar RTL_EMBED(0x202B);

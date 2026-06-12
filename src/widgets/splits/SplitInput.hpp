@@ -116,6 +116,7 @@ public:
     pajlada::Signals::NoArgSignal selectionChanged;
 
 protected:
+    // NOLINTNEXTLINE(misc-override-with-different-visibility)
     QSize minimumSizeHint() const override;
 
     void scaleChangedEvent(float scale_) override;
@@ -149,8 +150,8 @@ protected:
     void applyNukePreview();
     void bindRaidStatusChannel();
     void updateRaidStatus();
-    bool trySendMessageAsWarning(const QString &message,
-                                 const ChannelPtr &channel);
+    static bool trySendMessageAsWarning(const QString &message,
+                                        const ChannelPtr &channel);
     bool maybeSendMessageAsWarning(const QString &message,
                                    const std::vector<QString> &arguments,
                                    const ChannelPtr &channel);

@@ -20,6 +20,8 @@
 
 #include <algorithm>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 using namespace literals;
@@ -239,16 +241,16 @@ QString Message::clientDetectionStatusToString(ClientDetectionStatus status)
     switch (status)
     {
         case ClientDetectionStatus::Web:
-            return QStringLiteral("Web");
+            return u"Web"_s;
         case ClientDetectionStatus::Android:
-            return QStringLiteral("Android");
+            return u"Android"_s;
         case ClientDetectionStatus::IOS:
-            return QStringLiteral("iOS");
+            return u"iOS"_s;
         case ClientDetectionStatus::Abnormal:
-            return QStringLiteral("Abnormal");
+            return u"Abnormal"_s;
         case ClientDetectionStatus::Unknown:
         default:
-            return QStringLiteral("Unknown");
+            return u"Unknown"_s;
     }
 }
 

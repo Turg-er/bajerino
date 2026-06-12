@@ -46,9 +46,9 @@ constexpr int BASE_SPACING = 3;
 constexpr int BASE_HEADER_SPACING = 2;
 constexpr int BASE_HEADER_TEXT_BOTTOM_INSET = 0;
 
-constexpr float BASE_TEXT_SCALE = 0.80f;
-constexpr float BASE_BADGE_SCALE = 0.25f;
-constexpr float BASE_EMOTE_SCALE = 0.55f;
+constexpr float BASE_TEXT_SCALE = 0.80F;
+constexpr float BASE_BADGE_SCALE = 0.25F;
+constexpr float BASE_EMOTE_SCALE = 0.55F;
 
 float normalizedBannerScale(float value)
 {
@@ -61,17 +61,19 @@ float normalizedBannerScale(float value)
 
 float pinnedMessageScale()
 {
-    return normalizedBannerScale(float(getSettings()->pinnedMessageScale));
+    return normalizedBannerScale(
+        static_cast<float>(getSettings()->pinnedMessageScale));
 }
 
 float pinnedContentScale()
 {
-    return normalizedBannerScale(float(getSettings()->pinnedContentScale));
+    return normalizedBannerScale(
+        static_cast<float>(getSettings()->pinnedContentScale));
 }
 
 int scaledInt(float value, int minimum = 1)
 {
-    return std::max(minimum, int(std::round(value)));
+    return std::max(minimum, static_cast<int>(std::round(value)));
 }
 
 bool sameOptionalFloat(const std::optional<float> &current, float value)
@@ -132,7 +134,8 @@ const MessageLayoutElement *tryGetPinnedBannerElementAt(ChannelView *view,
     }
 
     auto &messages = view->getMessagesSnapshot();
-    const auto start = size_t(view->getScrollBar().getRelativeCurrentValue());
+    const auto start =
+        static_cast<size_t>(view->getScrollBar().getRelativeCurrentValue());
     if (start >= messages.size())
     {
         return nullptr;
@@ -176,7 +179,14 @@ bool shouldLetEmbeddedMessageHandleClick(ChannelView *view, QMouseEvent *event)
 
 PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     : BaseWidget(parent)
+    , topLayout_(new QHBoxLayout())
+    , messageLayout_(new QHBoxLayout())
+    , messageView_(new ChannelView(this, split))
+    , pinnerLabel_(new QLabel(this))
+    , timerLabel_(new QLabel(this))
+    , moreLabel_(new QLabel(this))
     , split_(split)
+    , countdownTimer_(new QTimer(this))
 {
     this->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
 
@@ -192,7 +202,6 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
                                BASE_BOTTOM_MARGIN);
     layout->setSpacing(BASE_SPACING);
 
-    this->topLayout_ = new QHBoxLayout();
     this->topLayout_->setContentsMargins(BASE_HEADER_LEFT_MARGIN, 0, 0, 0);
     this->topLayout_->setSpacing(BASE_HEADER_SPACING);
 
@@ -205,12 +214,12 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->icon_->setFixedSize(BASE_ICON_SIZE, BASE_ICON_SIZE);
     this->icon_->setCursor(Qt::ArrowCursor);
     this->icon_->setGraphicsEffect(new QGraphicsOpacityEffect);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
     static_cast<QGraphicsOpacityEffect *>(this->icon_->graphicsEffect())
         ->setOpacity(0.5);
     this->icon_->installEventFilter(this);
     this->topLayout_->addWidget(this->icon_, 0, Qt::AlignBottom);
 
-    this->pinnerLabel_ = new QLabel(this);
     this->pinnerLabel_->setContentsMargins(0, 0, 0, 0);
     this->pinnerLabel_->setAlignment(Qt::AlignLeft | Qt::AlignBottom);
 
@@ -221,7 +230,6 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
                                       QSizePolicy::Preferred);
     this->topLayout_->addWidget(this->pinnerLabel_, 1, Qt::AlignBottom);
 
-    this->moreLabel_ = new QLabel(this);
     this->moreLabel_->setContentsMargins(0, 0, 4, 0);
     this->moreLabel_->setAlignment(Qt::AlignRight | Qt::AlignBottom);
     this->moreLabel_->setStyleSheet(
@@ -231,7 +239,6 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->moreLabel_->hide();
     this->topLayout_->addWidget(this->moreLabel_, 0, Qt::AlignBottom);
 
-    this->timerLabel_ = new QLabel(this);
     this->timerLabel_->setContentsMargins(0, 0, 4, 0);
     this->timerLabel_->setAlignment(Qt::AlignRight | Qt::AlignBottom);
     this->timerLabel_->setStyleSheet(
@@ -262,6 +269,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->unpinButton_->setToolTip("Dismiss");
     this->unpinButton_->setFixedSize(BASE_ICON_SIZE, BASE_ICON_SIZE);
     this->unpinButton_->setGraphicsEffect(new QGraphicsOpacityEffect);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
     static_cast<QGraphicsOpacityEffect *>(this->unpinButton_->graphicsEffect())
         ->setOpacity(0.5);
     this->unpinButton_->setVisible(true);
@@ -270,7 +278,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     layout->addLayout(this->topLayout_);
 
     this->channel_ = std::make_shared<Channel>("", Channel::Type::None);
-    this->messageView_ = new ChannelView(this, split);
+
     this->messageView_->setOverrideScale(BASE_TEXT_SCALE);
     this->messageView_->setOverrideEmoteScale(BASE_EMOTE_SCALE);
     this->messageView_->setCenterBadges(true);
@@ -308,7 +316,6 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->messageView_->setSizePolicy(QSizePolicy::Expanding,
                                       QSizePolicy::Fixed);
 
-    this->messageLayout_ = new QHBoxLayout();
     this->messageLayout_->setContentsMargins(BASE_MESSAGE_LEFT_MARGIN, 0, 0, 0);
     this->messageLayout_->addWidget(this->messageView_);
     layout->addLayout(this->messageLayout_);
@@ -316,7 +323,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
     this->hide();
 
     getSettings()->pinnedMessageScale.connect(
-        [this](const float &, auto) {
+        [this](const float &, const auto &) {
             if (this->isVisible())
             {
                 this->updateScaling();
@@ -326,7 +333,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
         this->managedConnections_);
 
     getSettings()->pinnedContentScale.connect(
-        [this](const float &, auto) {
+        [this](const float &, const auto &) {
             if (this->isVisible())
             {
                 this->scaleChangedEvent(this->scale());
@@ -336,7 +343,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
         this->managedConnections_);
 
     getSettings()->alwaysExpandPinnedMessages.connect(
-        [this](const bool &enabled, auto) {
+        [this](const bool &enabled, const auto &) {
             if (!this->isVisible())
             {
                 return;
@@ -357,14 +364,14 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
         },
         this->managedConnections_);
 
-    this->countdownTimer_ = new QTimer(this);
     this->countdownTimer_->setInterval(1000);
-    this->connect(this->countdownTimer_, &QTimer::timeout, [this]() {
-        this->updateTimer();
-    });
+    chatterino::PinnedMessageBanner::connect(this->countdownTimer_,
+                                             &QTimer::timeout, [this]() {
+                                                 this->updateTimer();
+                                             });
 
     getSettings()->pinTimerDisplay.connect(
-        [this](const int &, auto) {
+        [this](const int &, const auto &) {
             if (this->isVisible())
             {
                 this->updateTimer();
@@ -373,7 +380,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
         this->managedConnections_);
 
     getSettings()->pinTimestampFormat.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             if (this->isVisible())
             {
                 this->updateTimer();
@@ -382,7 +389,7 @@ PinnedMessageBanner::PinnedMessageBanner(Split *split, QWidget *parent)
         this->managedConnections_);
 
     getSettings()->pinBannerBackgroundColor.connect(
-        [this](const QString &, auto) {
+        [this](const QString &, const auto &) {
             this->update();  // Repaint with new background
         },
         this->managedConnections_);
@@ -469,19 +476,33 @@ void PinnedMessageBanner::setPinnedMessage(
 
         QStringList tags;
         if (!pin->messageId.isEmpty())
+        {
             tags << "id=" + pin->messageId;
+        }
         if (!pin->authorId.isEmpty())
+        {
             tags << "user-id=" + pin->authorId;
+        }
         if (!pin->authorColor.isEmpty())
+        {
             tags << "color=" + pin->authorColor;
+        }
         if (!pin->authorBadges.isEmpty())
+        {
             tags << "badges=" + pin->authorBadges;
+        }
         if (!channel->roomId().isEmpty())
+        {
             tags << "room-id=" + channel->roomId();
+        }
         if (!pin->authorLogin.isEmpty())
+        {
             tags << "login=" + pin->authorLogin;
+        }
         if (!pin->authorName.isEmpty())
+        {
             tags << "display-name=" + pin->authorName;
+        }
 
         QString tagsStr = tags.isEmpty() ? "" : "@" + tags.join(";") + " ";
         QString fakeIrcData =
@@ -491,7 +512,7 @@ void PinnedMessageBanner::setPinnedMessage(
         auto *fakeMessage =
             Communi::IrcMessage::fromData(fakeIrcData.toUtf8(), nullptr);
 
-        if (fakeMessage && fakeMessage->command() == "PRIVMSG")
+        if ((fakeMessage != nullptr) && fakeMessage->command() == "PRIVMSG")
         {
             MessageParseArgs args;
             std::tie(message, std::ignore) = MessageBuilder::makeIrcMessage(
@@ -532,11 +553,7 @@ void PinnedMessageBanner::setPinnedMessage(
 
     int displayMode = getSettings()->pinTimerDisplay;
 
-    if (displayMode <= 2 && this->endsAt_.has_value())
-    {
-        this->icon_->setToolTip(QString());
-    }
-    else if (!this->endsAt_.has_value())
+    if (!this->endsAt_.has_value())
     {
         this->icon_->setToolTip(QString("Pinned by %1\nPinned indefinitely")
                                     .arg(this->pinnerName_));
@@ -563,22 +580,23 @@ void PinnedMessageBanner::setPinnedMessage(
 
     this->unpinButton_->disconnect();
     this->unpinButton_->setVisible(true);
-    this->connect(this->unpinButton_, &Button::leftClicked,
-                  [this, channel, pin, hasModRights]() {
-                      int action = getSettings()->pinCloseButtonAction;
-                      if (action == 1 && hasModRights)
-                      {
-                          channel->unpinMessage();
-                      }
-                      else
-                      {
-                          this->dismissedPinId_ = pin->messageId;
-                          this->hasPin_ = false;
-                          this->countdownTimer_->stop();
-                          this->hide();
-                          this->dismissed.invoke();
-                      }
-                  });
+    chatterino::PinnedMessageBanner::connect(
+        this->unpinButton_, &Button::leftClicked,
+        [this, channel, pin, hasModRights]() {
+            int action = getSettings()->pinCloseButtonAction;
+            if (action == 1 && hasModRights)
+            {
+                channel->unpinMessage();
+            }
+            else
+            {
+                this->dismissedPinId_ = pin->messageId;
+                this->hasPin_ = false;
+                this->countdownTimer_->stop();
+                this->hide();
+                this->dismissed.invoke();
+            }
+        });
     this->unpinButton_->setToolTip(
         (getSettings()->pinCloseButtonAction == 1 && hasModRights)
             ? "Unpin message"
@@ -588,25 +606,25 @@ void PinnedMessageBanner::setPinnedMessage(
     if (hasModRights)
     {
         this->icon_->setCursor(Qt::PointingHandCursor);
-        this->connect(this->icon_, &Button::leftClicked,
-                      [this, channel, pin]() {
-                          auto *menu = new QMenu(this);
-                          menu->setAttribute(Qt::WA_DeleteOnClose);
+        chatterino::PinnedMessageBanner::connect(
+            this->icon_, &Button::leftClicked, [this, channel, pin]() {
+                auto *menu = new QMenu(this);
+                menu->setAttribute(Qt::WA_DeleteOnClose);
 
-                          menu->addAction("Unpin Message", [channel]() {
-                              channel->unpinMessage();
-                          });
+                menu->addAction("Unpin Message", [channel]() {
+                    channel->unpinMessage();
+                });
 
-                          if (pin->endsAt.has_value())
-                          {
-                              menu->addSeparator();
-                              menu->addAction("Pin Indefinitely", [channel]() {
-                                  channel->keepPinned();
-                              });
-                          }
+                if (pin->endsAt.has_value())
+                {
+                    menu->addSeparator();
+                    menu->addAction("Pin Indefinitely", [channel]() {
+                        channel->keepPinned();
+                    });
+                }
 
-                          menu->popup(QCursor::pos());
-                      });
+                menu->popup(QCursor::pos());
+            });
     }
     else
     {
@@ -819,14 +837,8 @@ void PinnedMessageBanner::toggleExpansion()
     this->isExpanded_ = !this->isExpanded_;
     this->messageView_->setCollapseMessages(!this->isExpanded_);
 
-    if (!this->isExpanded_ && getSettings()->alwaysExpandPinnedMessages)
-    {
-        this->userManuallyCollapsed_ = true;
-    }
-    else
-    {
-        this->userManuallyCollapsed_ = false;
-    }
+    this->userManuallyCollapsed_ =
+        !this->isExpanded_ && getSettings()->alwaysExpandPinnedMessages;
 
     this->updateScaling();
     this->updateGeometry();
@@ -840,9 +852,9 @@ void PinnedMessageBanner::refreshLayout()
     }
 
     auto &snapshot = this->messageView_->getMessagesSnapshot();
-    for (size_t i = 0; i < snapshot.size(); i++)
+    for (auto &i : snapshot)
     {
-        snapshot[i]->flags.set(MessageLayoutFlag::RequiresLayout);
+        i->flags.set(MessageLayoutFlag::RequiresLayout);
     }
     this->messageView_->performLayout();
     this->messageView_->update();
@@ -887,7 +899,7 @@ void PinnedMessageBanner::updateScaling()
     if (this->messageLayout_ != nullptr)
     {
         const float contentScale = s * pinnedContentScale();
-        int internalLeft = scaledInt(8.0f * overrideScale, 0);
+        int internalLeft = scaledInt(8.0F * overrideScale, 0);
         int targetLeft = scaledInt(BASE_HEADER_LEFT_MARGIN * contentScale, 0);
         this->messageLayout_->setContentsMargins(
             std::max(0, targetLeft - internalLeft), 0, 0, 0);
@@ -935,12 +947,9 @@ bool PinnedMessageBanner::eventFilter(QObject *obj, QEvent *event)
 {
     if (obj == this->messageView_ && event->type() == QEvent::Wheel)
     {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast)
         auto *wheelEvent = static_cast<QWheelEvent *>(event);
-        if (wheelEvent->modifiers() & Qt::ControlModifier)
-        {
-            return false;
-        }
-        return true;
+        return wheelEvent->modifiers().testFlag(Qt::ControlModifier);
     }
 
     if (obj == this->icon_)
@@ -978,13 +987,17 @@ namespace {
 QString formatElapsed(qint64 totalSecs)
 {
     if (totalSecs < 60)
+    {
         return "just now";
+    }
     if (totalSecs < 3600)
+    {
         return QString("%1m ago").arg(totalSecs / 60);
+    }
     if (totalSecs < 86400)
     {
-        int h = totalSecs / 3600;
-        int m = (totalSecs % 3600) / 60;
+        int h = static_cast<int>(totalSecs / 3600);
+        int m = static_cast<int>((totalSecs % 3600) / 60);
         return m > 0 ? QString("%1h %2m ago").arg(h).arg(m)
                      : QString("%1h ago").arg(h);
     }
@@ -1021,7 +1034,9 @@ void PinnedMessageBanner::updateTimer()
         {
             qint64 elapsed = this->pinnedAt_->secsTo(now);
             if (elapsed >= 0)
+            {
                 timeStr = formatElapsed(elapsed);
+            }
         }
         else
         {
@@ -1039,7 +1054,9 @@ void PinnedMessageBanner::updateTimer()
             countdownStr = "Expired";
             this->countdownTimer_->stop();
             if (this->twitchChannel_)
+            {
                 this->twitchChannel_->refreshPinnedMessage();
+            }
         }
         else
         {
@@ -1076,14 +1093,22 @@ void PinnedMessageBanner::updateTimer()
     {
         QString tooltip;
         if (!timeStr.isEmpty() && !countdownStr.isEmpty())
+        {
             tooltip =
                 QString("%1 \xC2\xB7 %2 remaining").arg(timeStr, countdownStr);
+        }
         else if (!countdownStr.isEmpty())
+        {
             tooltip = QString("%1 remaining").arg(countdownStr);
+        }
         else if (!timeStr.isEmpty())
+        {
             tooltip = timeStr;
+        }
         else
+        {
             tooltip = "Pinned indefinitely";
+        }
 
         QToolTip::showText(
             this->icon_->mapToGlobal(QPoint(0, this->icon_->height() + 4)),

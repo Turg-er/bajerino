@@ -21,6 +21,9 @@
 
 #include <algorithm>
 #include <memory>
+#include <utility>
+
+using namespace Qt::StringLiterals;
 
 namespace chatterino::MoltorinoAuth {
 namespace {
@@ -75,7 +78,7 @@ QString nowIso()
     return QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
 }
 
-QString lower(QString text)
+QString lower(const QString &text)
 {
     return text.trimmed().toLower();
 }
@@ -122,7 +125,7 @@ MoltorinoAuthAccount accountFromJson(const QJsonObject &obj)
 
     const auto channels = obj.value("moderatedChannels").toArray();
     account.moderatedChannels.reserve(channels.size());
-    for (const auto &channelValue : channels)
+    for (const auto channelValue : channels)
     {
         if (channelValue.isObject())
         {
@@ -155,10 +158,9 @@ QJsonObject accountToJson(const MoltorinoAuthAccount &account)
 
 void sortAccounts(std::vector<MoltorinoAuthAccount> &accounts)
 {
-    std::sort(accounts.begin(), accounts.end(),
-              [](const auto &a, const auto &b) {
-                  return lower(a.login).localeAwareCompare(lower(b.login)) < 0;
-              });
+    std::ranges::sort(accounts, [](const auto &a, const auto &b) {
+        return lower(a.login).localeAwareCompare(lower(b.login)) < 0;
+    });
 }
 
 void saveAccounts(const std::vector<MoltorinoAuthAccount> &accounts)
@@ -192,12 +194,9 @@ void upsertAccount(MoltorinoAuthAccount account)
 
     auto current = accounts();
     const auto token = account.token;
-    current.erase(std::remove_if(current.begin(), current.end(),
-                                 [&](const auto &existing) {
-                                     return sameAccount(existing,
-                                                        account.userId, token);
-                                 }),
-                  current.end());
+    std::erase_if(current, [&](const auto &existing) {
+        return sameAccount(existing, account.userId, token);
+    });
     current.push_back(std::move(account));
     sortAccounts(current);
     saveAccounts(current);
@@ -217,19 +216,12 @@ bool accountMatchesChannel(const MoltorinoAuthAccount &account,
         return true;
     }
 
-    for (const auto &channel : account.moderatedChannels)
-    {
-        if (!channelId.isEmpty() && channel.id == channelId)
-        {
-            return true;
-        }
-        if (!normalizedLogin.isEmpty() &&
-            lower(channel.login) == normalizedLogin)
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(
+        account.moderatedChannels, [&](const auto &channel) {
+            return (!channelId.isEmpty() && channel.id == channelId) ||
+                   (!normalizedLogin.isEmpty() &&
+                    lower(channel.login) == normalizedLogin);
+        });
 }
 
 bool accountMatchesBroadcaster(const MoltorinoAuthAccount &account,
@@ -280,12 +272,9 @@ QString separateAccountAuthDisabledMessage(const QString &action)
 std::vector<MoltorinoAuthAccount> validAccounts()
 {
     auto loaded = accounts();
-    loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
-                                [](const auto &account) {
-                                    return !account.valid ||
-                                           account.token.trimmed().isEmpty();
-                                }),
-                 loaded.end());
+    std::erase_if(loaded, [](const auto &account) {
+        return !account.valid || account.token.trimmed().isEmpty();
+    });
     return loaded;
 }
 
@@ -333,14 +322,9 @@ bool hasStoredAccountForToken(const QString &token)
         return false;
     }
 
-    for (const auto &account : accounts())
-    {
-        if (normalizeToken(account.token) == normalizedToken)
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(accounts(), [&](const auto &account) {
+        return normalizeToken(account.token) == normalizedToken;
+    });
 }
 
 QString &lastResolvedPersonalToken()
@@ -368,10 +352,9 @@ std::optional<MoltorinoAuthAccount> validAccountForToken(
         return std::nullopt;
     }
 
-    auto found =
-        std::find_if(valid.begin(), valid.end(), [&](const auto &account) {
-            return normalizeToken(account.token) == normalizedToken;
-        });
+    auto found = std::ranges::find_if(valid, [&](const auto &account) {
+        return normalizeToken(account.token) == normalizedToken;
+    });
     if (found == valid.end())
     {
         return std::nullopt;
@@ -478,11 +461,11 @@ QString moderatedChannelKey(const QString &id, const QString &login)
 {
     if (!id.trimmed().isEmpty())
     {
-        return QStringLiteral("id:") + id.trimmed();
+        return u"id:"_s + id.trimmed();
     }
     if (!login.trimmed().isEmpty())
     {
-        return QStringLiteral("login:") + lower(login);
+        return u"login:"_s + lower(login);
     }
     return {};
 }
@@ -549,7 +532,7 @@ void fetchModeratedChannelsWithHelix(
     std::weak_ptr<FetchState> weakState = state;
     std::weak_ptr<std::function<void(QString)>> weakRequestPage = requestPage;
     *requestPage = [weakState, weakRequestPage, finishSuccess,
-                    finishFailure](QString cursor) mutable {
+                    finishFailure](const QString &cursor) mutable {
         auto state = weakState.lock();
         if (!state)
         {
@@ -607,7 +590,7 @@ void fetchModeratedChannelsWithHelix(
                     return;
                 }
 
-                for (const auto &value : data)
+                for (const auto value : data)
                 {
                     const auto obj = value.toObject();
                     MoltorinoAuthChannel channel{
@@ -710,7 +693,7 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
 
     auto finishWithCachedChannels = [finish](MoltorinoAuthAccount baseAccount,
                                              const QString &error) mutable {
-        auto account = baseAccount;
+        auto account = std::move(baseAccount);
         for (const auto &existing : accounts())
         {
             if (sameAccount(existing, account.userId,
@@ -728,11 +711,11 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
     };
 
     auto fetchWithGql = [finishWithChannels, finishWithCachedChannels](
-                            MoltorinoAuthAccount baseAccount) mutable {
+                            const MoltorinoAuthAccount &baseAccount) mutable {
         TwitchGql::getModeratedChannels(
             baseAccount.token,
             [baseAccount, finishWithChannels](
-                QVector<GqlModeratedChannel> channels) mutable {
+                const QVector<GqlModeratedChannel> &channels) mutable {
                 QVector<MoltorinoAuthChannel> converted;
                 converted.reserve(channels.size());
                 for (const auto &channel : channels)
@@ -762,7 +745,7 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
                 finishWithChannels(baseAccount, std::move(channels));
             },
             [baseAccount, fetchWithGql](const QString &) mutable {
-                fetchWithGql(std::move(baseAccount));
+                fetchWithGql(baseAccount);
             });
         return;
     }
@@ -783,7 +766,7 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
                     finishWithChannels(baseAccount, std::move(channels));
                 },
                 [baseAccount, fetchWithGql](const QString &) mutable {
-                    fetchWithGql(std::move(baseAccount));
+                    fetchWithGql(baseAccount);
                 });
         });
 }
@@ -880,7 +863,7 @@ void validateToken(const QString &token,
 
     TwitchGql::validateCustomAuthToken(
         token,
-        [succeed](CustomAuthValidationResult result) mutable {
+        [succeed](const CustomAuthValidationResult &result) mutable {
             MoltorinoAuthAccount account;
             account.token = result.normalizedToken;
             account.userId = result.userId;
@@ -913,8 +896,8 @@ std::vector<MoltorinoAuthAccount> accounts()
 
     std::vector<MoltorinoAuthAccount> result;
     const auto array = doc.array();
-    result.reserve(size_t(array.size()));
-    for (const auto &value : array)
+    result.reserve(static_cast<size_t>(array.size()));
+    for (const auto value : array)
     {
         if (value.isObject())
         {
@@ -969,7 +952,7 @@ MoltorinoAuthSummary summary()
         }
     }
 
-    result.moderatedChannelCount = channels.size();
+    result.moderatedChannelCount = static_cast<int>(channels.size());
     result.hasOnlyLegacyToken =
         result.accountCount == 0 && result.hasLegacyToken;
     return result;
@@ -1003,12 +986,9 @@ void removeAccount(const QString &userId, const QString &token)
 {
     const auto normalizedToken = normalizeToken(token);
     auto current = accounts();
-    current.erase(std::remove_if(current.begin(), current.end(),
-                                 [&](const auto &account) {
-                                     return sameAccount(account, userId,
-                                                        normalizedToken);
-                                 }),
-                  current.end());
+    std::erase_if(current, [&](const auto &account) {
+        return sameAccount(account, userId, normalizedToken);
+    });
     saveAccounts(current);
 
     if (!normalizedToken.isEmpty() && legacyToken() == normalizedToken)
@@ -1028,7 +1008,7 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
     }
     coordinator.running = true;
 
-    auto finishRefresh = [](MoltorinoAuthRefreshResult result) {
+    auto finishRefresh = [](const MoltorinoAuthRefreshResult &result) {
         auto &coordinator = refreshCoordinator();
         auto callbacks = std::move(coordinator.callbacks);
         coordinator.callbacks.clear();
@@ -1051,15 +1031,14 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
     {
         const auto token = normalizeToken(account.token);
         if (!token.isEmpty() &&
-            std::find(tokens.begin(), tokens.end(), token) == tokens.end())
+            std::ranges::find(tokens, token) == tokens.end())
         {
             tokens.push_back(token);
         }
     }
 
     const auto legacy = legacyToken();
-    if (!legacy.isEmpty() &&
-        std::find(tokens.begin(), tokens.end(), legacy) == tokens.end())
+    if (!legacy.isEmpty() && std::ranges::find(tokens, legacy) == tokens.end())
     {
         tokens.push_back(legacy);
     }
@@ -1085,10 +1064,9 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
 
     auto existingAccountForToken = [existing](const QString &token) {
         const auto normalizedToken = normalizeToken(token);
-        auto found = std::find_if(
-            existing.begin(), existing.end(), [&](const auto &account) {
-                return normalizeToken(account.token) == normalizedToken;
-            });
+        auto found = std::ranges::find_if(existing, [&](const auto &account) {
+            return normalizeToken(account.token) == normalizedToken;
+        });
         if (found != existing.end())
         {
             return *found;
@@ -1142,17 +1120,12 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
             configuredTokens.push_back(legacy);
         }
 
-        state->accounts.erase(
-            std::remove_if(
-                state->accounts.begin(), state->accounts.end(),
-                [&](const auto &refreshed) {
-                    const auto token = normalizeToken(refreshed.token);
-                    return token.isEmpty() ||
-                           std::find(configuredTokens.begin(),
-                                     configuredTokens.end(),
-                                     token) == configuredTokens.end();
-                }),
-            state->accounts.end());
+        std::erase_if(state->accounts, [&](const auto &refreshed) {
+            const auto token = normalizeToken(refreshed.token);
+            return token.isEmpty() ||
+                   std::ranges::find(configuredTokens, token) ==
+                       configuredTokens.end();
+        });
 
         std::vector<QString> refreshedTokens;
         refreshedTokens.reserve(state->accounts.size());
@@ -1172,13 +1145,13 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
             {
                 continue;
             }
-            if (std::find(configuredTokens.begin(), configuredTokens.end(),
-                          token) == configuredTokens.end())
+            if (std::ranges::find(configuredTokens, token) ==
+                configuredTokens.end())
             {
                 continue;
             }
-            if (std::find(refreshedTokens.begin(), refreshedTokens.end(),
-                          token) != refreshedTokens.end())
+            if (std::ranges::find(refreshedTokens, token) !=
+                refreshedTokens.end())
             {
                 continue;
             }
@@ -1239,7 +1212,7 @@ void scheduleStartupRefresh()
             return;
         }
 
-        refreshAccounts([](MoltorinoAuthRefreshResult) {});
+        refreshAccounts([](const MoltorinoAuthRefreshResult &) {});
     });
 }
 

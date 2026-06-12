@@ -78,19 +78,19 @@ public:
                    ResultCallback<IvrSubage> resultCallback,
                    IvrFailureCallback failureCallback);
     // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/modvip/{channel}
-    void getModVip(
-        QString channelName,
-        ResultCallback<std::vector<HelixModerator>, std::vector<HelixVip>>
-            resultCallback,
-        IvrFailureCallback failureCallback);
+    void getModVip(const QString &channelName,
+                   const ResultCallback<std::vector<HelixModerator>,
+                                        std::vector<HelixVip>> &successCallback,
+                   const IvrFailureCallback &failureCallback);
     // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/founders/{login}
-    void getFounders(QString channelName,
-                     ResultCallback<std::vector<HelixModerator>> resultCallback,
-                     IvrFailureCallback failureCallback);
+    void getFounders(
+        const QString &channelName,
+        const ResultCallback<std::vector<HelixModerator>> &successCallback,
+        const IvrFailureCallback &failureCallback);
     // https://api.ivr.fi/v2/docs/#tag/twitch/GET/twitch/user
-    void getUser(QString userName,
-                 ResultCallback<IvrUserProfile> resultCallback,
-                 IvrFailureCallback failureCallback);
+    void getUser(const QString &userName,
+                 const ResultCallback<IvrUserProfile> &successCallback,
+                 const IvrFailureCallback &failureCallback);
 
     static void initialize();
 
@@ -103,7 +103,8 @@ public:
     IvrApi &operator=(IvrApi &&) = delete;
 
 private:
-    NetworkRequest makeRequest(QString url, QUrlQuery urlQuery);
+    static NetworkRequest makeRequest(const QString &url,
+                                      const QUrlQuery &urlQuery);
 };
 
 IvrApi *getIvr();

@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <limits>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 namespace {
@@ -250,11 +252,11 @@ QString formatLongFriendlyDuration(const QDateTime &from, const QDateTime &to)
                 {
                     out += ',';
                 }
-                out += QStringLiteral(" and ");
+                out += u" and "_s;
             }
             else
             {
-                out += QStringLiteral(", ");
+                out += u", "_s;
             }
         }
 

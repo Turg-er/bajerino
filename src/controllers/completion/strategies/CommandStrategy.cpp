@@ -6,9 +6,11 @@
 
 #include <algorithm>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino::completion {
 
-QString normalizeQuery(const QString &query)
+static QString normalizeQuery(const QString &query)
 {
     if (query.startsWith('/') || query.startsWith('.'))
     {
@@ -45,7 +47,7 @@ void CommandStrategy::apply(const std::vector<CommandItem> &items,
                                                              : QChar{};
         const auto hasPreferredPrefix = !preferredPrefix.isNull();
         auto effectivePrefix = [](const CommandItem &item) {
-            return item.prefix.isEmpty() ? QStringLiteral("/") : item.prefix;
+            return item.prefix.isEmpty() ? u"/"_s : item.prefix;
         };
         auto prefixFits = [&](const CommandItem &item) {
             return !hasPreferredPrefix ||

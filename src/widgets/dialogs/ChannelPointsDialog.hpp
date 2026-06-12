@@ -48,6 +48,7 @@ protected:
     void showEvent(QShowEvent *event) override;
 
 private:
+    // NOLINTNEXTLINE(performance-enum-size)
     enum class View {
         Rewards,
         RewardDetail,
@@ -136,7 +137,8 @@ private:
 
     pajlada::Signals::ScopedConnection channelPointsConnection_;
 
-    static std::vector<QPointer<ChannelPointsDialog>> activeDialogs_;
+    static std::vector<QPointer<ChannelPointsDialog>>
+        activeDialogs_;  // NOLINT(readability-identifier-naming)
 };
 
 }  // namespace chatterino

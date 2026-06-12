@@ -46,6 +46,7 @@ struct PubSubCommunityPointsUserV1Message {
 }  // namespace chatterino
 
 template <>
+// NOLINTNEXTLINE(readability-identifier-naming)
 constexpr magic_enum::customize::customize_t magic_enum::customize::enum_name<
     chatterino::PubSubCommunityPointsChannelV1Message::Type>(
     chatterino::PubSubCommunityPointsChannelV1Message::Type value) noexcept
@@ -64,6 +65,7 @@ constexpr magic_enum::customize::customize_t magic_enum::customize::enum_name<
 }
 
 template <>
+// NOLINTNEXTLINE(readability-identifier-naming)
 constexpr magic_enum::customize::customize_t magic_enum::customize::enum_name<
     chatterino::PubSubCommunityPointsUserV1Message::Type>(
     chatterino::PubSubCommunityPointsUserV1Message::Type value) noexcept

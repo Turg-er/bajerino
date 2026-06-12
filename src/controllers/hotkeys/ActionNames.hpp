@@ -84,14 +84,18 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               },
               .argumentsPrompt = "Direction:",
           }},
-         {"search", ActionDefinition{"Focus search box"}},
+         {"search", ActionDefinition{.displayName = "Focus search box"}},
          {"execModeratorAction",
           ActionDefinition{
-              "Usercard: execute moderation action",
-              "<ban, unban or number of the timeout button to use>", 1}},
+              .displayName = "Usercard: execute moderation action",
+              .argumentDescription =
+                  "<ban, unban or number of the timeout button to use>",
+              .minCountArguments = 1}},
          {"openProfilePictureMenu",
-          ActionDefinition{"Usercard: Open profile picture menu"}},
-         {"pin", ActionDefinition{"Usercard, reply thread: pin window"}},
+          ActionDefinition{.displayName =
+                               "Usercard: Open profile picture menu"}},
+         {"pin", ActionDefinition{.displayName =
+                                      "Usercard, reply thread: pin window"}},
      }},
     {HotkeyCategory::Split,
      {
@@ -184,10 +188,12 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .argumentsPromptHover =
                   "Should the moderation mode be enabled, disabled or toggled",
           }},
-         {"showSearch", ActionDefinition{"Search current channel"}},
-         {"showGlobalSearch", ActionDefinition{"Search all open tabs"}},
-         {"debug", ActionDefinition{"Show debug popup"}},
-         {"popupOverlay", ActionDefinition{"New overlay popup"}},
+         {"showSearch",
+          ActionDefinition{.displayName = "Search current channel"}},
+         {"showGlobalSearch",
+          ActionDefinition{.displayName = "Search all open tabs"}},
+         {"debug", ActionDefinition{.displayName = "Show debug popup"}},
+         {"popupOverlay", ActionDefinition{.displayName = "New overlay popup"}},
          {"toggleOverlayInertia",
           ActionDefinition{
               .displayName = "Toggle overlay click-through",

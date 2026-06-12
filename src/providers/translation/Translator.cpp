@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <optional>
 
+using namespace Qt::StringLiterals;
+
 namespace chatterino {
 
 namespace {
@@ -29,7 +31,7 @@ std::optional<TranslationResult> parseGoogleTranslationResult(
     }
 
     QString translated;
-    for (const auto &segmentValue : segments)
+    for (const auto segmentValue : segments)
     {
         const auto segment = segmentValue.toArray();
         if (!segment.isEmpty())
@@ -66,100 +68,100 @@ QString normalizedLanguageCode(QString language)
 const std::vector<TranslationLanguage> &supportedTranslationLanguages()
 {
     static const std::vector<TranslationLanguage> languages{
-        {QStringLiteral("en"), QStringLiteral("English")},
-        {QStringLiteral("es"), QStringLiteral("Spanish")},
-        {QStringLiteral("pt"), QStringLiteral("Portuguese")},
-        {QStringLiteral("fr"), QStringLiteral("French")},
-        {QStringLiteral("de"), QStringLiteral("German")},
-        {QStringLiteral("it"), QStringLiteral("Italian")},
-        {QStringLiteral("nl"), QStringLiteral("Dutch")},
-        {QStringLiteral("pl"), QStringLiteral("Polish")},
-        {QStringLiteral("tr"), QStringLiteral("Turkish")},
-        {QStringLiteral("ru"), QStringLiteral("Russian")},
-        {QStringLiteral("ja"), QStringLiteral("Japanese")},
-        {QStringLiteral("ko"), QStringLiteral("Korean")},
-        {QStringLiteral("zh-cn"), QStringLiteral("Chinese (Simplified)")},
-        {QStringLiteral("zh-tw"), QStringLiteral("Chinese (Traditional)")},
-        {QStringLiteral("ar"), QStringLiteral("Arabic")},
-        {QStringLiteral("af"), QStringLiteral("Afrikaans")},
-        {QStringLiteral("sq"), QStringLiteral("Albanian")},
-        {QStringLiteral("am"), QStringLiteral("Amharic")},
-        {QStringLiteral("hy"), QStringLiteral("Armenian")},
-        {QStringLiteral("az"), QStringLiteral("Azerbaijani")},
-        {QStringLiteral("eu"), QStringLiteral("Basque")},
-        {QStringLiteral("be"), QStringLiteral("Belarusian")},
-        {QStringLiteral("bn"), QStringLiteral("Bengali")},
-        {QStringLiteral("bs"), QStringLiteral("Bosnian")},
-        {QStringLiteral("bg"), QStringLiteral("Bulgarian")},
-        {QStringLiteral("ca"), QStringLiteral("Catalan")},
-        {QStringLiteral("ceb"), QStringLiteral("Cebuano")},
-        {QStringLiteral("co"), QStringLiteral("Corsican")},
-        {QStringLiteral("hr"), QStringLiteral("Croatian")},
-        {QStringLiteral("cs"), QStringLiteral("Czech")},
-        {QStringLiteral("da"), QStringLiteral("Danish")},
-        {QStringLiteral("eo"), QStringLiteral("Esperanto")},
-        {QStringLiteral("et"), QStringLiteral("Estonian")},
-        {QStringLiteral("fi"), QStringLiteral("Finnish")},
-        {QStringLiteral("fy"), QStringLiteral("Frisian")},
-        {QStringLiteral("gl"), QStringLiteral("Galician")},
-        {QStringLiteral("ka"), QStringLiteral("Georgian")},
-        {QStringLiteral("el"), QStringLiteral("Greek")},
-        {QStringLiteral("gu"), QStringLiteral("Gujarati")},
-        {QStringLiteral("ht"), QStringLiteral("Haitian Creole")},
-        {QStringLiteral("ha"), QStringLiteral("Hausa")},
-        {QStringLiteral("haw"), QStringLiteral("Hawaiian")},
-        {QStringLiteral("iw"), QStringLiteral("Hebrew")},
-        {QStringLiteral("hi"), QStringLiteral("Hindi")},
-        {QStringLiteral("hu"), QStringLiteral("Hungarian")},
-        {QStringLiteral("is"), QStringLiteral("Icelandic")},
-        {QStringLiteral("id"), QStringLiteral("Indonesian")},
-        {QStringLiteral("ga"), QStringLiteral("Irish")},
-        {QStringLiteral("jv"), QStringLiteral("Javanese")},
-        {QStringLiteral("kn"), QStringLiteral("Kannada")},
-        {QStringLiteral("kk"), QStringLiteral("Kazakh")},
-        {QStringLiteral("km"), QStringLiteral("Khmer")},
-        {QStringLiteral("ku"), QStringLiteral("Kurdish")},
-        {QStringLiteral("ky"), QStringLiteral("Kyrgyz")},
-        {QStringLiteral("lo"), QStringLiteral("Lao")},
-        {QStringLiteral("la"), QStringLiteral("Latin")},
-        {QStringLiteral("lv"), QStringLiteral("Latvian")},
-        {QStringLiteral("lt"), QStringLiteral("Lithuanian")},
-        {QStringLiteral("lb"), QStringLiteral("Luxembourgish")},
-        {QStringLiteral("mk"), QStringLiteral("Macedonian")},
-        {QStringLiteral("mg"), QStringLiteral("Malagasy")},
-        {QStringLiteral("ms"), QStringLiteral("Malay")},
-        {QStringLiteral("ml"), QStringLiteral("Malayalam")},
-        {QStringLiteral("mt"), QStringLiteral("Maltese")},
-        {QStringLiteral("mi"), QStringLiteral("Maori")},
-        {QStringLiteral("mr"), QStringLiteral("Marathi")},
-        {QStringLiteral("mn"), QStringLiteral("Mongolian")},
-        {QStringLiteral("my"), QStringLiteral("Myanmar (Burmese)")},
-        {QStringLiteral("ne"), QStringLiteral("Nepali")},
-        {QStringLiteral("no"), QStringLiteral("Norwegian")},
-        {QStringLiteral("ps"), QStringLiteral("Pashto")},
-        {QStringLiteral("fa"), QStringLiteral("Persian")},
-        {QStringLiteral("ro"), QStringLiteral("Romanian")},
-        {QStringLiteral("sr"), QStringLiteral("Serbian")},
-        {QStringLiteral("si"), QStringLiteral("Sinhala")},
-        {QStringLiteral("sk"), QStringLiteral("Slovak")},
-        {QStringLiteral("sl"), QStringLiteral("Slovenian")},
-        {QStringLiteral("so"), QStringLiteral("Somali")},
-        {QStringLiteral("su"), QStringLiteral("Sundanese")},
-        {QStringLiteral("sw"), QStringLiteral("Swahili")},
-        {QStringLiteral("sv"), QStringLiteral("Swedish")},
-        {QStringLiteral("ta"), QStringLiteral("Tamil")},
-        {QStringLiteral("te"), QStringLiteral("Telugu")},
-        {QStringLiteral("th"), QStringLiteral("Thai")},
-        {QStringLiteral("tl"), QStringLiteral("Tagalog")},
-        {QStringLiteral("uk"), QStringLiteral("Ukrainian")},
-        {QStringLiteral("ur"), QStringLiteral("Urdu")},
-        {QStringLiteral("uz"), QStringLiteral("Uzbek")},
-        {QStringLiteral("vi"), QStringLiteral("Vietnamese")},
-        {QStringLiteral("cy"), QStringLiteral("Welsh")},
-        {QStringLiteral("xh"), QStringLiteral("Xhosa")},
-        {QStringLiteral("yi"), QStringLiteral("Yiddish")},
-        {QStringLiteral("yo"), QStringLiteral("Yoruba")},
-        {QStringLiteral("zu"), QStringLiteral("Zulu")},
+        {.code = u"en"_s, .name = u"English"_s},
+        {.code = u"es"_s, .name = u"Spanish"_s},
+        {.code = u"pt"_s, .name = u"Portuguese"_s},
+        {.code = u"fr"_s, .name = u"French"_s},
+        {.code = u"de"_s, .name = u"German"_s},
+        {.code = u"it"_s, .name = u"Italian"_s},
+        {.code = u"nl"_s, .name = u"Dutch"_s},
+        {.code = u"pl"_s, .name = u"Polish"_s},
+        {.code = u"tr"_s, .name = u"Turkish"_s},
+        {.code = u"ru"_s, .name = u"Russian"_s},
+        {.code = u"ja"_s, .name = u"Japanese"_s},
+        {.code = u"ko"_s, .name = u"Korean"_s},
+        {.code = u"zh-cn"_s, .name = u"Chinese (Simplified)"_s},
+        {.code = u"zh-tw"_s, .name = u"Chinese (Traditional)"_s},
+        {.code = u"ar"_s, .name = u"Arabic"_s},
+        {.code = u"af"_s, .name = u"Afrikaans"_s},
+        {.code = u"sq"_s, .name = u"Albanian"_s},
+        {.code = u"am"_s, .name = u"Amharic"_s},
+        {.code = u"hy"_s, .name = u"Armenian"_s},
+        {.code = u"az"_s, .name = u"Azerbaijani"_s},
+        {.code = u"eu"_s, .name = u"Basque"_s},
+        {.code = u"be"_s, .name = u"Belarusian"_s},
+        {.code = u"bn"_s, .name = u"Bengali"_s},
+        {.code = u"bs"_s, .name = u"Bosnian"_s},
+        {.code = u"bg"_s, .name = u"Bulgarian"_s},
+        {.code = u"ca"_s, .name = u"Catalan"_s},
+        {.code = u"ceb"_s, .name = u"Cebuano"_s},
+        {.code = u"co"_s, .name = u"Corsican"_s},
+        {.code = u"hr"_s, .name = u"Croatian"_s},
+        {.code = u"cs"_s, .name = u"Czech"_s},
+        {.code = u"da"_s, .name = u"Danish"_s},
+        {.code = u"eo"_s, .name = u"Esperanto"_s},
+        {.code = u"et"_s, .name = u"Estonian"_s},
+        {.code = u"fi"_s, .name = u"Finnish"_s},
+        {.code = u"fy"_s, .name = u"Frisian"_s},
+        {.code = u"gl"_s, .name = u"Galician"_s},
+        {.code = u"ka"_s, .name = u"Georgian"_s},
+        {.code = u"el"_s, .name = u"Greek"_s},
+        {.code = u"gu"_s, .name = u"Gujarati"_s},
+        {.code = u"ht"_s, .name = u"Haitian Creole"_s},
+        {.code = u"ha"_s, .name = u"Hausa"_s},
+        {.code = u"haw"_s, .name = u"Hawaiian"_s},
+        {.code = u"iw"_s, .name = u"Hebrew"_s},
+        {.code = u"hi"_s, .name = u"Hindi"_s},
+        {.code = u"hu"_s, .name = u"Hungarian"_s},
+        {.code = u"is"_s, .name = u"Icelandic"_s},
+        {.code = u"id"_s, .name = u"Indonesian"_s},
+        {.code = u"ga"_s, .name = u"Irish"_s},
+        {.code = u"jv"_s, .name = u"Javanese"_s},
+        {.code = u"kn"_s, .name = u"Kannada"_s},
+        {.code = u"kk"_s, .name = u"Kazakh"_s},
+        {.code = u"km"_s, .name = u"Khmer"_s},
+        {.code = u"ku"_s, .name = u"Kurdish"_s},
+        {.code = u"ky"_s, .name = u"Kyrgyz"_s},
+        {.code = u"lo"_s, .name = u"Lao"_s},
+        {.code = u"la"_s, .name = u"Latin"_s},
+        {.code = u"lv"_s, .name = u"Latvian"_s},
+        {.code = u"lt"_s, .name = u"Lithuanian"_s},
+        {.code = u"lb"_s, .name = u"Luxembourgish"_s},
+        {.code = u"mk"_s, .name = u"Macedonian"_s},
+        {.code = u"mg"_s, .name = u"Malagasy"_s},
+        {.code = u"ms"_s, .name = u"Malay"_s},
+        {.code = u"ml"_s, .name = u"Malayalam"_s},
+        {.code = u"mt"_s, .name = u"Maltese"_s},
+        {.code = u"mi"_s, .name = u"Maori"_s},
+        {.code = u"mr"_s, .name = u"Marathi"_s},
+        {.code = u"mn"_s, .name = u"Mongolian"_s},
+        {.code = u"my"_s, .name = u"Myanmar (Burmese)"_s},
+        {.code = u"ne"_s, .name = u"Nepali"_s},
+        {.code = u"no"_s, .name = u"Norwegian"_s},
+        {.code = u"ps"_s, .name = u"Pashto"_s},
+        {.code = u"fa"_s, .name = u"Persian"_s},
+        {.code = u"ro"_s, .name = u"Romanian"_s},
+        {.code = u"sr"_s, .name = u"Serbian"_s},
+        {.code = u"si"_s, .name = u"Sinhala"_s},
+        {.code = u"sk"_s, .name = u"Slovak"_s},
+        {.code = u"sl"_s, .name = u"Slovenian"_s},
+        {.code = u"so"_s, .name = u"Somali"_s},
+        {.code = u"su"_s, .name = u"Sundanese"_s},
+        {.code = u"sw"_s, .name = u"Swahili"_s},
+        {.code = u"sv"_s, .name = u"Swedish"_s},
+        {.code = u"ta"_s, .name = u"Tamil"_s},
+        {.code = u"te"_s, .name = u"Telugu"_s},
+        {.code = u"th"_s, .name = u"Thai"_s},
+        {.code = u"tl"_s, .name = u"Tagalog"_s},
+        {.code = u"uk"_s, .name = u"Ukrainian"_s},
+        {.code = u"ur"_s, .name = u"Urdu"_s},
+        {.code = u"uz"_s, .name = u"Uzbek"_s},
+        {.code = u"vi"_s, .name = u"Vietnamese"_s},
+        {.code = u"cy"_s, .name = u"Welsh"_s},
+        {.code = u"xh"_s, .name = u"Xhosa"_s},
+        {.code = u"yi"_s, .name = u"Yiddish"_s},
+        {.code = u"yo"_s, .name = u"Yoruba"_s},
+        {.code = u"zu"_s, .name = u"Zulu"_s},
     };
 
     return languages;
@@ -194,23 +196,23 @@ QString translationLanguageCodeFromInput(QString language)
     }
 
     static const QHash<QString, QString> aliases{
-        {"zh", QStringLiteral("zh-cn")},
-        {"zh-hans", QStringLiteral("zh-cn")},
-        {"cn", QStringLiteral("zh-cn")},
-        {"chinese", QStringLiteral("zh-cn")},
-        {"simplified-chinese", QStringLiteral("zh-cn")},
-        {"zh-hant", QStringLiteral("zh-tw")},
-        {"tw", QStringLiteral("zh-tw")},
-        {"traditional-chinese", QStringLiteral("zh-tw")},
-        {"he", QStringLiteral("iw")},
-        {"fil", QStringLiteral("tl")},
-        {"filipino", QStringLiteral("tl")},
-        {"burmese", QStringLiteral("my")},
-        {"br", QStringLiteral("pt")},
-        {"pt-br", QStringLiteral("pt")},
-        {"jp", QStringLiteral("ja")},
-        {"kr", QStringLiteral("ko")},
-        {"ua", QStringLiteral("uk")},
+        {"zh", u"zh-cn"_s},
+        {"zh-hans", u"zh-cn"_s},
+        {"cn", u"zh-cn"_s},
+        {"chinese", u"zh-cn"_s},
+        {"simplified-chinese", u"zh-cn"_s},
+        {"zh-hant", u"zh-tw"_s},
+        {"tw", u"zh-tw"_s},
+        {"traditional-chinese", u"zh-tw"_s},
+        {"he", u"iw"_s},
+        {"fil", u"tl"_s},
+        {"filipino", u"tl"_s},
+        {"burmese", u"my"_s},
+        {"br", u"pt"_s},
+        {"pt-br", u"pt"_s},
+        {"jp", u"ja"_s},
+        {"kr", u"ko"_s},
+        {"ua", u"uk"_s},
     };
 
     return aliases.value(normalized);
@@ -223,10 +225,10 @@ bool isSupportedTranslationLanguage(const QString &language)
 
 QString normalizedTranslationTargetLanguage(QString language)
 {
-    const auto code = translationLanguageCodeFromInput(std::move(language));
+    auto code = translationLanguageCodeFromInput(std::move(language));
     if (code.isEmpty())
     {
-        return QStringLiteral("en");
+        return u"en"_s;
     }
 
     return code;
@@ -266,16 +268,16 @@ QString trimTextForTranslation(QString text)
 
 void requestTextTranslation(const QString &text, const QString &targetLanguage,
                             QObject *caller,
-                            TranslationSuccessCallback onSuccess,
-                            TranslationErrorCallback onError,
-                            TranslationFinishedCallback onFinished)
+                            const TranslationSuccessCallback &onSuccess,
+                            const TranslationErrorCallback &onError,
+                            const TranslationFinishedCallback &onFinished)
 {
     const auto requestText = trimTextForTranslation(text);
     if (requestText.isEmpty())
     {
         if (onError)
         {
-            onError(QStringLiteral("There is no text to translate."));
+            onError(u"There is no text to translate."_s);
         }
         if (onFinished)
         {
@@ -286,14 +288,13 @@ void requestTextTranslation(const QString &text, const QString &targetLanguage,
 
     const auto target = normalizedTranslationTargetLanguage(targetLanguage);
 
-    QUrl url(
-        QStringLiteral("https://translate.googleapis.com/translate_a/single"));
+    QUrl url(u"https://translate.googleapis.com/translate_a/single"_s);
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("client"), QStringLiteral("gtx"));
-    query.addQueryItem(QStringLiteral("sl"), QStringLiteral("auto"));
-    query.addQueryItem(QStringLiteral("tl"), target);
-    query.addQueryItem(QStringLiteral("dt"), QStringLiteral("t"));
-    query.addQueryItem(QStringLiteral("q"), requestText);
+    query.addQueryItem(u"client"_s, u"gtx"_s);
+    query.addQueryItem(u"sl"_s, u"auto"_s);
+    query.addQueryItem(u"tl"_s, target);
+    query.addQueryItem(u"dt"_s, u"t"_s);
+    query.addQueryItem(u"q"_s, requestText);
     url.setQuery(query);
 
     auto request =
@@ -305,8 +306,7 @@ void requestTextTranslation(const QString &text, const QString &targetLanguage,
                 {
                     if (onError)
                     {
-                        onError(QStringLiteral(
-                            "Translation failed: invalid response."));
+                        onError(u"Translation failed: invalid response."_s);
                     }
                     return;
                 }
@@ -320,8 +320,7 @@ void requestTextTranslation(const QString &text, const QString &targetLanguage,
                 (void)result;
                 if (onError)
                 {
-                    onError(
-                        QStringLiteral("Translation failed: network error."));
+                    onError(u"Translation failed: network error."_s);
                 }
             })
             .finally([onFinished] {

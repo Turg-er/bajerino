@@ -53,9 +53,9 @@ public:
     bool newInstance{};
 
     /// Native, platform-specific exception code from crashpad
-    std::optional<uint32_t> exceptionCode{};
+    std::optional<uint32_t> exceptionCode;
     /// Text version of the exception code. Potentially contains more context.
-    std::optional<QString> exceptionMessage{};
+    std::optional<QString> exceptionMessage;
 
     bool shouldRunBrowserExtensionHost{};
     // Shows a single chat. Used on windows to embed in another application.

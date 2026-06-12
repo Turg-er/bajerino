@@ -82,6 +82,7 @@ struct GqlUsercardMessagePage {
     bool hasNextPage = false;
 };
 
+// NOLINTNEXTLINE(performance-enum-size)
 enum class GqlModerationActionKind {
     Ban,
     Unban,
@@ -183,235 +184,238 @@ class TwitchGql
 public:
     static void pinMessage(
         const QString &channelId, const QString &messageId, int durationSeconds,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unpinMessage(
         const QString &pinId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void updatePinnedMessage(
         const QString &pinId, std::optional<int> durationSeconds,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getCurrentPin(
-        const QString &channelId, std::shared_ptr<TwitchAccount> account,
-        std::function<void(std::optional<TwitchChannel::PinnedMessage>)>
-            successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &channelId, const std::shared_ptr<TwitchAccount> &account,
+        const std::function<void(std::optional<TwitchChannel::PinnedMessage>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getUserByLogin(
         const QString &login, const QString &oauthToken,
-        std::function<void(std::optional<GqlUser>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(std::optional<GqlUser>)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void followUser(
         const QString &targetId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unfollowUser(
         const QString &targetId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getLatestModLogMessageBySender(
         const QString &channelId, const QString &senderId,
         const QString &oauthToken,
-        std::function<void(std::optional<GqlModLogMessage>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(std::optional<GqlModLogMessage>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getUsercardMessagesBySender(
         const QString &channelId, const QString &senderId,
         const QString &cursor, const QString &oauthToken,
-        std::function<void(GqlUsercardMessagePage)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlUsercardMessagePage)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getModerationActionLogs(
         const QString &channelId, const QString &cursor,
         const QString &oauthToken,
-        std::function<void(GqlModerationActionLogPage)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlModerationActionLogPage)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getActivePrediction(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(std::optional<TwitchChannel::PredictionEvent>)>
-            successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(std::optional<TwitchChannel::PredictionEvent>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getActivePoll(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(std::optional<TwitchChannel::PollEvent>)>
-            successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(std::optional<TwitchChannel::PollEvent>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void makePrediction(
         const QString &eventID, const QString &outcomeID, int points,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void createPredictionEvent(
         const QString &channelId, const QString &title,
         const QStringList &outcomes, int predictionWindowSeconds,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getPredictionTemplates(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(QVector<PredictionTemplate>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(QVector<PredictionTemplate>)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void lockPrediction(
         const QString &eventId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void cancelPrediction(
         const QString &eventId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void resolvePrediction(
         const QString &eventId, const QString &outcomeId,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void createPollEvent(
         const QString &channelId, const QString &title,
         const QStringList &choices, int durationSeconds,
         std::optional<int> pointsPerVote, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void terminatePoll(
         const QString &pollId, const QString &currentUserId,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void archivePoll(
         const QString &pollId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void addChannelBlockedTerm(
         const QString &channelId, const QString &phrase,
         const QString &oauthToken,
-        std::function<void(GqlAddBlockedTermResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlAddBlockedTermResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getChannelBlockedTerms(
         const QString &channelId, const QString &oauthToken,
-        std::function<void(QVector<GqlBlockedTerm>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(QVector<GqlBlockedTerm>)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getChannelSelfData(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(GqlChannelSelfData)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelSelfData)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void deleteChannelBlockedTerm(
         const QString &channelId, const QString &termId,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
-    static void grantVIP(const QString &channelId, const QString &targetLogin,
-                         const QString &oauthToken,
-                         std::function<void()> successCallback,
-                         std::function<void(const QString &)> failureCallback);
-    static void revokeVIP(const QString &channelId, const QString &targetLogin,
-                          const QString &oauthToken,
-                          std::function<void()> successCallback,
-                          std::function<void(const QString &)> failureCallback);
-    static void modUser(const QString &channelId, const QString &targetLogin,
-                        const QString &oauthToken,
-                        std::function<void()> successCallback,
-                        std::function<void(const QString &)> failureCallback);
-    static void unmodUser(const QString &channelId, const QString &targetLogin,
-                          const QString &oauthToken,
-                          std::function<void()> successCallback,
-                          std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
+    static void grantVIP(
+        const QString &channelId, const QString &targetLogin,
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
+    static void revokeVIP(
+        const QString &channelId, const QString &targetLogin,
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
+    static void modUser(
+        const QString &channelId, const QString &targetLogin,
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
+    static void unmodUser(
+        const QString &channelId, const QString &targetLogin,
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void assignLeadModerator(
         const QString &channelId, const QString &targetUserId,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unassignLeadModerator(
         const QString &channelId, const QString &targetUserId,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void addEditorUser(
         const QString &channelId, const QString &targetLogin,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void removeEditorUser(
         const QString &channelId, const QString &targetLogin,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getRaidChannelIDs(
         const QString &sourceLogin, const QString &targetLogin,
         const QString &oauthToken,
-        std::function<void(RaidChannelIDs)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(RaidChannelIDs)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void createRaid(
         const QString &sourceId, const QString &targetId,
         const QString &oauthToken,
-        std::function<void(const QString &)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(const QString &)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void sendRaidNow(
         const QString &sourceId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void cancelRaidGql(
         const QString &sourceId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void voteInPoll(
         const QString &pollId, const QString &choiceId, const QString &userId,
         int extraVotes, std::optional<int> pointsPerVote,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const QString &oauthToken, const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getChannelPoints(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(qint64)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(qint64)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
     static void getChannelPointRewards(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(GqlChannelPointRewards)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRewards)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void redeemCustomReward(
         const QString &channelId, const GqlChannelPointReward &reward,
         const QString &textInput, const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void sendHighlightedChatMessage(
         const QString &channelId, int cost, const QString &message,
         const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void sendSubOnlyBypassMessage(
         const QString &channelId, int cost, const QString &message,
         const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unlockRandomSubscriberEmote(
         const QString &channelId, int cost, const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unlockChosenSubscriberEmote(
         const QString &channelId, const QString &emoteId, int cost,
         const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void unlockModifiedSubscriberEmote(
         const QString &channelId, const QString &modifiedEmoteId, int cost,
         const QString &oauthToken,
-        std::function<void(GqlChannelPointRedeemResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(GqlChannelPointRedeemResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getAvailableChannelPointEmotes(
         const QString &channelId, const QString &oauthToken,
-        std::function<void(QVector<GqlChannelPointEmote>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(QVector<GqlChannelPointEmote>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getModifiableChannelPointEmotes(
         const QString &channelLogin, const QString &oauthToken,
-        std::function<void(QVector<GqlChannelPointEmote>)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(QVector<GqlChannelPointEmote>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getChannelPointEmoteModifiers(
         const QString &oauthToken,
-        std::function<void(QVector<GqlChannelPointEmoteModifier>)>
-            successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(QVector<GqlChannelPointEmoteModifier>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
 #endif
     static void getChatWarningStatus(
         const QString &channelId, const QString &targetUserId,
         const QString &oauthToken,
-        std::function<void(std::optional<TwitchChannel::ChatWarning>)>
-            successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(std::optional<TwitchChannel::ChatWarning>)>
+            &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void acknowledgeChatWarning(
         const QString &channelId, const QString &oauthToken,
-        std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void()> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void validateCustomAuthToken(
         const QString &oauthToken,
-        std::function<void(CustomAuthValidationResult)> successCallback,
-        std::function<void(const QString &)> failureCallback);
+        const std::function<void(CustomAuthValidationResult)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
     static void getModeratedChannels(
         const QString &oauthToken,
         std::function<void(QVector<GqlModeratedChannel>)> successCallback,

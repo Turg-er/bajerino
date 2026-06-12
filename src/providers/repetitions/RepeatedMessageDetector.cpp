@@ -14,7 +14,7 @@ namespace chatterino {
 
 namespace {
 
-constexpr qint64 CACHE_TTL_MS = 5 * 60 * 1000;
+constexpr qint64 CACHE_TTL_MS = static_cast<const qint64>(5 * 60 * 1000);
 constexpr qsizetype MAX_SEEN_MESSAGE_IDS_PER_USER = 16;
 constexpr qsizetype MAX_USERS_PER_CHANNEL = 2048;
 constexpr qsizetype MAX_NORMALIZED_CHARS = 512;
@@ -92,7 +92,8 @@ std::optional<int> RepeatedMessageDetector::check(
         this->checksSinceCleanup_ = 0;
         for (auto it = this->channels_.begin(); it != this->channels_.end();)
         {
-            this->cleanupChannel(it.value(), now);
+            chatterino::RepeatedMessageDetector::cleanupChannel(it.value(),
+                                                                now);
             if (it.value().isEmpty())
             {
                 it = this->channels_.erase(it);
@@ -107,7 +108,7 @@ std::optional<int> RepeatedMessageDetector::check(
     auto &channel = this->channels_[check.channelID];
     auto &user = channel[check.userID];
     user.lastSeenAt = now;
-    this->cleanupUser(user, now);
+    chatterino::RepeatedMessageDetector::cleanupUser(user, now);
 
     if (hasSeenMessageID(user, check.messageID))
     {
@@ -129,7 +130,7 @@ std::optional<int> RepeatedMessageDetector::check(
         user.active->missesSinceMatch = 0;
         user.active->expiresAt = now + CACHE_TTL_MS;
         user.candidate = user.active;
-        this->enforceChannelLimit(channel);
+        chatterino::RepeatedMessageDetector::enforceChannelLimit(channel);
         if (user.active->repeatCount >= visibleThreshold)
         {
             return user.active->repeatCount;
@@ -164,11 +165,11 @@ std::optional<int> RepeatedMessageDetector::check(
     {
         user.candidate->missesSinceMatch = 0;
         user.active = user.candidate;
-        this->enforceChannelLimit(channel);
+        chatterino::RepeatedMessageDetector::enforceChannelLimit(channel);
         return user.active->repeatCount;
     }
 
-    this->enforceChannelLimit(channel);
+    chatterino::RepeatedMessageDetector::enforceChannelLimit(channel);
     return std::nullopt;
 }
 
@@ -243,16 +244,16 @@ double RepeatedMessageDetector::compare(const QString &first,
     firstBigrams.reserve(first.size() - 1);
     for (qsizetype i = 0; i < first.size() - 1; ++i)
     {
-        const auto key = (quint32(first.at(i).unicode()) << 16U) |
-                         quint32(first.at(i + 1).unicode());
+        const auto key = (static_cast<quint32>(first.at(i).unicode()) << 16U) |
+                         static_cast<quint32>(first.at(i + 1).unicode());
         firstBigrams[key] = firstBigrams.value(key) + 1;
     }
 
     int intersectionSize = 0;
     for (qsizetype i = 0; i < second.size() - 1; ++i)
     {
-        const auto key = (quint32(second.at(i).unicode()) << 16U) |
-                         quint32(second.at(i + 1).unicode());
+        const auto key = (static_cast<quint32>(second.at(i).unicode()) << 16U) |
+                         static_cast<quint32>(second.at(i + 1).unicode());
         auto count = firstBigrams.value(key);
         if (count > 0)
         {
@@ -261,7 +262,8 @@ double RepeatedMessageDetector::compare(const QString &first,
         }
     }
 
-    return (2.0 * intersectionSize) / double(first.size() + second.size() - 2);
+    return (2.0 * intersectionSize) /
+           static_cast<double>(first.size() + second.size() - 2);
 }
 
 bool RepeatedMessageDetector::messagesMatch(const QString &first,
@@ -278,7 +280,8 @@ bool RepeatedMessageDetector::messagesMatch(const QString &first,
         return false;
     }
 
-    return compare(first, second) >= double(sensitivityPercent) / 100.0;
+    return compare(first, second) >=
+           static_cast<double>(sensitivityPercent) / 100.0;
 }
 
 int RepeatedMessageDetector::sensitivityToPercent(int sensitivity)
@@ -314,17 +317,18 @@ RepeatedMessageDetector::Entry RepeatedMessageDetector::makeEntry(
 bool RepeatedMessageDetector::hasSeenMessageID(const UserCache &user,
                                                const QString &messageID)
 {
-    return std::any_of(user.seenMessages.begin(), user.seenMessages.end(),
-                       [&messageID](const SeenMessage &seen) {
-                           return seen.messageID == messageID;
-                       });
+    return std::ranges::any_of(user.seenMessages,
+                               [&messageID](const SeenMessage &seen) {
+                                   return seen.messageID == messageID;
+                               });
 }
 
 void RepeatedMessageDetector::rememberMessageID(UserCache &user,
                                                 const QString &messageID,
                                                 qint64 now)
 {
-    user.seenMessages.push_back({messageID, now + CACHE_TTL_MS});
+    user.seenMessages.push_back(
+        {.messageID = messageID, .expiresAt = now + CACHE_TTL_MS});
     while (user.seenMessages.size() > MAX_SEEN_MESSAGE_IDS_PER_USER)
     {
         user.seenMessages.pop_front();
@@ -343,10 +347,11 @@ void RepeatedMessageDetector::cleanupUser(UserCache &user, qint64 now)
     }
 
     user.seenMessages.erase(
-        std::remove_if(user.seenMessages.begin(), user.seenMessages.end(),
-                       [now](const SeenMessage &seen) {
-                           return seen.expiresAt <= now;
-                       }),
+        std::ranges::remove_if(user.seenMessages,
+                               [now](const SeenMessage &seen) {
+                                   return seen.expiresAt <= now;
+                               })
+            .begin(),
         user.seenMessages.end());
 }
 
@@ -354,7 +359,7 @@ void RepeatedMessageDetector::cleanupChannel(ChannelCache &channel, qint64 now)
 {
     for (auto it = channel.begin(); it != channel.end();)
     {
-        this->cleanupUser(it.value(), now);
+        chatterino::RepeatedMessageDetector::cleanupUser(it.value(), now);
 
         if (!it.value().active && !it.value().candidate &&
             it.value().seenMessages.isEmpty())

@@ -261,7 +261,7 @@ public:
     BoolSetting headerGame = {"/appearance/splitheader/showGame", false};
     BoolSetting headerUptime = {"/appearance/splitheader/showUptime", false};
     FloatSetting customThemeMultiplier = {"/appearance/customThemeMultiplier",
-                                          -0.5f};
+                                          -0.5F};
     // BoolSetting useCustomWindowFrame = {"/appearance/useCustomWindowFrame",
     // false};
 
@@ -449,7 +449,7 @@ public:
     BoolSetting enableEmoteImages = {"/emotes/enableEmoteImages", true};
     BoolSetting animateEmotes = {"/emotes/enableGifAnimations", true};
     BoolSetting enableZeroWidthEmotes = {"/emotes/enableZeroWidthEmotes", true};
-    FloatSetting emoteScale = {"/emotes/scale", 1.f};
+    FloatSetting emoteScale = {"/emotes/scale", 1.F};
     EnumStringSetting<EmoteTooltipScale> emoteTooltipScale = {
         "/emotes/tooltipScale",
         EmoteTooltipScale::Medium,
@@ -794,7 +794,7 @@ public:
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};
 
-    BoolSetting openLinksIncognito = {"/misc/openLinksIncognito", 0};
+    BoolSetting openLinksIncognito = {"/misc/openLinksIncognito", false};
 
     EnumSetting<ThumbnailPreviewMode> emotesTooltipPreview = {
         "/misc/emotesTooltipPreview",
@@ -867,7 +867,7 @@ public:
     BoolSetting shownSimilarTriggerHighlights = {
         "/similarity/shownSimilarTriggerHighlights", false};
     FloatSetting similarityPercentage = {"/similarity/similarityPercentage",
-                                         0.9f};
+                                         0.9F};
     IntSetting hideSimilarMaxDelay = {"/similarity/hideSimilarMaxDelay", 5};
     IntSetting hideSimilarMaxMessagesToCheck = {
         "/similarity/hideSimilarMaxMessagesToCheck", 3};

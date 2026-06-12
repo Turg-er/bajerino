@@ -63,6 +63,8 @@
 
 #include <unordered_map>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 using namespace chatterino;
@@ -559,14 +561,13 @@ CommandController::CommandController(const Paths &paths)
         }
 
         auto &s = *getSettings();
-        const auto usage = QStringLiteral("Usage: /bot <message>");
+        const auto usage = u"Usage: /bot <message>"_s;
         const bool botBadgeConfigured =
             !s.botBadgeAppAccessToken.getValue().trimmed().isEmpty() &&
             !s.botBadgeClientID.getValue().trimmed().isEmpty() &&
             !s.botBadgeUserID.getValue().trimmed().isEmpty();
         const auto lockedMessage = [&usage] {
-            return QStringLiteral("Bot mode is locked. Ask Molto about it. ") +
-                   usage;
+            return u"Bot mode is locked. Ask Molto about it. "_s + usage;
         };
 
         if (ctx.words.size() < 2)
@@ -584,11 +585,9 @@ CommandController::CommandController(const Paths &paths)
             ctx.channel->addSystemMessage(
                 enabling
                     ? (s.botBadgeOverrideAllAccounts.getValue()
-                           ? QStringLiteral(
-                                 "Bot mode enabled for all accounts.")
-                           : QStringLiteral(
-                                 "Bot mode enabled for the bot account only."))
-                    : QStringLiteral("Bot mode disabled."));
+                           ? u"Bot mode enabled for all accounts."_s
+                           : u"Bot mode enabled for the bot account only."_s)
+                    : u"Bot mode disabled."_s);
             return "";
         }
 
@@ -665,11 +664,12 @@ QString CommandController::execCommand(const QString &textNoEmoji,
                     std::get_if<CommandFunctionWithContext>(&it->second))
             {
                 CommandContext ctx{
-                    words,
-                    text,
-                    channel,
-                    dynamic_cast<TwitchChannel *>(channel.get()),
-                    dynamic_cast<KickChannel *>(channel.get()),
+                    .words = words,
+                    .rawText = text,
+                    .channel = channel,
+                    .twitchChannel =
+                        dynamic_cast<TwitchChannel *>(channel.get()),
+                    .kickChannel = dynamic_cast<KickChannel *>(channel.get()),
                 };
                 return (*command)(ctx);
             }
