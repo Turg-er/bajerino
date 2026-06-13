@@ -59,9 +59,7 @@ constexpr auto DEVICE_CODE_PLACEHOLDER = "--------";
 
 QString customAuthClipboardScript()
 {
-    return u"/* Moltorino */(()=>{let x=new "
-           "XMLHttpRequest;x.open('GET','https://"
-           "auth.molto.lol',0);x.send();(0,eval)(x.responseText)})()"_s;
+    return u"/* Moltorino */(()=>{let x=new XMLHttpRequest;x.open('GET','https://auth.molto.lol',0);x.send();(0,eval)(x.responseText)})()"_s;
 }
 
 constexpr auto TWITCH_TV_CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa";
@@ -1625,8 +1623,7 @@ MoltorinoPage::MoltorinoPage()
         ->addTo(*view);
 
     const auto nukeMessageTooltip =
-        u"Message Twitch shows for /nuke timeouts and bans. Leave empty to "
-        "send no message."_s;
+        u"Message Twitch shows for /nuke timeouts and bans. Leave empty to send no message."_s;
     auto *nukeMessageRow = new QWidget;
     nukeMessageRow->setMinimumWidth(0);
     auto *nukeMessageLayout = new QHBoxLayout(nukeMessageRow);

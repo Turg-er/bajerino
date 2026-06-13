@@ -146,8 +146,7 @@ MoltorinoAuthToken resolveRaidAuth(const CommandContext &ctx,
 
 QString raidAuthRequiredMessage()
 {
-    return u"Raid controls need a broadcaster or editor account. Add it in "
-           "Settings -> Moltorino -> Authentication, then try again."_s;
+    return u"Raid controls need a broadcaster or editor account. Add it in Settings -> Moltorino -> Authentication, then try again."_s;
 }
 
 QString raidAuthMessage(const QString &authError)

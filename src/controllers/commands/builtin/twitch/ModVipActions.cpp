@@ -273,11 +273,9 @@ QString usageForAction(ModVipAction action)
     switch (action)
     {
         case ModVipAction::AddLeadModerator:
-            return u"Usage: \"/leadmod <username>\" - Grant lead "
-                   "moderator status."_s;
+            return u"Usage: \"/leadmod <username>\" - Grant lead moderator status."_s;
         case ModVipAction::RemoveLeadModerator:
-            return u"Usage: \"/unleadmod <username>\" - Revoke "
-                   "lead moderator status."_s;
+            return u"Usage: \"/unleadmod <username>\" - Revoke lead moderator status."_s;
         case ModVipAction::AddEditor:
             return u"Usage: \"/editor <username>\" - Add a channel editor."_s;
         case ModVipAction::RemoveEditor:

@@ -101,9 +101,7 @@ QString errorResultToString(const sol::protected_function_result &result)
     //   `error(message[, level])`. The `message` is the "error object". As with
     //   `lua_error()`, the object passed doesn't need to be a string, but it's
     //   one by convention. If we get here because of this, that's not a bug.
-    return u"(no error message) "
-           "Unless an error without a message string was explicitly thrown, "
-           "this is a bug in Chatterino. Please report this."_s;
+    return u"(no error message) Unless an error without a message string was explicitly thrown, this is a bug in Chatterino. Please report this."_s;
 }
 
 void logError(Plugin *plugin, QStringView context, const QString &msg)

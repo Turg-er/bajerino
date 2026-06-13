@@ -453,8 +453,8 @@ void SeventvEmotes::loadChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << channelId << ", error" << errorString;
                             shared->addSystemMessage(
-                                u"Failed to fetch 7TV channel "
-                                "emotes. (Error: %1)"_s.arg(errorString));
+                                u"Failed to fetch 7TV channel "_s
+                                "emotes. (Error: %1)".arg(errorString));
                             if (cacheHit)
                             {
                                 shared->addSystemMessage(
@@ -587,8 +587,8 @@ void SeventvEmotes::loadKickChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << userID << ", error" << errorString;
                             shared->addSystemMessage(
-                                u"Failed to fetch 7TV channel "
-                                "emotes. (Error: %1)"_s.arg(errorString));
+                                u"Failed to fetch 7TV channel emotes. (Error: %1)"_s
+                                    .arg(errorString));
                             if (cacheHit)
                             {
                                 shared->addSystemMessage(

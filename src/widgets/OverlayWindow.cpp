@@ -461,29 +461,29 @@ void OverlayWindow::triggerFirstActivation()
     acquireKnowledge(Knowledge::Activation);
 
     auto welcomeText =
-        u"Hey! It looks like this is the first time you're using the overlay. "_s
-        "You can move the overlay by dragging it with your mouse. "
+        u"Hey! It looks like this is the first time you're using the overlay. "
+        u"You can move the overlay by dragging it with your mouse. "
 #ifdef OVERLAY_NATIVE_MOVE
-        "To resize the window, drag on any edge."
+        u"To resize the window, drag on any edge."
 #else
-        "To resize the window, drag on the bottom right corner."
+        u"To resize the window, drag on the bottom right corner."
 #endif
-        "<br><br>"
-        "By default, the overlay is interactive. ";
+        u"<br><br>"
+        u"By default, the overlay is interactive. "_s;
 
     auto [actualShortcut, allOverlays] = toggleIntertiaShortcut();
     if (actualShortcut.isEmpty())
     {
         welcomeText +=
             u"To toggle the click-through mode, "
-            "add a hotkey for \"Toggle overlay click-through\" in the split "
-            "category to press while any Bajerino window is focused."_s;
+            u"add a hotkey for \"Toggle overlay click-through\" in the split "
+            u"category to press while any Bajerino window is focused."_s;
     }
     else
     {
         welcomeText +=
-            u"To toggle the click-through mode, press %1 (customizable "_s
-            "in the settings) while any Bajerino window is focused.".arg(
+            u"To toggle the click-through mode, press %1 (customizable "
+            u"in the settings) while any Bajerino window is focused."_s.arg(
                 actualShortcut.toString());
     }
 

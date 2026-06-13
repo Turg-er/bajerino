@@ -1394,8 +1394,8 @@ QString modLogs(const CommandContext &ctx)
                         });
                 };
             scanner->onError = [channel, scanner](const QString &error) {
-                channel->addSystemMessage(u"Failed to fetch moderation "
-                                          "action logs: %1"_s.arg(error));
+                channel->addSystemMessage(
+                    u"Failed to fetch moderation action logs: %1"_s.arg(error));
                 scanner->deleteLater();
             };
             scanner->start();

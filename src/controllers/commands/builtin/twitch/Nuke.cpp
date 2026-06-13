@@ -158,21 +158,17 @@ QHash<QString, std::shared_ptr<SpamJob>> &activeSpams()
 
 QString usage()
 {
-    return u"Usage: /nuke <text> <timeout|ban|delete> <range>, for example "
-           u"/nuke "
-           "bots 10m 30s. Use /nuke stop to cancel active nukes."_s;
+    return u"Usage: /nuke <text> <timeout|ban|delete> <range>, for example /nuke bots 10m 30s. Use /nuke stop to cancel active nukes."_s;
 }
 
 QString spamUsage()
 {
-    return u"Usage: /spam <count> <message>, for example /spam "
-           "50 get in the predict. Use /spam stop to cancel."_s;
+    return u"Usage: /spam <count> <message>, for example /spam 50 get in the predict. Use /spam stop to cancel."_s;
 }
 
 QString pyramidUsage()
 {
-    return u"Usage: /pyramid <height> <message>, for example "
-           "/pyramid 6 Kappa. Use /pyramid stop to cancel."_s;
+    return u"Usage: /pyramid <height> <message>, for example /pyramid 6 Kappa. Use /pyramid stop to cancel."_s;
 }
 
 QString actionName(const ParseResult &plan)
@@ -1197,10 +1193,8 @@ void stopSpamJobForSendFailure(const std::shared_ptr<SpamJob> &job,
                       job->label)
             // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
             : rateLimited
-                ? u"%1 stopped: Twitch rate-limited this account "
-                  "in this channel. "
-                  "Fast bursts usually only work reliably when "
-                  "the account is mod, VIP, or broadcaster."_s.arg(job->label)
+                ? u"%1 stopped: Twitch rate-limited this account in this channel. Fast bursts usually only work reliably when the account is mod, VIP, or broadcaster."_s
+                      .arg(job->label)
                 : u"%1 stopped: %2"_s.arg(job->label, error));
     }
     removeSpamJob(job);
@@ -1406,8 +1400,8 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     else
     {
         ctx.channel->addSystemMessage(
-            u"%1 %2 message%3 through %4 every %5 ms. Use %6 "
-            "stop to cancel."_s.arg(startVerb)
+            u"%1 %2 message%3 through %4 every %5 ms. Use %6 stop to cancel."_s
+                .arg(startVerb)
                 .arg(job->total)
                 .arg(job->total == 1 ? "" : "s")
                 .arg(job->useIrc ? u"IRC"_s : u"Helix"_s)

@@ -1521,8 +1521,7 @@ QString raidFailureMessage(QString error)
     if (upper.contains(u"TARGET_SETTINGS_DO_NOT_ALLOW"_s) ||
         (upper.contains(u"TARGET"_s) && upper.contains(u"SETTING"_s)))
     {
-        return u"That channel's raid settings do not allow this raid. "
-               "They may require more viewers than you currently have."_s;
+        return u"That channel's raid settings do not allow this raid. They may require more viewers than you currently have."_s;
     }
 
     if (upper.contains(u"EDITOR"_s) || upper.contains(u"BROADCASTER"_s) ||
@@ -1530,8 +1529,7 @@ QString raidFailureMessage(QString error)
         upper.contains(u"NOT AUTHORIZED"_s) || upper.contains(u"FORBIDDEN"_s) ||
         upper.contains(u"PERMISSION"_s) || upper == u"SERVICE ERROR"_s)
     {
-        return u"You need broadcaster or editor raid permission in this "
-               "channel."_s;
+        return u"You need broadcaster or editor raid permission in this channel."_s;
     }
 
     if (upper.contains(u"NO_ACTIVE_RAID"_s) || upper.contains(u"NO_RAID"_s) ||

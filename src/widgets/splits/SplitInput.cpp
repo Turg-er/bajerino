@@ -332,22 +332,19 @@ QString warningMessageError(HelixWarnUserError error, const QString &message,
     switch (error)
     {
         case Error::ConflictingOperation:
-            return u"There was a conflicting warn operation on "
-                   "this user. Please try again."_s;
+            return u"There was a conflicting warn operation on this user. Please try again."_s;
 
         case Error::Forwarded:
             return message;
 
         case Error::Ratelimited:
-            return u"You are being ratelimited by Twitch. Try "
-                   "again in a few seconds."_s;
+            return u"You are being ratelimited by Twitch. Try again in a few seconds."_s;
 
         case Error::CannotWarnUser:
             return u"You cannot warn %1."_s.arg(displayName);
 
         case Error::UserMissingScope:
-            return u"Missing required scope. Re-login with your "
-                   "account and try again."_s;
+            return u"Missing required scope. Re-login with your account and try again."_s;
 
         case Error::UserNotAuthorized:
             return u"You don't have permission to perform that action."_s;
@@ -406,9 +403,9 @@ void sendWarningMessageToTarget(const ChannelPtr &channel,
                 if (channel != nullptr)
                 {
                     channel->addSystemMessage(
-                        u"Failed to send message as warning - "
-                        "bad target username: %1"_s.arg(
-                            QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)));
+                        u"Failed to send message as warning - bad target username: %1"_s
+                            .arg(QString::fromLatin1(
+                                WARNING_MESSAGE_TARGET_LOGIN)));
                 }
                 return;
             }
@@ -423,7 +420,7 @@ void sendWarningMessageToTarget(const ChannelPtr &channel,
             {
                 channel->addSystemMessage(
                     u"Failed to send message as warning - "
-                    "could not look up %1."_s.arg(
+                    u"could not look up %1."_s.arg(
                         QString::fromLatin1(WARNING_MESSAGE_TARGET_LOGIN)));
             }
         });
@@ -3050,10 +3047,8 @@ void SplitInput::renderCommandCompletion()
         row->setProperty("commandCompletionIndex", actualIndex);
         row->setStyleSheet(
             selected
-                ? u"QLabel#commandCompletionRow { background: rgba(120, "
-                  "120, 120, 0.20); border: 0; }"_s
-                : u"QLabel#commandCompletionRow { background: transparent; "
-                  "border: 0; }"_s);
+                ? u"QLabel#commandCompletionRow { background: rgba(120, 120, 120, 0.20); border: 0; }"_s
+                : u"QLabel#commandCompletionRow { background: transparent; border: 0; }"_s);
         row->setText(u"<span style=\"font-weight:600; color:%1;\">%2</span>"
                      "<span style=\"color:%3;\">%4%5</span>"_s.arg(
                          textColor, suggestion.completion.toHtmlEscaped(),

@@ -258,9 +258,7 @@ QString pin(const CommandContext &ctx)
         (ctx.words.at(1) == u"-h" || ctx.words.at(1) == u"--help"))
     {
         ctx.channel->addSystemMessage(
-            u"Pin a chat message or show the currently pinned one."
-            "Usage: /pin [--duration <seconds|until-end|none>] [message]... OR "
-            "/pin --id <message-id> [--duration <seconds|until-end|none>]"_s);
+            u"Pin a chat message or show the currently pinned one. Usage: /pin [--duration <seconds|until-end|none>] [message]... OR /pin --id <message-id> [--duration <seconds|until-end|none>]"_s);
         return {};
     }
 

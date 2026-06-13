@@ -150,8 +150,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->addKeywords({"bajerino", "big 3", "noticing"})
         ->addTo(layout);
     layout.addDescription(
-        u"To know who rules over you, simply find out who you "
-        "are not allowed to criticise."_s);
+        u"To know who rules over you, simply find out who you are not allowed to criticise."_s);
 
     SettingWidget::checkbox("Join Twitch channels anonymously by default",
                             s.twitchIrcJoinAsAnonymous)

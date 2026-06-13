@@ -309,8 +309,8 @@ WindowLayout WindowLayout::loadFromFile(const QString &path)
             .fileName = fileInfo.fileName(),
             .directory = fileInfo.absolutePath(),
             .fileKind = u"Window layout"_s,
-            .fileDescription = u"This file contains your open windows, tabs, "
-                               "splits, and split sizes."_s,
+            .fileDescription =
+                u"This file contains your open windows, tabs, splits, and split sizes."_s,
         },
         [&]() -> ExpectedStr<void> {
             auto maybeWindows = loadWindowArray(path);

@@ -1586,8 +1586,7 @@ void TwitchChannel::showLoginMessage()
     const auto accountsLink = Link(Link::OpenAccountsPage, QString());
     const auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
     const auto expirationText =
-        u"You need to log in to send messages. You can link your "
-        "Twitch account"_s;
+        u"You need to log in to send messages. You can link your Twitch account"_s;
     const auto loginPromptText = u"in the settings."_s;
 
     auto builder = MessageBuilder();
