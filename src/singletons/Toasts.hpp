@@ -48,7 +48,7 @@ private:
     bool initialized_ = false;
     bool actionCenterActivationChecked_ = false;
     bool actionCenterActivationAvailable_ = false;
-#elifdef CHATTERINO_WITH_LIBNOTIFY
+#elif defined(CHATTERINO_WITH_LIBNOTIFY)
     void ensureInitialized();
     void sendLibnotify(const QString &channelName, const QString &channelTitle);
     bool sendLibnotifyHighlightNotification(const QString &channelName,
