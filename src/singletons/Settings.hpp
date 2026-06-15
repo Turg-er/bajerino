@@ -996,6 +996,8 @@ public:
         "/moltorino/channelPoints/returnToListAfterRedeem", false};
     BoolSetting autoClaimChannelPoints{"/moltorino/channelPoints/autoClaim",
                                        true};
+    BoolSetting farmChannelPoints{"/moltorino/channelPoints/farm", false};
+    IntSetting maxFarmedChannels{"/moltorino/channelPoints/maxFarmed", 2};
 
     FloatSetting predictionBannerContentScale{
         "/moltorino/predictions/bannerContentScale", 1.F};

@@ -1,14 +1,20 @@
 #include "widgets/settingspages/MoltorinoPage.hpp"
 
+#include "common/Channel.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/translation/Translator.hpp"
+#include "providers/twitch/ChannelPointsFarm.hpp"
+#include "providers/twitch/ChannelPointsFarmModel.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
 #include "util/Clipboard.hpp"
 #include "util/FuzzyConvert.hpp"
 #include "widgets/buttons/SignalLabel.hpp"
+#include "widgets/helper/EditableModelView.hpp"
 #include "widgets/settingspages/GeneralPageView.hpp"
 #include "widgets/settingspages/SettingWidget.hpp"
 #ifndef Q_OS_MACOS
@@ -18,6 +24,8 @@
 #include "controllers/accounts/AccountController.hpp"
 
 #include <QAbstractItemView>
+#include <QAction>
+#include <QCursor>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDialog>
@@ -28,6 +36,7 @@
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPointer>
 #include <QPushButton>
@@ -1434,6 +1443,78 @@ MoltorinoPage::MoltorinoPage()
                      "(the chest) in channels you watch, and flash the gained "
                      "amount on the points balance.")
         ->addTo(*view);
+
+    SettingWidget::checkbox("Farm channel points (simulate watching)",
+                            s.farmChannelPoints)
+        ->setTooltip(
+            "Periodically tell Twitch you are watching the channels in the "
+            "priority list below, so the account earns watch points and the "
+            "bonus chest even without an open player. This impersonates a "
+            "viewer; use at your own risk.")
+        ->addTo(*view);
+
+    SettingWidget::intInput("Channels to farm at once", s.maxFarmedChannels,
+                            {
+                                .min = 0,
+                                .max = ChannelPointsFarm::MAX_FARMED,
+                            })
+        ->setTooltip("Twitch only awards watch points on a couple of streams "
+                     "at the same time, so this is capped. The channels you "
+                     "have open and live are farmed, up to this limit.")
+        ->addTo(*view);
+
+    view->addDescription(
+        "Priority order for which open, live channels to farm when more are "
+        "live than the limit above. Channels higher in the list win; any "
+        "leftover slots are filled with your other open live channels.");
+
+    auto *farmView = new EditableModelView(
+        getApp()->getChannelPointsFarm()->createModel(nullptr));
+    farmView->setTitles({"Channel"});
+    farmView->getTableView()->horizontalHeader()->setSectionResizeMode(
+        QHeaderView::Fixed);
+    farmView->getTableView()->horizontalHeader()->setSectionResizeMode(
+        0, QHeaderView::Stretch);
+    // Add via a picker of currently-open channels rather than free text.
+    // We own farmView for the lifetime of the page, so ignoring the
+    // connection is safe.
+    std::ignore = farmView->addButtonPressed.connect([] {
+        auto *farm = getApp()->getChannelPointsFarm();
+
+        QStringList logins;
+        getApp()->getTwitch()->forEachChannel([&](const ChannelPtr &chan) {
+            auto *tc = dynamic_cast<TwitchChannel *>(chan.get());
+            if (tc == nullptr)
+            {
+                return;
+            }
+            const auto name = tc->getName();
+            if (!name.isEmpty() && !farm->isChannelFarmed(name))
+            {
+                logins.push_back(name);
+            }
+        });
+        logins.sort(Qt::CaseInsensitive);
+
+        auto *menu = new QMenu();
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        if (logins.isEmpty())
+        {
+            menu->addAction("No open channels to add")->setEnabled(false);
+        }
+        else
+        {
+            for (const auto &login : logins)
+            {
+                QObject::connect(
+                    menu->addAction(login), &QAction::triggered, [login] {
+                        getApp()->getChannelPointsFarm()->addChannel(login);
+                    });
+            }
+        }
+        menu->popup(QCursor::pos());
+    });
+    view->addWidget(farmView);
 
     view->addTitle("Input Box");
     view->addDescription(

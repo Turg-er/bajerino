@@ -18,6 +18,7 @@ class Updates;
 class CommandController;
 class AccountController;
 class NotificationController;
+class ChannelPointsFarm;
 class HighlightController;
 class HotkeyController;
 class IUserDataController;
@@ -98,6 +99,7 @@ public:
     virtual CommandController *getCommands() = 0;
     virtual HighlightController *getHighlights() = 0;
     virtual NotificationController *getNotifications() = 0;
+    virtual ChannelPointsFarm *getChannelPointsFarm() = 0;
     virtual ITwitchIrcServer *getTwitch() = 0;
     virtual PubSub *getTwitchPubSub() = 0;
     virtual ILogging *getChatLogger() = 0;
@@ -181,6 +183,7 @@ private:
     std::unique_ptr<CrashHandler> crashHandler;
     std::unique_ptr<CommandController> commands;
     std::unique_ptr<NotificationController> notifications;
+    std::unique_ptr<ChannelPointsFarm> channelPointsFarm;
     std::unique_ptr<HighlightController> highlights;
     std::unique_ptr<TwitchIrcServer> twitch;
     std::unique_ptr<FfzBadges> ffzBadges;
@@ -231,6 +234,7 @@ public:
     CrashHandler *getCrashHandler() override;
     CommandController *getCommands() override;
     NotificationController *getNotifications() override;
+    ChannelPointsFarm *getChannelPointsFarm() override;
     HighlightController *getHighlights() override;
     ITwitchIrcServer *getTwitch() override;
     PubSub *getTwitchPubSub() override;

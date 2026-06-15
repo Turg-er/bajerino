@@ -25,6 +25,7 @@
 #include "providers/pronouns/Pronouns.hpp"
 #include "providers/seventv/SeventvAPI.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/twitch/ChannelPointsFarm.hpp"
 #include "providers/twitch/eventsub/Controller.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
 #include "singletons/ImageUploader.hpp"
@@ -187,6 +188,7 @@ Application::Application(Settings &_settings, const Paths &paths,
 
     , commands(new CommandController(paths))
     , notifications(new NotificationController)
+    , channelPointsFarm(new ChannelPointsFarm)
     , highlights(new HighlightController(_settings, this->accounts.get()))
     , twitch(new TwitchIrcServer)
     , ffzBadges(new FfzBadges)
@@ -271,6 +273,8 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
     // Load live status
     this->notifications->initialize();
+
+    this->channelPointsFarm->initialize();
 
     // XXX: Loading Twitch badges after Helix has been initialized, which only happens after
     // the AccountController initialize has been called
@@ -493,6 +497,14 @@ NotificationController *Application::getNotifications()
     assert(this->notifications);
 
     return this->notifications.get();
+}
+
+ChannelPointsFarm *Application::getChannelPointsFarm()
+{
+    assertInGuiThread();
+    assert(this->channelPointsFarm);
+
+    return this->channelPointsFarm.get();
 }
 
 HighlightController *Application::getHighlights()
@@ -786,6 +798,7 @@ void Application::stop()
     this->homiesBadges.reset();
     this->twitch.reset();
     this->highlights.reset();
+    this->channelPointsFarm.reset();
     this->notifications.reset();
     this->commands.reset();
     this->crashHandler.reset();

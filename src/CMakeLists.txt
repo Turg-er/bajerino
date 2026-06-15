@@ -523,6 +523,10 @@ set(SOURCE_FILES
 
         providers/twitch/ChannelPointReward.cpp
         providers/twitch/ChannelPointReward.hpp
+        providers/twitch/ChannelPointsFarm.cpp
+        providers/twitch/ChannelPointsFarm.hpp
+        providers/twitch/ChannelPointsFarmModel.cpp
+        providers/twitch/ChannelPointsFarmModel.hpp
         providers/twitch/IrcMessageHandler.cpp
         providers/twitch/IrcMessageHandler.hpp
         providers/twitch/ModerationActionLogs.cpp

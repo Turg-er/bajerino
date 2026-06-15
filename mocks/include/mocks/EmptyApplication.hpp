@@ -117,6 +117,14 @@ public:
         return nullptr;
     }
 
+    ChannelPointsFarm *getChannelPointsFarm() override
+    {
+        assert(false &&
+               "EmptyApplication::getChannelPointsFarm was called without "
+               "being initialized");
+        return nullptr;
+    }
+
     HighlightController *getHighlights() override
     {
         assert(false && "EmptyApplication::getHighlights was called without "
