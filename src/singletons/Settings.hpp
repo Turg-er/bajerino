@@ -994,6 +994,8 @@ public:
         "/moltorino/channelPoints/closeAfterRedeem", true};
     BoolSetting rewardsReturnToListAfterRedeem{
         "/moltorino/channelPoints/returnToListAfterRedeem", false};
+    BoolSetting autoClaimChannelPoints{"/moltorino/channelPoints/autoClaim",
+                                       true};
 
     FloatSetting predictionBannerContentScale{
         "/moltorino/predictions/bannerContentScale", 1.F};

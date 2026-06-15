@@ -159,6 +159,9 @@ protected:
     void bindChannelPoints(TwitchChannel *channel);
     void clearChannelPointsDisplay();
     void updateChannelPointsDisplay(TwitchChannel *channel);
+    /// Briefly shows the gained amount (e.g. "+50") on the points label, as
+    /// the Twitch website does when a bonus is claimed.
+    void flashChannelPointsGain(qint64 amount);
     void updateActionRowCompactness();
     void updateDisplayedPlaceholderText();
     void updateCompletionPopup();
@@ -266,6 +269,7 @@ protected:
     pajlada::Signals::SignalHolder managedConnections_;
     pajlada::Signals::SignalHolder channelConnections_;
     pajlada::Signals::ScopedConnection channelPointSignal_;
+    pajlada::Signals::ScopedConnection channelPointsClaimedSignal_;
     pajlada::Signals::ScopedConnection modStateSignal_;
     pajlada::Signals::ScopedConnection pollStateSignal_;
     pajlada::Signals::ScopedConnection focusedPointsConnection_;

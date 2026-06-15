@@ -258,14 +258,16 @@ QString getUserPointsChannelId(const QJsonObject &payload)
     }
 
     const auto data = dataValue.toObject();
-    const auto balanceValue = data.value("balance");
-    if (!balanceValue.isObject())
-    {
-        return {};
-    }
 
-    const auto balanceObj = balanceValue.toObject();
-    auto channelId = balanceObj.value("channel_id").toString();
+    // points-earned / points-spent carry a balance object, while
+    // claim-available carries a claim object; check both.
+    auto channelId =
+        data.value("balance").toObject().value("channel_id").toString();
+    if (channelId.isEmpty())
+    {
+        channelId =
+            data.value("claim").toObject().value("channel_id").toString();
+    }
     if (channelId.isEmpty())
     {
         channelId = data.value("channel_id").toString();
@@ -5111,6 +5113,12 @@ void TwitchChannel::handleUserPointsUpdate(const QJsonObject &payload)
 
     const QString type = payload.value("type").toString();
 
+    if (type == "claim-available")
+    {
+        this->handleChannelPointsClaimAvailable(payload);
+        return;
+    }
+
     if (type != "points-earned" && type != "points-spent")
     {
         return;
@@ -5173,6 +5181,101 @@ void TwitchChannel::handleUserPointsUpdate(const QJsonObject &payload)
                               << "type:" << type << "balance:" << newBalance;
 
     this->setChannelPointBalance(newBalance);
+}
+
+void TwitchChannel::handleChannelPointsClaimAvailable(
+    const QJsonObject &payload)
+{
+    assertInGuiThread();
+
+    if (!getSettings()->autoClaimChannelPoints)
+    {
+        return;
+    }
+
+    const auto data = payload.value("data").toObject();
+    const auto claim = data.value("claim").toObject();
+    const auto claimId = claim.value("id").toString();
+    if (claimId.isEmpty())
+    {
+        return;
+    }
+
+    auto channelId = claim.value("channel_id").toString();
+    if (channelId.isEmpty())
+    {
+        channelId = data.value("channel_id").toString();
+    }
+    if (channelId.isEmpty())
+    {
+        channelId = this->roomId();
+    }
+    if (channelId != this->roomId())
+    {
+        return;
+    }
+
+    if (this->pendingPointClaimId_ == claimId)
+    {
+        // Already claiming this bonus; ignore the duplicate event.
+        return;
+    }
+
+    const auto auth = MoltorinoAuth::resolveCurrentUserToken();
+    if (auth.token.isEmpty())
+    {
+        return;
+    }
+
+    this->pendingPointClaimId_ = claimId;
+
+    const auto gain = static_cast<qint64>(
+        claim.value("point_gain").toObject().value("total_points").toDouble());
+
+    qCDebug(chatterinoTwitch) << "[Points] Auto-claiming bonus for"
+                              << this->getName() << "gain:" << gain;
+
+    const auto weak = this->weak_from_this();
+    TwitchGql::claimCommunityPoints(
+        channelId, claimId, auth.token,
+        [weak, gain](qint64 newBalance) {
+            runInGuiThread([weak, gain, newBalance] {
+                auto shared =
+                    std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+                if (!shared)
+                {
+                    return;
+                }
+
+                shared->pendingPointClaimId_.clear();
+                if (newBalance >= 0)
+                {
+                    shared->setChannelPointBalance(newBalance);
+                }
+                if (gain > 0)
+                {
+                    shared->channelPointsClaimed.invoke(gain);
+                }
+            });
+        },
+        [weak, claimId](const QString &error) {
+            runInGuiThread([weak, claimId, error] {
+                auto shared =
+                    std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+                if (!shared)
+                {
+                    return;
+                }
+
+                if (shared->pendingPointClaimId_ == claimId)
+                {
+                    shared->pendingPointClaimId_.clear();
+                }
+                qCDebug(chatterinoTwitch)
+                    << "[Points] Failed to auto-claim bonus for"
+                    << shared->getName() << ":" << error;
+            });
+        });
 }
 
 void TwitchChannel::refreshActivePrediction()

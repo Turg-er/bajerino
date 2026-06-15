@@ -1428,6 +1428,13 @@ MoltorinoPage::MoltorinoPage()
                      "grid instead of staying on the current picker.")
         ->addTo(*view);
 
+    SettingWidget::checkbox("Auto-claim channel points bonuses",
+                            s.autoClaimChannelPoints)
+        ->setTooltip("Automatically claim the periodic channel points bonus "
+                     "(the chest) in channels you watch, and flash the gained "
+                     "amount on the points balance.")
+        ->addTo(*view);
+
     view->addTitle("Input Box");
     view->addDescription(
         "Chat input buttons, typing helpers, and quick controls.");

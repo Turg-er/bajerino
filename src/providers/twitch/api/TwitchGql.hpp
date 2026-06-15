@@ -352,6 +352,14 @@ public:
         const QString &channelLogin, const QString &oauthToken,
         const std::function<void(qint64)> &successCallback,
         const std::function<void(const QString &)> &failureCallback);
+    // Claims an available channel points bonus (the periodic chest). The
+    // success callback receives the new balance, or -1 if Twitch did not
+    // report one.
+    static void claimCommunityPoints(
+        const QString &channelId, const QString &claimId,
+        const QString &oauthToken,
+        const std::function<void(qint64)> &successCallback,
+        const std::function<void(const QString &)> &failureCallback);
 #if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
     static void getChannelPointRewards(
         const QString &channelLogin, const QString &oauthToken,

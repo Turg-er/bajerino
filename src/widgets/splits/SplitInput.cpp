@@ -3815,6 +3815,7 @@ bool SplitInput::submitChannelPointRewardPrompt()
 void SplitInput::bindChannelPoints(TwitchChannel *channel)
 {
     this->channelPointSignal_ = pajlada::Signals::ScopedConnection();
+    this->channelPointsClaimedSignal_ = pajlada::Signals::ScopedConnection();
     this->modStateSignal_ = pajlada::Signals::ScopedConnection();
     this->pollStateSignal_ = pajlada::Signals::ScopedConnection();
     this->focusedPointsConnection_ = pajlada::Signals::ScopedConnection();
@@ -3879,6 +3880,10 @@ void SplitInput::bindChannelPoints(TwitchChannel *channel)
         this->ui_.channelPointsLabel->setText("...");
     }
     this->updateChannelPointsDisplay(channel);
+    this->channelPointsClaimedSignal_ =
+        channel->channelPointsClaimed.connect([this](qint64 amount) {
+            this->flashChannelPointsGain(amount);
+        });
     auto connectPoints = [this, channel]() {
         this->channelPointSignal_ =
             channel->channelPointsChanged.connect([this, channel]() {
@@ -3965,6 +3970,28 @@ void SplitInput::updateChannelPointsDisplay(TwitchChannel *channel)
     {
         this->ui_.channelPointsLabel->setToolTip(tooltip);
     }
+}
+
+void SplitInput::flashChannelPointsGain(qint64 amount)
+{
+    if (amount <= 0 || !this->channelPointsLabelWanted_)
+    {
+        return;
+    }
+
+    auto *label = this->ui_.channelPointsLabel;
+    label->setText(u"+"_s + formatChannelPointsValue(amount));
+    label->setStyleSheet(u"color: #00b85f;"_s);
+
+    QTimer::singleShot(2000, this, [this]() {
+        this->ui_.channelPointsLabel->setStyleSheet(QString());
+        auto *channel =
+            dynamic_cast<TwitchChannel *>(this->split_->getChannel().get());
+        if (channel)
+        {
+            this->updateChannelPointsDisplay(channel);
+        }
+    });
 }
 
 void SplitInput::updateFonts()

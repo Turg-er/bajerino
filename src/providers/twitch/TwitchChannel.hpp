@@ -361,6 +361,7 @@ public:
     void setActivePrediction(std::optional<PredictionEvent> prediction);
     void handlePredictionUpdate(const QJsonObject &payload);
     void handleUserPointsUpdate(const QJsonObject &payload);
+    void handleChannelPointsClaimAvailable(const QJsonObject &payload);
     void refreshPrediction(bool force = false);
     SharedAccessGuard<const std::optional<PollEvent>> accessPoll() const;
     void setActivePoll(std::optional<PollEvent> poll);
@@ -516,6 +517,9 @@ public:
     pajlada::Signals::NoArgSignal predictionChanged;
     pajlada::Signals::NoArgSignal pollChanged;
     pajlada::Signals::NoArgSignal channelPointsChanged;
+    /// Fired when a channel points bonus is auto-claimed, carrying the number
+    /// of points gained so the UI can flash the increase.
+    pajlada::Signals::Signal<qint64> channelPointsClaimed;
     pajlada::Signals::NoArgSignal followingStatusChanged;
     pajlada::Signals::NoArgSignal raidChanged;
     /// Fired when the channel's effective anonymity changes, whether from a
@@ -728,6 +732,9 @@ private:
     QString shownChatWarningMessageId_;
     std::atomic<qint64> channelPoints_{-1};
     std::atomic<bool> channelPointsFetchInFlight_{false};
+    // Id of the bonus claim currently being auto-claimed, used to avoid
+    // sending duplicate claim mutations. Only touched on the GUI thread.
+    QString pendingPointClaimId_;
     QDateTime lastChannelPointsRefreshAt_;
     QDateTime lastChannelPointsUpdateAt_;
     QString lastChannelPointsError_;
