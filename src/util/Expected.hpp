@@ -6,7 +6,11 @@
 
 #include <version>
 
-#if __cpp_lib_expected >= 202202L
+// NOTE: require 202211L (not 202202L): GCC 12 defines std::expected at
+// 202202L but without the monadic operations (and_then/transform/or_else),
+// which only arrived in GCC 13 (202211L). Gating lower would select a
+// std::expected that's missing and_then and break callers on GCC 12.
+#if __cpp_lib_expected >= 202211L
 #    include <expected>
 #else
 #    define CHATTERINO_USING_NONSTD_EXPECTED
@@ -19,7 +23,7 @@ class QString;
 
 namespace chatterino {
 
-#if __cpp_lib_expected >= 202202L
+#if __cpp_lib_expected >= 202211L
 template <typename T, typename E>
 using Expected = std::expected<T, E>;
 
