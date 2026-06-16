@@ -11,6 +11,17 @@ ChannelPointsFarmModel::ChannelPointsFarmModel(QObject *parent)
 {
 }
 
+QVariant ChannelPointsFarmModel::headerData(int section,
+                                            Qt::Orientation orientation,
+                                            int role) const
+{
+    if (orientation == Qt::Vertical && role == Qt::DisplayRole)
+    {
+        return section + 1;
+    }
+    return SignalVectorModel<QString>::headerData(section, orientation, role);
+}
+
 QString ChannelPointsFarmModel::getItemFromRow(
     std::vector<QStandardItem *> &row, const QString & /*original*/)
 {

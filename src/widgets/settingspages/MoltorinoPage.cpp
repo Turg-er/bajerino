@@ -1471,6 +1471,8 @@ MoltorinoPage::MoltorinoPage()
     auto *farmView = new EditableModelView(
         getApp()->getChannelPointsFarm()->createModel(nullptr));
     farmView->setTitles({"Channel"});
+    // Show the 1-based row number down the side so the priority rank is clear.
+    farmView->getTableView()->verticalHeader()->setVisible(true);
     farmView->getTableView()->horizontalHeader()->setSectionResizeMode(
         QHeaderView::Fixed);
     farmView->getTableView()->horizontalHeader()->setSectionResizeMode(
@@ -1515,6 +1517,61 @@ MoltorinoPage::MoltorinoPage()
         menu->popup(QCursor::pos());
     });
     view->addWidget(farmView);
+
+    view->addDescription(
+        "Never farm these channels, even while they are open and live. Useful "
+        "for channels you keep open but don't want to send watch events for "
+        "(e.g. your own channel, or one you only lurk in).");
+
+    // Blacklist membership has no order, so no move up/down buttons.
+    auto *blacklistView = new EditableModelView(
+        getApp()->getChannelPointsFarm()->createBlacklistModel(nullptr), false);
+    blacklistView->setTitles({"Channel"});
+    blacklistView->getTableView()->horizontalHeader()->setSectionResizeMode(
+        QHeaderView::Fixed);
+    blacklistView->getTableView()->horizontalHeader()->setSectionResizeMode(
+        0, QHeaderView::Stretch);
+    // Add via a picker of currently-open channels rather than free text.
+    // We own blacklistView for the lifetime of the page, so ignoring the
+    // connection is safe.
+    std::ignore = blacklistView->addButtonPressed.connect([] {
+        auto *farm = getApp()->getChannelPointsFarm();
+
+        QStringList logins;
+        getApp()->getTwitch()->forEachChannel([&](const ChannelPtr &chan) {
+            auto *tc = dynamic_cast<TwitchChannel *>(chan.get());
+            if (tc == nullptr)
+            {
+                return;
+            }
+            const auto name = tc->getName();
+            if (!name.isEmpty() && !farm->isChannelBlacklisted(name))
+            {
+                logins.push_back(name);
+            }
+        });
+        logins.sort(Qt::CaseInsensitive);
+
+        auto *menu = new QMenu();
+        menu->setAttribute(Qt::WA_DeleteOnClose);
+        if (logins.isEmpty())
+        {
+            menu->addAction("No open channels to add")->setEnabled(false);
+        }
+        else
+        {
+            for (const auto &login : logins)
+            {
+                QObject::connect(
+                    menu->addAction(login), &QAction::triggered, [login] {
+                        getApp()->getChannelPointsFarm()->addBlacklistChannel(
+                            login);
+                    });
+            }
+        }
+        menu->popup(QCursor::pos());
+    });
+    view->addWidget(blacklistView);
 
     view->addTitle("Input Box");
     view->addDescription(

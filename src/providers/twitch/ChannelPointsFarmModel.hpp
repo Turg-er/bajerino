@@ -18,6 +18,12 @@ class ChannelPointsFarmModel : public SignalVectorModel<QString>
 {
     explicit ChannelPointsFarmModel(QObject *parent);
 
+public:
+    /// Show the 1-based row number in the vertical header so the priority rank
+    /// is visible. SignalVectorModel only fills horizontal header data.
+    QVariant headerData(int section, Qt::Orientation orientation,
+                        int role) const override;
+
 protected:
     QString getItemFromRow(std::vector<QStandardItem *> &row,
                            const QString &original) override;

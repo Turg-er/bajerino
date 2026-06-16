@@ -46,10 +46,18 @@ ChannelPointsFarm::ChannelPointsFarm()
     {
         this->channels_.append(name);
     }
+    for (const auto &name : this->blacklistSetting_.getValue())
+    {
+        this->blacklist_.append(name);
+    }
 
-    // channels_ outlives this connection, so it's safe to ignore.
+    // channels_ and blacklist_ outlive these connections, so it's safe to
+    // ignore them.
     std::ignore = this->channels_.delayedItemsChanged.connect([this] {
         this->setting_.setValue(this->channels_.raw());
+    });
+    std::ignore = this->blacklist_.delayedItemsChanged.connect([this] {
+        this->blacklistSetting_.setValue(this->blacklist_.raw());
     });
 
     QObject::connect(&this->timer_, &QTimer::timeout, [this] {
@@ -92,10 +100,46 @@ void ChannelPointsFarm::removeChannel(const QString &channelName)
     }
 }
 
+bool ChannelPointsFarm::isChannelBlacklisted(const QString &channelName) const
+{
+    const auto &raw = this->blacklist_.raw();
+    return std::ranges::any_of(raw, [&](const QString &name) {
+        return name.compare(channelName, Qt::CaseInsensitive) == 0;
+    });
+}
+
+void ChannelPointsFarm::addBlacklistChannel(const QString &channelName)
+{
+    if (!this->isChannelBlacklisted(channelName))
+    {
+        this->blacklist_.append(channelName);
+    }
+}
+
+void ChannelPointsFarm::removeBlacklistChannel(const QString &channelName)
+{
+    const auto &raw = this->blacklist_.raw();
+    for (size_t i = 0; i < raw.size(); i++)
+    {
+        if (raw.at(i).compare(channelName, Qt::CaseInsensitive) == 0)
+        {
+            this->blacklist_.removeAt(static_cast<int>(i));
+            return;
+        }
+    }
+}
+
 ChannelPointsFarmModel *ChannelPointsFarm::createModel(QObject *parent)
 {
     auto *model = new ChannelPointsFarmModel(parent);
     model->initialize(&this->channels_);
+    return model;
+}
+
+ChannelPointsFarmModel *ChannelPointsFarm::createBlacklistModel(QObject *parent)
+{
+    auto *model = new ChannelPointsFarmModel(parent);
+    model->initialize(&this->blacklist_);
     return model;
 }
 
@@ -125,6 +169,14 @@ void ChannelPointsFarm::tick()
         return;
     }
 
+    // Lower-cased blacklisted logins; these are never farmed, even when open
+    // and live, so the leftover-slot fill skips them too.
+    QSet<QString> blacklisted;
+    for (const auto &name : this->blacklist_.raw())
+    {
+        blacklisted.insert(name.toLower());
+    }
+
     // Gather the channels currently open in Bajerino that are live, keyed by
     // lower-cased login so the priority list matches case-insensitively.
     QHash<QString, WatchTarget> liveOpen;
@@ -149,7 +201,7 @@ void ChannelPointsFarm::tick()
         const auto login = tc->getName();
         const auto key = login.toLower();
         if (broadcastId.isEmpty() || channelId.isEmpty() || login.isEmpty() ||
-            liveOpen.contains(key))
+            liveOpen.contains(key) || blacklisted.contains(key))
         {
             return;
         }

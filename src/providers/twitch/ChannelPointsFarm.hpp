@@ -26,6 +26,9 @@ class ChannelPointsFarmModel;
 /// (MAX_FARMED). When more open channels are live than that, the priority list
 /// decides who wins: channels earlier in the list first, then any remaining
 /// open & live channels fill the leftover slots.
+///
+/// Channels on the blacklist are never farmed, even when open and live, so the
+/// leftover-slot fill never picks a channel the user wants left alone.
 class ChannelPointsFarm final
 {
 public:
@@ -41,7 +44,12 @@ public:
     void addChannel(const QString &channelName);
     void removeChannel(const QString &channelName);
 
+    bool isChannelBlacklisted(const QString &channelName) const;
+    void addBlacklistChannel(const QString &channelName);
+    void removeBlacklistChannel(const QString &channelName);
+
     ChannelPointsFarmModel *createModel(QObject *parent);
+    ChannelPointsFarmModel *createBlacklistModel(QObject *parent);
 
 private:
     // A channel selected for watching during the current tick.
@@ -68,10 +76,13 @@ private:
 
     QTimer timer_;
     SignalVector<QString> channels_;
+    SignalVector<QString> blacklist_;
     QHash<QString, SpadeEntry> spadeCache_;
 
     ChatterinoSetting<std::vector<QString>> setting_ = {
         "/moltorino/channelPoints/farmPriority"};
+    ChatterinoSetting<std::vector<QString>> blacklistSetting_ = {
+        "/moltorino/channelPoints/farmBlacklist"};
 };
 
 }  // namespace chatterino
