@@ -21,7 +21,7 @@ if(CHATTERINO_SANITIZER_SUPPORT)
     add_sanitizers(${PROJECT_NAME})
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE chatterino-lib)
+target_link_libraries(${PROJECT_NAME} PRIVATE bajerino-lib)
 target_link_libraries(${PROJECT_NAME} PRIVATE chatterino-mocks)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE benchmark::benchmark)

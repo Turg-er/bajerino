@@ -177,6 +177,24 @@ TEST(BasicPubSub, SubscriptionCycle)
     ASSERT_EQ(manager.messagesReceived, 2);
 }
 
+TEST(BasicPubSub, PendingSubscriptionCanBeCancelled)
+{
+    mock::BaseApplication app;
+    const QString host("wss://" + PUBSUB_WSS_ADDR + "/liveupdates/sub-unsub");
+    MyManager manager(host);
+    const DummySubscription subscription{1, "foo"};
+
+    manager.sub(subscription);
+    manager.unsub(subscription);
+    QTest::qWait(500);
+
+    ASSERT_EQ(manager.messagesReceived, 0);
+
+    manager.stop();
+    QCoreApplication::processEvents(QEventLoop::AllEvents);
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+}
+
 TEST(BasicPubSub, SubLimits)
 {
     mock::BaseApplication app;

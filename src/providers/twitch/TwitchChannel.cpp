@@ -1031,6 +1031,7 @@ void TwitchChannel::initialize()
         [this](auto, const auto &) {
             if (!this->anonymousOverride_.has_value())
             {
+                this->refreshPubSub();
                 this->anonymousChanged.invoke();
             }
         },
@@ -3399,9 +3400,17 @@ void TwitchChannel::refreshPubSub()
         return;
     }
 
+    // This topic is public and provides the reward metadata needed to render
+    // the redemption banner for IRC messages.
+    getApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
+
     if (this->isAnonymous())
     {
         resetEventSubHandles();
+        if (!getApp()->getTwitch()->hasAuthenticatedChannels())
+        {
+            getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
+        }
         if (getSettings()->enablePinnedMessages)
         {
             qCDebug(chatterinoPubSub)
@@ -3414,8 +3423,6 @@ void TwitchChannel::refreshPubSub()
     }
 
     auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
-
-    getApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
 
     if (getSettings()->enablePinnedMessages)
     {
@@ -3466,15 +3473,13 @@ void TwitchChannel::refreshPubSub()
         }
         else
         {
-            getApp()->getTwitchPubSub()->forgetOtherUserAuthenticatedTopics(
-                QString());
+            getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
         }
     }
 
     if (currentAccount->isAnon())
     {
-        getApp()->getTwitchPubSub()->forgetOtherUserAuthenticatedTopics(
-            QString());
+        getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
         resetEventSubHandles();
         return;
     }

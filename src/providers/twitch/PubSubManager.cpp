@@ -228,6 +228,7 @@ void PubSub::listenToAuthenticatedTopic(QString topic, const QString &authToken)
     }
 
     qCDebug(chatterinoPubSub) << "Listen to authenticated topic" << topic;
+    this->authenticationRequested_ = true;
     this->private_->subscribe(
         TopicData{.topic = std::move(topic), .authToken = authToken});
 }
@@ -273,6 +274,37 @@ void PubSub::forgetOtherUserAuthenticatedTopics(const QString &userID)
         this->private_->unsubscribe(TopicData{.topic = topic});
         this->authenticatedTopicTokens_.erase(topic);
     }
+}
+
+void PubSub::clearAuthenticatedTopics()
+{
+    if (this->authenticatedTopicTokens_.empty() &&
+        !this->authenticationRequested_)
+    {
+        return;
+    }
+
+    QStringList topics;
+    topics.reserve(
+        static_cast<qsizetype>(this->authenticatedTopicTokens_.size()));
+    for (const auto &[topic, token] : this->authenticatedTopicTokens_)
+    {
+        (void)token;
+        topics.push_back(topic);
+    }
+
+    for (const auto &topic : topics)
+    {
+        qCDebug(chatterinoPubSub)
+            << "Unlisten from authenticated topic" << topic;
+        this->private_->unsubscribe(TopicData{.topic = topic});
+    }
+    this->authenticatedTopicTokens_.clear();
+
+    // Public subscriptions may have shared a connection with an authenticated
+    // topic. Reconnect them on a fresh, token-free connection.
+    this->private_->reconnect();
+    this->authenticationRequested_ = false;
 }
 
 void PubSub::reconnect()

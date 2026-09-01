@@ -62,6 +62,8 @@ public:
     /// re-homes it between the authed and anonymous connections, reconnecting
     /// as needed.
     virtual void reevaluateChannelRouting() = 0;
+    /// Whether any open Twitch channel is effectively authenticated.
+    virtual bool hasAuthenticatedChannels() = 0;
 
     virtual void addFakeMessage(const QString &data) = 0;
 
@@ -166,6 +168,7 @@ public:
         const QString &dirtyChannelName) override;
     void reconnectAnonymousChannels() override;
     void reevaluateChannelRouting() override;
+    bool hasAuthenticatedChannels() override;
 
     void open(ConnectionType type);
 
@@ -213,8 +216,6 @@ protected:
     /// Opens the authed read/write connections if they are not already up.
     void ensureReadConnection();
     void ensureAnonymousReadConnection();
-    /// Whether any open Twitch channel is effectively authenticated (non-anon).
-    bool hasAuthedChannels();
     /// Removes a destroyed channel from both maps, parts it, and tears down the
     /// relevant connection if it became idle.
     void onChannelDestroyed(const QString &channelName);

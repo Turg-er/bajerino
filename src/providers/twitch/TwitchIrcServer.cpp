@@ -1618,12 +1618,22 @@ void TwitchIrcServer::ensureReadConnection()
                                ConnectionType::Read);
 }
 
-bool TwitchIrcServer::hasAuthedChannels()
+bool TwitchIrcServer::hasAuthenticatedChannels()
 {
     std::scoped_lock lock(this->channelMutex);
-    return std::ranges::any_of(this->channels, [](const auto &weak) {
-        return weak.lock() != nullptr;
-    });
+    for (const auto *map : {&this->channels, &this->anonymousChannels})
+    {
+        for (const auto &weak : *map)
+        {
+            const auto channel =
+                std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
+            if (channel && !channel->isAnonymous())
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void TwitchIrcServer::reevaluateChannelRouting()
@@ -1658,6 +1668,11 @@ void TwitchIrcServer::reevaluateChannelRouting()
         repartition(this->anonymousChannels);
         this->channels = authed;
         this->anonymousChannels = anonymous;
+    }
+
+    if (!this->hasAuthenticatedChannels())
+    {
+        getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
     }
 
     // Reconnect the authed connections for the new authed channel set. connect()
@@ -1769,7 +1784,7 @@ void TwitchIrcServer::connect()
     // (e.g. the global default is on with no per-channel overrides), no authed
     // connection is established, so the account never appears connected and
     // EventSub stays dormant.
-    if (this->hasAuthedChannels())
+    if (this->hasAuthenticatedChannels())
     {
         {
             std::scoped_lock locker(this->connectionMutex_);
@@ -1819,6 +1834,11 @@ void TwitchIrcServer::onChannelDestroyed(const QString &channelName)
         wasAnonymous = this->anonymousChannels.remove(channelName) > 0;
         authedEmpty = this->channels.isEmpty();
         anonymousEmpty = this->anonymousChannels.isEmpty();
+    }
+
+    if (wasAuthed && authedEmpty)
+    {
+        getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
     }
 
     // HACK(mm2pl): This prevents custom invalid twitch channels used by plugins

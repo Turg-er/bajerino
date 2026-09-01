@@ -17,6 +17,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
+#include <QtCore/qtestsupport_core.h>
 
 #include <vector>
 
@@ -115,8 +116,13 @@ class MockApplication : public mock::BaseApplication
 public:
     MockApplication()
         : highlights(this->settings, &this->accounts)
-        , pubSub("wss://127.0.0.1:9050")
+        , pubSub("wss://" + PUBSUB_WSS_ADDR)
     {
+    }
+
+    bool isTest() const override
+    {
+        return this->testMode;
     }
 
     ILogging *getChatLogger() override
@@ -149,6 +155,7 @@ public:
     AccountController accounts;
     HighlightController highlights;
     PubSub pubSub;
+    bool testMode = true;
 };
 
 QJsonObject makeChannelPointRedemption(const QString &redemptionId,
@@ -253,6 +260,30 @@ TEST(TwitchChannel, DuplicateChannelPointRewardPubSubMessageIgnoredWithoutId)
     channel.addChannelPointReward(ChannelPointReward(redemption));
 
     EXPECT_EQ(channel.countMessages(), 1);
+}
+
+TEST(TwitchChannel, EnablingAnonymityClearsAuthenticatedPubSubTopics)
+{
+    MockApplication app;
+    app.settings.enablePinnedMessages.setValue(false);
+
+    TwitchChannel channel("pajlada", false);
+    TwitchChannelTestAccess::setRoomId(channel, "11148817");
+
+    app.pubSub.listenToUserChannelPoints("user-1", "test-token");
+    QTest::qWait(200);
+    ASSERT_EQ(app.pubSub.diag.listenResponses, 1);
+
+    app.testMode = false;
+    channel.setAnonymousOverride(true);
+    QTest::qWait(500);
+
+    const auto responsesAfterAnonymizing =
+        app.pubSub.diag.listenResponses.load();
+    app.pubSub.listenToUserChannelPoints("user-1", "test-token");
+    QTest::qWait(200);
+
+    EXPECT_EQ(app.pubSub.diag.listenResponses, responsesAfterAnonymizing + 1);
 }
 
 TEST(TwitchChannel, ChannelPointsPubSubUpdateRequiresMatchingChannel)

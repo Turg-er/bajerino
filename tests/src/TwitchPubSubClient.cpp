@@ -7,6 +7,7 @@
 #include "providers/twitch/PubSubManager.hpp"
 #include "Test.hpp"
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QString>
@@ -172,6 +173,23 @@ TEST(TwitchPubSubClient, UnlistenResponseIsTrackedSeparately)
     EXPECT_EQ(pubSub.diag.listenResponses, 0);
     EXPECT_EQ(pubSub.diag.failedListenResponses, 0);
     EXPECT_EQ(pubSub.diag.unlistenResponses, 1);
+}
+
+TEST(TwitchPubSubClient, PublicChannelPointSubscriptionOmitsAuthToken)
+{
+    PubSub pubSub("wss://127.0.0.1:9050", 1s);
+    PubSubClient client(pubSub, 1s);
+
+    const auto encoded = client.encodeSubscription(
+        TopicData{.topic = "community-points-channel-v1.123456"});
+    const auto root = QJsonDocument::fromJson(encoded).object();
+    const auto data = root.value("data").toObject();
+
+    EXPECT_EQ(root.value("type").toString(), "LISTEN");
+    ASSERT_EQ(data.value("topics").toArray().size(), 1);
+    EXPECT_EQ(data.value("topics").toArray().at(0).toString(),
+              "community-points-channel-v1.123456");
+    EXPECT_FALSE(data.contains("auth_token"));
 }
 
 TEST(TwitchPubSubClient, ServerDoesntRespondToPings)

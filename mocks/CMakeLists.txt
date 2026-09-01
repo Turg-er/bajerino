@@ -28,4 +28,4 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24.0")
     )
 endif()
 
-target_link_libraries(${PROJECT_NAME} INTERFACE gmock chatterino-lib)
+target_link_libraries(${PROJECT_NAME} INTERFACE gmock bajerino-lib)

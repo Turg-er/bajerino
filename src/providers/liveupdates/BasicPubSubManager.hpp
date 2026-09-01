@@ -112,6 +112,11 @@ protected:
     {
         assertInGuiThread();
 
+        const auto pendingCount =
+            std::erase(this->pendingSubscriptions_, subscription);
+        DebugCount::decrease(DebugObject::LiveUpdatesSubscriptionBacklog,
+                             static_cast<int64_t>(pendingCount));
+
         for (auto &client : this->clients_)
         {
             if (client.second->unsubscribe(subscription))

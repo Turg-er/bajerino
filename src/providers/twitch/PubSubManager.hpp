@@ -93,6 +93,9 @@ public:
                                    const QString &authToken);
     void forgetUserAuthenticatedTopics(const QString &userID);
     void forgetOtherUserAuthenticatedTopics(const QString &userID);
+    /// Removes every token-bearing topic and reconnects so remaining public
+    /// topics use a connection that has never received an auth token.
+    void clearAuthenticatedTopics();
 
     void reconnect();
 
@@ -115,6 +118,7 @@ private:
 
     std::unique_ptr<PubSubManagerPrivate> private_;
     std::unordered_map<QString, QString> authenticatedTopicTokens_;
+    bool authenticationRequested_ = false;
 
 #ifdef FRIEND_TEST
     friend class FTest;

@@ -90,6 +90,21 @@ public:
     {
     }
 
+    bool hasAuthenticatedChannels() override
+    {
+        for (const auto &[name, weakChannel] : this->mockChannels)
+        {
+            (void)name;
+            const auto channel =
+                std::dynamic_pointer_cast<TwitchChannel>(weakChannel.lock());
+            if (channel && !channel->isAnonymous())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     void addFakeMessage(const QString &data) override
     {
     }
