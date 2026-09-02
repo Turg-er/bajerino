@@ -49,6 +49,16 @@
                     "type": "TimestampElement"
                 },
                 {
+                    "flags": "ModeratorTools",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TwitchModerationElement"
+                },
+                {
                     "emote": {
                         "images": {
                             "1x": "https://static-cdn.jtvnw.net/badges/v1/3267646d-33f0-4b17-b3df-f923a41db1d0/1",
@@ -92,7 +102,7 @@
                     "flags": "Username",
                     "link": {
                         "type": "UserInfo",
-                        "value": "JCRouzer"
+                        "value": "jcrouzer"
                     },
                     "style": "ChatMediumBold",
                     "tooltip": "",
@@ -156,7 +166,6 @@
             ],
             "flags": "Collapsed|WatchStreak",
             "frozen": false,
-            "highlightColor": "#64c466ff",
             "id": "090939a1-18a5-4370-9066-b4f56512c320",
             "localizedName": "",
             "loginName": "jcrouzer",

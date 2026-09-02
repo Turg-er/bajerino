@@ -390,10 +390,17 @@ TEST_F(FiltersF, ClientDetectionContextChecks)
             &channel, privmsg, MessageParseArgs{}, privmsg->content(), 0);
         ASSERT_NE(msg.get(), nullptr);
 
-        auto contextMap = buildContextMap(msg, &channel);
-        EXPECT_EQ(contextMap["moltorino.client_detection"].toString(),
+        RunContext context{
+            .message = *msg,
+            .channel = &channel,
+        };
+        auto clientDetection =
+            createIdentifierExpression(u"moltorino.client_detection"_s);
+        auto webchatDetected =
+            createIdentifierExpression(u"flags.webchat_detected"_s);
+        EXPECT_EQ(clientDetection->execute(context).toString(),
                   test.expectedDetection);
-        EXPECT_EQ(contextMap["flags.webchat_detected"].toBool(),
+        EXPECT_EQ(webchatDetected->execute(context).toBool(),
                   test.expectedWebFlag);
 
         delete privmsg;

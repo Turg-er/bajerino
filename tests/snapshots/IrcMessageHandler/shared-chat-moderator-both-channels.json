@@ -49,6 +49,16 @@
                     "type": "TimestampElement"
                 },
                 {
+                    "flags": "ModeratorTools",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TwitchModerationElement"
+                },
+                {
                     "emote": {
                         "homePage": "https://www.twitch.tv/forsen",
                         "images": {
@@ -178,5 +188,10 @@
             "userID": "100229878",
             "usernameColor": "#ff00ff7f"
         }
-    ]
+    ],
+    "params": {
+        "helixExpectations": {
+            "getSharedChatSession": 1
+        }
+    }
 }

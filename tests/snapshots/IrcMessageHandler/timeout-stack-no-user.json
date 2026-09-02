@@ -149,7 +149,7 @@
                     "flags": "Username",
                     "link": {
                         "type": "UserInfo",
-                        "value": "TwitchDev"
+                        "value": "twitchdev"
                     },
                     "style": "ChatMediumBold",
                     "tooltip": "",

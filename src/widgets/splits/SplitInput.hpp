@@ -11,6 +11,7 @@
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPaintEvent>
 #include <QPointer>
 #include <QProgressBar>
@@ -86,6 +87,8 @@ public:
      **/
     bool isHidden() const;
 
+    bool isInHistorySearch() const;
+
     /**
      * @brief Sets the text of this input
      *
@@ -114,6 +117,7 @@ public:
 
     pajlada::Signals::Signal<const QString &> textChanged;
     pajlada::Signals::NoArgSignal selectionChanged;
+    pajlada::Signals::NoArgSignal historySearchStateChanged;
 
 protected:
     // NOLINTNEXTLINE(misc-override-with-different-visibility)
@@ -129,6 +133,9 @@ protected:
 
     virtual void giveFocus(Qt::FocusReason reason);
 
+    ChannelPtr messageChannel() const;
+    void refreshMessageTargetState();
+    void updateEncryptionState();
     void handleToggleEncryption();
 
     QString handleSendMessage(const std::vector<QString> &arguments);
@@ -260,6 +267,9 @@ protected:
         SvgButton *outgoingTranslateButton;
         QCheckBox *encryptionToggleCheckbox;
         SvgButton *emoteButton;
+        QWidget *historySearchWrap;
+        QLineEdit *historySearchInput;
+        QLabel *historySearchLabel;
     } ui_{};
 
     MessagePtr replyTarget_ = nullptr;
@@ -349,6 +359,46 @@ protected:
     InputHighlighter *inputHighlighter = nullptr;
 
     void updateFonts();
+
+    bool inHistorySearch = false;
+
+    void startHistorySearch(bool backwards, bool loop);
+    void stopHistorySearchIfNecessary();
+
+    /// Search through all previous messages for `historySearchQuery`
+    void refreshHistorySearch(bool backwards, bool loop);
+
+    void cycleHistorySearch(bool backwards, bool loop);
+    void loopHistorySearchIfNeeded(bool backwards);
+
+    /// Show the currently selected message in the input box
+    void updateSelectedHistorySearchMatch();
+
+    void updateHistorySearchStatus(bool failed, const QString &message);
+
+    QString historySearchQuery;
+
+    struct HistorySearchResult {
+        /// Index of the message in `prevMsg_`
+        qsizetype messageIdx = 0;
+        QString message;
+    };
+    std::vector<HistorySearchResult> historySearchResults;
+
+    /// Index into `historySearchResults`
+    /// This might be out of bounds if there's no match.
+    qsizetype historySearchResultIndex = -1;
+
+    bool historySearchFailed = false;
+
+    bool lastHistorySearchBackwards = false;
+    bool lastHistorySearchLoop = false;
+
+    /// `prevIndex_` value before a history search was started.
+    ///
+    /// The history search modifies `prevIndex_`, but we need this anchor when
+    /// the user updates the query.
+    int prevIndexBeforeSearch = 0;
 
 private Q_SLOTS:
     void editTextChanged();

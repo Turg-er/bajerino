@@ -230,7 +230,8 @@ Application::~Application()
     INSTANCE = nullptr;
 }
 
-void Application::initialize(Settings &settings, const Paths &paths)
+void Application::initialize(Settings &settings, const Modes &modes,
+                             const Paths &paths)
 {
     assert(!this->initialized);
 
@@ -311,7 +312,7 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
     if (!this->args_.isFramelessEmbed)
     {
-        this->initNm(paths);
+        this->initNm(modes, paths);
     }
 
     this->twitch->initEventAPIs(this->bttvLiveUpdates.get(),
@@ -387,34 +388,22 @@ void Application::initialize(Settings &settings, const Paths &paths)
     this->initialized = true;
 }
 
-int Application::run()
+void Application::connect()
 {
     assert(this->initialized);
 
     this->twitch->connect();
+    MoltorinoAuth::scheduleStartupRefresh();
+}
+
+int Application::run()
+{
+    this->connect();
 
     if (!this->args_.isFramelessEmbed)
     {
         this->windows->getMainWindow().show();
     }
-
-    getSettings()->enableBTTVChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllBTTVChannelEmotes();
-        },
-        false);
-    getSettings()->enableFFZChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllFFZChannelEmotes();
-        },
-        false);
-    getSettings()->enableSevenTVChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllSevenTVChannelEmotes();
-        },
-        false);
-
-    MoltorinoAuth::scheduleStartupRefresh();
 
     return QApplication::exec();
 }
@@ -818,12 +807,13 @@ void Application::stop()
     STOPPED.store(true);
 }
 
-void Application::initNm(const Paths &paths)
+void Application::initNm(const Modes &modes, const Paths &paths)
 {
+    (void)modes;
     (void)paths;
 
 #if defined QT_NO_DEBUG || defined CHATTERINO_DEBUG_NM
-    registerNmHost(paths);
+    registerNmHost(modes, paths);
     this->nmServer->start();
 #endif
 }

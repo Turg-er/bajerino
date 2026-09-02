@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Contributors to Chatterino <https://chatterino.com>
+//
+// SPDX-License-Identifier: MIT
+
 #include "controllers/filters/lang/expressions/IdentifierExpression.hpp"
 
 #include "Application.hpp"
@@ -264,11 +268,27 @@ const AccessorMap &accessorMap()
         },
         {
             u"flags.elevated_message"_s,
-            {Type::Bool, flagAccessor<MessageFlag::ElevatedMessage>},
+            {
+                Type::Bool,
+
+                [](RunContext /*ctx*/) {
+                    // Feature deprecated by Twitch in 2023
+                    return false;
+                },
+
+            },
         },
         {
             u"flags.hype_chat"_s,
-            {Type::Bool, flagAccessor<MessageFlag::ElevatedMessage>},
+            {
+                Type::Bool,
+
+                [](RunContext /*ctx*/) {
+                    // Feature deprecated by Twitch in 2023
+                    return false;
+                },
+
+            },
         },
         {
             u"flags.cheer_message"_s,
@@ -303,8 +323,26 @@ const AccessorMap &accessorMap()
             {Type::Bool, flagAccessor<MessageFlag::Similar>},
         },
         {
+            u"flags.repeated_message"_s,
+            {Type::Bool, flagAccessor<MessageFlag::RepeatedMessage>},
+        },
+        {
+            u"flags.repeated_messages"_s,
+            {Type::Bool, flagAccessor<MessageFlag::RepeatedMessage>},
+        },
+        {
             u"flags.watch_streak"_s,
             {Type::Bool, flagAccessor<MessageFlag::WatchStreak>},
+        },
+        {
+            u"flags.webchat_detected"_s,
+            {
+                Type::Bool,
+                [](RunContext ctx) {
+                    return ctx.message.clientDetection ==
+                           Message::ClientDetectionStatus::Web;
+                },
+            },
         },
         {
             u"flags.announcement"_s,
@@ -322,6 +360,18 @@ const AccessorMap &accessorMap()
                 Type::Int,
                 [](RunContext ctx) {
                     return ctx.message.messageText.length();
+                },
+            },
+        },
+
+        // moltorino.*
+        {
+            u"moltorino.client_detection"_s,
+            {
+                Type::String,
+                [](RunContext ctx) {
+                    return Message::clientDetectionStatusToString(
+                        ctx.message.clientDetection);
                 },
             },
         },

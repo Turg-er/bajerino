@@ -14,6 +14,7 @@
 #    include <expected>
 #else
 #    define CHATTERINO_USING_NONSTD_EXPECTED
+#    define nsel_CONFIG_SELECT_EXPECTED nsel_EXPECTED_NONSTD
 #    include <nonstd/expected.hpp>
 #endif
 

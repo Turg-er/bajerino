@@ -197,7 +197,7 @@ TEST(SplitInputTest, ChannelPointsChromeStaysCompact)
     EXPECT_EQ(input.ui_.channelPointsLabel->font().pointSizeF(),
               input.ui_.textEditLength->font().pointSizeF());
     EXPECT_EQ(input.ui_.channelPointsLabel->toolTip(),
-              QString("Channel Points (click to refresh)"));
+              QString("Channel Points (click to open rewards)"));
     EXPECT_FALSE(input.ui_.channelPointsLabel->isVisible());
 }
 

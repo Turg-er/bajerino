@@ -38,7 +38,7 @@ class MockApplication : public mock::BaseApplication
 {
 public:
     MockApplication()
-        : windowManager(this->args, this->paths_, this->settings, this->theme,
+        : windowManager(this->args_, this->paths_, this->settings, this->theme,
                         this->fonts)
         , commands(this->paths_)
         , pubSub("wss://127.0.0.1:9050")
@@ -1103,7 +1103,7 @@ TEST(Commands, PredictionCommandOpensDialogInsteadOfCreatingViaArgs)
         "--duration 60",
         channel, false);
 
-    PredictionDialog const *openedDialog = nullptr;
+    PredictionDialog *openedDialog = nullptr;
     for (auto *widget : QApplication::topLevelWidgets())
     {
         auto *dialog = dynamic_cast<PredictionDialog *>(widget);

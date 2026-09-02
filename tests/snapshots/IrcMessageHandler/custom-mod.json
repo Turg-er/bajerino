@@ -49,6 +49,16 @@
                     "type": "TimestampElement"
                 },
                 {
+                    "flags": "ModeratorTools",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TwitchModerationElement"
+                },
+                {
                     "emote": {
                         "images": {
                             "1x": "https://chatterino.com/ffz-mod1x.png"

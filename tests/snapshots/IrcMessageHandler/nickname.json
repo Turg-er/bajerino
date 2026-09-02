@@ -63,7 +63,7 @@
                     "flags": "Username",
                     "link": {
                         "type": "UserInfo",
-                        "value": "NickName"
+                        "value": "nickname"
                     },
                     "style": "ChatMediumBold",
                     "tooltip": "",

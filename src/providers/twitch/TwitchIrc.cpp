@@ -9,80 +9,81 @@
 #include "common/QLogging.hpp"
 #include "controllers/emotes/EmoteController.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
+#include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
+
+#include <span>
 
 namespace {
 
 using namespace chatterino;
 
-void appendTwitchEmoteOccurrences(const QString &emote,
-                                  std::vector<TwitchEmoteOccurrence> &vec,
-                                  const std::vector<int> &correctPositions,
-                                  const QString &originalMessage,
+void appendTwitchEmoteOccurrences(QStringView emote,
+                                  std::vector<TwitchEmoteOccurrence> &out,
+                                  std::span<const uint16_t> codepointToUtf16Idx,
+                                  QStringView originalMessage,
                                   int messageOffset)
 {
     auto *app = getApp();
-    if (!emote.contains(':'))
+
+    auto [idRef, ranges] = splitOnce(emote, u':');
+    if (ranges.empty())
     {
         return;
     }
+    // FIXME: Add an EmoteIdView.
+    auto id = EmoteId{idRef.toString()};
 
-    auto parameters = emote.split(':');
-
-    if (parameters.length() < 2)
+    for (const auto occurrence : ranges.tokenize(u','))
     {
-        return;
-    }
-
-    auto id = EmoteId{parameters.at(0)};
-
-    auto occurrences = parameters.at(1).split(',');
-
-    for (const QString &occurrence : occurrences)
-    {
-        auto coords = occurrence.split('-');
-
-        if (coords.length() < 2)
+        auto [fromStr, toStr] = splitOnce(occurrence, u'-');
+        bool fromOk = false;
+        bool toOk = false;
+        uint16_t from = fromStr.toUShort(&fromOk);
+        uint16_t to = toStr.toUShort(&toOk);
+        if (!fromOk || !toOk)
         {
-            return;
+            qCDebug(chatterinoTwitch) << "Invalid emote range:" << occurrence;
+            continue;
         }
-
-        auto from = coords.at(0).toUInt() - messageOffset;
-        auto to = coords.at(1).toUInt() - messageOffset;
-        auto maxPositions = correctPositions.size();
-        if (from > to || to >= maxPositions)
-        {
-            // Emote coords are out of range
-            qCDebug(chatterinoTwitch)
-                << "Emote coords" << from << "-" << to << "are out of range ("
-                << maxPositions << ")";
-            return;
-        }
-
-        auto start = correctPositions[from];
-        auto end = correctPositions[to];
-        if (start > end || start < 0 || end > originalMessage.length())
-        {
-            // Emote coords are out of range from the modified character positions
-            qCDebug(chatterinoTwitch) << "Emote coords" << from << "-" << to
-                                      << "are out of range after offsets ("
-                                      << originalMessage.length() << ")";
-            return;
-        }
-
-        auto name = EmoteName{originalMessage.mid(start, end - start + 1)};
-        TwitchEmoteOccurrence emoteOccurrence{
-            start,
-            end,
-            app->getEmotes()->getTwitchEmotes()->getOrCreateEmote(id, name),
-            name,
-        };
-        if (emoteOccurrence.ptr == nullptr)
+        if (from > to || std::cmp_less(from, messageOffset))
         {
             qCDebug(chatterinoTwitch)
-                << "nullptr" << emoteOccurrence.name.string;
+                << "Out of bounds emote range:" << occurrence
+                << "offset:" << messageOffset;
+            continue;
         }
-        vec.push_back(std::move(emoteOccurrence));
+        to -= messageOffset;
+        from -= messageOffset;
+        if (to >= codepointToUtf16Idx.size())
+        {
+            qCDebug(chatterinoTwitch)
+                << "Out of bounds emote range:" << occurrence
+                << "max-codepoints:" << codepointToUtf16Idx.size();
+            return;
+        }
+
+        auto start = codepointToUtf16Idx[from];
+        auto end = codepointToUtf16Idx[to];
+        assert(start <= end && end < originalMessage.length() &&
+               "Bad codepointToUtf16Idx list");
+
+        auto name = EmoteName{
+            originalMessage.sliced(start, end - start + 1).toString()};
+        auto ptr =
+            app->getEmotes()->getTwitchEmotes()->getOrCreateEmote(id, name);
+        if (!ptr)
+        {
+            qCDebug(chatterinoTwitch) << "Invalid emote:" << id.string;
+            continue;
+        }
+
+        out.emplace_back(TwitchEmoteOccurrence{
+            .start = start,
+            .end = end,
+            .ptr = ptr,
+            .name = name,
+        });
     }
 }
 
@@ -90,17 +91,17 @@ void appendTwitchEmoteOccurrences(const QString &emote,
 
 namespace chatterino {
 
-std::unordered_map<QString, QString> parseBadgeInfoTag(const QVariantMap &tags)
+std::unordered_map<QString, QString> parseBadgeInfoTag(Communi::TagsRef tags)
 {
     std::unordered_map<QString, QString> infoMap;
 
-    auto infoIt = tags.constFind("badge-info");
-    if (infoIt == tags.end())
+    auto infoIt = tags.get("badge-info");
+    if (!infoIt)
     {
         return infoMap;
     }
 
-    auto info = infoIt.value().toString().split(',', Qt::SkipEmptyParts);
+    auto info = infoIt->split(',', Qt::SkipEmptyParts);
 
     for (const QString &badge : info)
     {
@@ -110,18 +111,18 @@ std::unordered_map<QString, QString> parseBadgeInfoTag(const QVariantMap &tags)
     return infoMap;
 }
 
-std::vector<TwitchBadge> parseBadgeTag(const QVariantMap &tags,
+std::vector<TwitchBadge> parseBadgeTag(Communi::TagsRef tags,
                                        const QString &tagName)
 {
     std::vector<TwitchBadge> b;
 
-    auto badgesIt = tags.constFind(tagName);
-    if (badgesIt == tags.end())
+    auto badgesIt = tags.get(tagName);
+    if (!badgesIt)
     {
         return b;
     }
 
-    auto badges = badgesIt.value().toString().split(',', Qt::SkipEmptyParts);
+    auto badges = badgesIt->split(',', Qt::SkipEmptyParts);
 
     for (const QString &badge : badges)
     {
@@ -137,32 +138,35 @@ std::vector<TwitchBadge> parseBadgeTag(const QVariantMap &tags,
     return b;
 }
 
-std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(const QVariantMap &tags,
-                                                     const QString &content,
+std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(Communi::TagsRef tags,
+                                                     QStringView content,
                                                      int messageOffset)
 {
     // Twitch emotes
     std::vector<TwitchEmoteOccurrence> twitchEmotes;
 
-    auto emotesTag = tags.find("emotes");
+    auto emotesTag = tags.getOrEmpty("emotes");
 
-    if (emotesTag == tags.end())
+    if (emotesTag.isEmpty() ||
+        content.size() > std::numeric_limits<uint16_t>::max())
     {
         return twitchEmotes;
     }
 
-    QStringList emoteString = emotesTag.value().toString().split('/');
-    std::vector<int> correctPositions;
-    for (int i = 0; i < content.size(); ++i)
+    QVarLengthArray<uint16_t, 128> codepointToUtf16Idx;
+    // We know the maximum length for the message, because
+    // `#code-points <= #utf16-code-units` is always true.
+    codepointToUtf16Idx.reserve(content.size());
+    for (qsizetype i = 0; i < content.size(); ++i)
     {
         if (!content.at(i).isLowSurrogate())
         {
-            correctPositions.push_back(i);
+            codepointToUtf16Idx.push_back(i);
         }
     }
-    for (const QString &emote : emoteString)
+    for (const auto emote : emotesTag.tokenize(u'/'))
     {
-        appendTwitchEmoteOccurrences(emote, twitchEmotes, correctPositions,
+        appendTwitchEmoteOccurrences(emote, twitchEmotes, codepointToUtf16Idx,
                                      content, messageOffset);
     }
 

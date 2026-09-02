@@ -346,8 +346,8 @@ bool activateExistingGuiInstance(const Paths &paths)
     return true;
 }
 
-void runGui(QApplication & /*a*/, const Paths &paths, Settings &settings,
-            const Args &args, Updates &updates)
+void runGui(QApplication & /*a*/, const Modes &modes, const Paths &paths,
+            Settings &settings, const Args &args, Updates &updates)
 {
     initQt(args);
     initResources();
@@ -361,6 +361,8 @@ void runGui(QApplication & /*a*/, const Paths &paths, Settings &settings,
 #endif
 
     selfcheck::checkWebp();
+
+    updates.deleteOldFiles();
 
     // Clear the cache 1 minute after start.
     QTimer::singleShot(60 * 1000, [cachePath = paths.cacheDirectory(),
@@ -378,6 +380,7 @@ void runGui(QApplication & /*a*/, const Paths &paths, Settings &settings,
     });
 
     chatterino::NetworkManager::init();
+    updates.checkForUpdates();
 
     QObject::connect(qApp, &QApplication::aboutToQuit, [] {
         auto *app = dynamic_cast<Application *>(tryGetApp());
@@ -391,7 +394,7 @@ void runGui(QApplication & /*a*/, const Paths &paths, Settings &settings,
     });
 
     Application app(settings, paths, args, updates);
-    app.initialize(settings, paths);
+    app.initialize(settings, modes, paths);
 
 #ifndef QT_NO_SESSIONMANAGER
     QObject::connect(qApp, &QGuiApplication::commitDataRequest, qApp,

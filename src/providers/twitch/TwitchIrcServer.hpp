@@ -8,6 +8,8 @@
 #include "common/Channel.hpp"
 #include "common/Common.hpp"
 #include "providers/irc/IrcConnection2.hpp"
+#include "providers/twitch/TwitchReadConnectionPool.hpp"
+#include "util/CancellationToken.hpp"
 #include "util/RatelimitBucket.hpp"
 
 #include <IrcMessage>
@@ -58,11 +60,10 @@ public:
     virtual ChannelPtr getAnonymousChannelOrEmpty(
         const QString &dirtyChannelName) = 0;
     virtual void reconnectAnonymousChannels() = 0;
-    /// Re-evaluates every open Twitch channel's effective anonymity and
-    /// re-homes it between the authed and anonymous connections, reconnecting
-    /// as needed.
+    /// Re-evaluates every open Twitch channel's read routing and re-homes it
+    /// between the authenticated connection and anonymous pool.
     virtual void reevaluateChannelRouting() = 0;
-    /// Whether any open Twitch channel is effectively authenticated.
+    /// Whether any open Twitch channel operates as the authenticated account.
     virtual bool hasAuthenticatedChannels() = 0;
 
     virtual void addFakeMessage(const QString &data) = 0;
@@ -93,6 +94,8 @@ public:
     virtual void initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                                SeventvEventAPI *seventvEventAPI) = 0;
 
+    virtual bool isModeratorIn(const QString &broadcasterLogin) const = 0;
+
     // Update this interface with TwitchIrcServer methods as needed
 };
 
@@ -100,9 +103,10 @@ class TwitchIrcServer final : public ITwitchIrcServer, public QObject
 {
 public:
     enum class ConnectionType {
+        // TwitchReadConnectionPool calls this type for anonymous reads.
         Read,
         Write,
-        AnonymousRead,
+        AuthenticatedRead,
     };
 
     TwitchIrcServer();
@@ -170,7 +174,7 @@ public:
     void reevaluateChannelRouting() override;
     bool hasAuthenticatedChannels() override;
 
-    void open(ConnectionType type);
+    bool isModeratorIn(const QString &broadcasterLogin) const override;
 
 private:
     Atomic<QString> lastUserThatWhisperedMe;
@@ -195,8 +199,10 @@ public:
     void initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                        SeventvEventAPI *seventvEventAPI) override;
 
+    static void initializeConnection(IrcConnection *connection,
+                                     ConnectionType type);
+
 protected:
-    void initializeConnection(IrcConnection *connection, ConnectionType type);
     std::shared_ptr<Channel> createChannel(
         const QString &channelName, std::optional<bool> anonymousOverride);
 
@@ -207,15 +213,11 @@ protected:
     void writeConnectionMessageReceived(Communi::IrcMessage *message);
 
     void onReadConnected(IrcConnection *connection);
-    void onAnonymousReadConnected(IrcConnection *connection);
-    static void onWriteConnected(IrcConnection *connection);
     void onDisconnected();
-    void onAnonymousDisconnected();
     void markChannelsConnected();
-    void markAnonymousChannelsConnected();
-    /// Opens the authed read/write connections if they are not already up.
+    void ensureWriteConnection();
     void ensureReadConnection();
-    void ensureAnonymousReadConnection();
+    void rebuildAnonymousReadConnection();
     /// Removes a destroyed channel from both maps, parts it, and tears down the
     /// relevant connection if it became idle.
     void onChannelDestroyed(const QString &channelName);
@@ -231,23 +233,23 @@ private:
 
     bool prepareToSend(const std::shared_ptr<TwitchChannel> &channel);
 
+    void refreshModeratedChannels();
+    void applyModeratedChannelInfo();
+
     QMap<QString, std::weak_ptr<Channel>> channels;
     QMap<QString, std::weak_ptr<Channel>> anonymousChannels;
     std::mutex channelMutex;
 
     QObjectPtr<IrcConnection> writeConnection_ = nullptr;
     QObjectPtr<IrcConnection> readConnection_ = nullptr;
-    QObjectPtr<IrcConnection> anonymousReadConnection_ = nullptr;
+    QObjectPtr<TwitchReadConnectionPool> anonymousReadConnection_ = nullptr;
+    bool writeConnectionStarted_ = false;
     bool readConnectionStarted_ = false;
     bool anonymousReadConnectionStarted_ = false;
 
     // Our rate limiting bucket for the Twitch join rate limits
     // https://dev.twitch.tv/docs/irc/guide#rate-limits
     QObjectPtr<RatelimitBucket> joinBucket_;
-    QObjectPtr<RatelimitBucket> anonymousJoinBucket_;
-
-    QTimer reconnectTimer_;
-    int falloffCounter_ = 1;
 
     std::mutex connectionMutex_;
 
@@ -258,6 +260,9 @@ private:
     std::queue<std::chrono::steady_clock::time_point> lastMessageMod_;
     std::chrono::steady_clock::time_point lastErrorTimeSpeed_;
     std::chrono::steady_clock::time_point lastErrorTimeAmount_;
+
+    QSet</* login */ QString> moderatedChannels;
+    ScopedCancellationToken moderatedChannelFetchToken;
 };
 
 }  // namespace chatterino

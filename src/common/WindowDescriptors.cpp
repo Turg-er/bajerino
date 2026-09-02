@@ -8,6 +8,7 @@
 #include "common/QLogging.hpp"
 #include "debug/AssertInGuiThread.hpp"
 #include "providers/kick/KickChatServer.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "util/Backup.hpp"
 #include "util/Expected.hpp"
@@ -21,7 +22,11 @@
 #include <QJsonDocument>
 #include <QJsonParseError>
 
-using namespace Qt::StringLiterals;
+#include <algorithm>
+#include <limits>
+#include <span>
+
+using namespace Qt::Literals;
 
 namespace chatterino {
 
@@ -70,7 +75,7 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
     return windows;
 }
 
-const QList<QUuid> loadFilters(const QJsonValue &val)
+QList<QUuid> loadFilters(const QJsonValue &val)
 {
     QList<QUuid> filterIds;
 
@@ -87,28 +92,54 @@ const QList<QUuid> loadFilters(const QJsonValue &val)
     return filterIds;
 }
 
+QJsonArray encodeFilters(std::span<const QUuid> filters)
+{
+    QJsonArray arr;
+    for (const auto &f : filters)
+    {
+        arr.append(f.toString(QUuid::WithoutBraces));
+    }
+    return arr;
+}
+
 }  // namespace
 
 ChildChannelDescriptor ChildChannelDescriptor::fromJson(const QJsonObject &obj)
 {
-    return {
+    ChildChannelDescriptor descriptor{
         .platform = obj["platform"].toString(),
         .channelName = obj["channel"].toString(),
     };
+
+    const auto anonymousOverride = obj["anonymousOverride"];
+    if (anonymousOverride.isBool())
+    {
+        descriptor.anonymousOverride = anonymousOverride.toBool();
+    }
+
+    return descriptor;
 }
 
 QJsonObject ChildChannelDescriptor::toJson() const
 {
-    return {
+    QJsonObject obj{
         {QLatin1StringView("platform"), this->platform},
         {QLatin1StringView("channel"), this->channelName},
     };
+
+    if (this->anonymousOverride.has_value())
+    {
+        obj.insert("anonymousOverride", *this->anonymousOverride);
+    }
+
+    return obj;
 }
 
-void SplitDescriptor::loadFromJSON(SplitDescriptor &descriptor,
-                                   const QJsonObject &root,
-                                   const QJsonObject &data)
+SplitDescriptor SplitDescriptor::loadFromJSON(const QJsonObject &root)
 {
+    const QJsonObject data = root["data"].toObject();
+
+    SplitDescriptor descriptor;
     descriptor.type_ = data.value("type").toString();
     descriptor.server_ = data.value("server").toInt(-1);
     if (data.contains("anonymousOverride"))
@@ -132,6 +163,7 @@ void SplitDescriptor::loadFromJSON(SplitDescriptor &descriptor,
     {
         descriptor.spellCheckOverride = spellOverride.toBool();
     }
+
     if (descriptor.type_ == u"kick")
     {
         descriptor.kickChannelID =
@@ -151,78 +183,159 @@ void SplitDescriptor::loadFromJSON(SplitDescriptor &descriptor,
         descriptor.mcIndicator =
             qmagicenum::enumCast<MultiChannelIndicatorMode>(modeStr).value_or(
                 MultiChannelIndicatorMode::PlatformBadgeIfUnselected);
-        descriptor.mcIndex = static_cast<uint32_t>(data["activeIndex"].toInt());
+        const auto activeIndex = data["activeIndex"].toInteger(-1);
+        if (activeIndex >= 0 &&
+            activeIndex <= std::numeric_limits<uint32_t>::max())
+        {
+            descriptor.mcIndex = static_cast<uint32_t>(activeIndex);
+        }
     }
+
+    return descriptor;
+}
+
+QJsonObject SplitDescriptor::toJson() const
+{
+    QJsonObject obj;
+
+    obj.insert("type", "split");
+    obj.insert("moderationMode", this->moderationMode_);
+
+    QJsonObject data{{"type"_L1, this->type_}};
+    if (!this->channelName_.isEmpty())
+    {
+        data.insert("name"_L1, this->channelName_);
+    }
+    if (this->anonymousOverride_.has_value())
+    {
+        data.insert("anonymousOverride", *this->anonymousOverride_);
+    }
+    if (this->type_ == u"kick")
+    {
+        data.insert("roomID", static_cast<qint64>(this->kickRoomID));
+        data.insert("userID", static_cast<qint64>(this->kickUserID));
+        data.insert("channelID", static_cast<qint64>(this->kickChannelID));
+    }
+    else if (this->type_ == u"multi")
+    {
+        QJsonArray children;
+        for (const auto &child : this->children)
+        {
+            children.append(child.toJson());
+        }
+        data.insert("children", children);
+        data.insert("indicatorMode",
+                    qmagicenum::enumNameString(this->mcIndicator));
+        data.insert("activeIndex", static_cast<qint64>(this->mcIndex));
+    }
+    obj.insert("data", data);
+
+    obj.insert("filters", encodeFilters(this->filters_));
+
+    if (this->spellCheckOverride.has_value())
+    {
+        obj["checkSpelling"] = *this->spellCheckOverride;
+    }
+
+    return obj;
 }
 
 IndirectChannel SplitDescriptor::decodeChannel() const
 {
     assertInGuiThread();
 
-    if (this->type_ == "twitch")
+    auto type = qmagicenum::enumCast<Channel::Type>(this->type_);
+    if (!type)
     {
-        return getApp()->getTwitch()->getOrAddChannel(this->channelName_,
-                                                      this->anonymousOverride_);
+        return Channel::getEmpty();
     }
-    if (this->type_ == "mentions")
+
+    switch (*type)
     {
-        return getApp()->getTwitch()->getMentionsChannel();
-    }
-    else if (this->type_ == "watching")
-    {
-        return getApp()->getTwitch()->getWatchingChannel();
-    }
-    else if (this->type_ == "whispers")
-    {
-        return getApp()->getTwitch()->getWhispersChannel();
-    }
-    else if (this->type_ == "live")
-    {
-        return getApp()->getTwitch()->getLiveChannel();
-    }
-    else if (this->type_ == "automod")
-    {
-        return getApp()->getTwitch()->getAutomodChannel();
-    }
-    else if (this->type_ == "misc")
-    {
-        return getApp()->getTwitch()->getChannelOrEmpty(this->channelName_);
-    }
-    else if (this->type_ == "kick")
-    {
-        return getApp()->getKickChatServer()->getOrCreate(
-            this->channelName_, KickChannel::UserInit{
-                                    .roomID = this->kickRoomID,
-                                    .userID = this->kickUserID,
-                                    .channelID = this->kickChannelID,
-                                });
-    }
-    else if (this->type_ == u"multi")
-    {
-        QVarLengthArray<MultiChannel::Spec, 4> specs;
-        for (const auto &child : this->children)
-        {
-            auto spec = MultiChannel::Spec::fromDescriptor(child);
-            if (spec)
+        case Channel::Type::Twitch:
+            return getApp()->getTwitch()->getOrAddChannel(
+                this->channelName_, this->anonymousOverride_);
+        case Channel::Type::TwitchMentions:
+            return getApp()->getTwitch()->getMentionsChannel();
+        case Channel::Type::TwitchWatching:
+            return getApp()->getTwitch()->getWatchingChannel();
+        case Channel::Type::TwitchWhispers:
+            return getApp()->getTwitch()->getWhispersChannel();
+        case Channel::Type::TwitchLive:
+            return getApp()->getTwitch()->getLiveChannel();
+        case Channel::Type::TwitchAutomod:
+            return getApp()->getTwitch()->getAutomodChannel();
+        case Channel::Type::Misc:
+            return getApp()->getTwitch()->getChannelOrEmpty(this->channelName_);
+        case Channel::Type::Kick:
+            return getApp()->getKickChatServer()->getOrCreate(
+                this->channelName_, KickChannel::UserInit{
+                                        .roomID = this->kickRoomID,
+                                        .userID = this->kickUserID,
+                                        .channelID = this->kickChannelID,
+                                    });
+        case Channel::Type::Multi: {
+            QVarLengthArray<MultiChannel::Spec, 4> specs;
+            QVarLengthArray<std::optional<bool>, 4> anonymousOverrides;
+            for (const auto &child : this->children)
             {
-                specs.emplace_back(*std::move(spec));
+                auto spec = MultiChannel::Spec::fromDescriptor(child);
+                if (spec)
+                {
+                    specs.emplace_back(*std::move(spec));
+                    anonymousOverrides.emplace_back(child.anonymousOverride);
+                }
             }
+            auto ptr = std::make_shared<MultiChannel>(specs, this->mcIndicator);
+            const auto channels = ptr->channels();
+            for (size_t i = 0; i < channels.size(); ++i)
+            {
+                if (!anonymousOverrides[i].has_value())
+                {
+                    continue;
+                }
+
+                if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
+                        channels[i].channel.get()))
+                {
+                    twitchChannel->setAnonymousOverride(anonymousOverrides[i]);
+                }
+            }
+            if (!specs.empty())
+            {
+                ptr->setActiveChannelIndex(
+                    std::min<size_t>(this->mcIndex, specs.size() - 1));
+            }
+            return {std::move(ptr)};
         }
-        auto ptr = std::make_shared<MultiChannel>(specs, this->mcIndicator);
-        ptr->setActiveChannelIndex(this->mcIndex);
-        return {std::move(ptr)};
+        case Channel::Type::None:
+        case Channel::Type::Direct:
+        case Channel::Type::TwitchEnd:
+            break;  // FIXME: Remove these (#5703)
     }
 
     return Channel::getEmpty();
 }
 
+SplitNodeDescriptor::SplitNodeDescriptor(SplitDescriptor descriptor)
+    : SplitDescriptor(std::move(descriptor))
+{
+}
+
 SplitNodeDescriptor SplitNodeDescriptor::loadFromJSON(const QJsonObject &root)
 {
-    SplitNodeDescriptor descriptor;
-    SplitDescriptor::loadFromJSON(descriptor, root, root["data"].toObject());
+    SplitNodeDescriptor descriptor(SplitDescriptor::loadFromJSON(root));
     descriptor.flexH_ = root["flexh"].toDouble(1.0);
     descriptor.flexV_ = root["flexv"].toDouble(1.0);
     return descriptor;
+}
+
+QJsonObject SplitNodeDescriptor::toJson() const
+{
+    QJsonObject obj = SplitDescriptor::toJson();
+    obj.insert("flexh", this->flexH_);
+    obj.insert("flexv", this->flexV_);
+    return obj;
 }
 
 ContainerNodeDescriptor ContainerNodeDescriptor::loadFromJSON(
@@ -253,6 +366,26 @@ ContainerNodeDescriptor ContainerNodeDescriptor::loadFromJSON(
     }
 
     return descriptor;
+}
+
+QJsonObject ContainerNodeDescriptor::toJson() const
+{
+    QJsonObject obj;
+    obj.insert("type", this->vertical_ ? "vertical" : "horizontal");
+    obj.insert("flexh", this->flexH_);
+    obj.insert("flexv", this->flexV_);
+
+    QJsonArray itemsArr;
+    for (const auto &n : this->items_)
+    {
+        itemsArr.append(std::visit(
+            [](auto &&it) {
+                return it.toJson();
+            },
+            n));
+    }
+    obj.insert("items", itemsArr);
+    return obj;
 }
 
 TabDescriptor TabDescriptor::loadFromJSON(const QJsonObject &tabObj)
@@ -334,7 +467,7 @@ WindowLayout WindowLayout::loadFromFile(const QString &path)
     // "deserialize"
     for (const auto windowVal : windowsArr)
     {
-        QJsonObject windowObj = windowVal.toObject();
+        const QJsonObject windowObj = windowVal.toObject();
 
         WindowDescriptor window;
 
@@ -374,6 +507,13 @@ WindowLayout WindowLayout::loadFromFile(const QString &path)
             int height = windowObj.value("height").toInt(-1);
 
             window.geometry_ = QRect(x, y, width, height);
+        }
+
+        // Load popup ID
+        auto idVal = windowObj["popupID"];
+        if (idVal.isDouble())
+        {
+            window.popupID = idVal.toInt(1);
         }
 
         bool hasSetASelectedTab = false;

@@ -1148,12 +1148,6 @@ MoltorinoPage::MoltorinoPage()
         ->setTooltip("Show the pinned message banner above chat.")
         ->addTo(*view);
 
-    SettingWidget::checkbox("Always expand long pinned messages",
-                            s.alwaysExpandPinnedMessages)
-        ->setTooltip("Automatically show the full content of long pins without "
-                     "requiring a click.")
-        ->addTo(*view);
-
     SettingWidget::checkbox("Enable /pin <message text>",
                             s.enablePinCommandMessages)
         ->setTooltip("Let /pin followed by text send that message and pin it.")
@@ -1169,12 +1163,6 @@ MoltorinoPage::MoltorinoPage()
         ->setTooltip("Only /pin @username can search for a user's latest "
                      "message. Bare names are not treated as usernames.")
         ->addTo(*view);
-
-    addBannerScaleDropdown("Pinned message scale", s.pinnedMessageScale,
-                           "Make pinned message text larger or smaller.");
-    addBannerScaleDropdown(
-        "Pinned content scale", s.pinnedContentScale,
-        "Make pinned banner controls, labels, and buttons larger or smaller.");
 
     view->addDropdown<int>(
             "Default pin duration",
@@ -1197,75 +1185,6 @@ MoltorinoPage::MoltorinoPage()
             },
             false)
         ->setToolTip("How long pins last when no duration is given.");
-
-    view->addDropdown<int>(
-            "Close button action", {"Hide banner here", "Unpin for everyone"},
-            s.pinCloseButtonAction,
-            [](auto val) {
-                return val == 1 ? QString("Unpin for everyone")
-                                : QString("Hide banner here");
-            },
-            [](const auto &args) {
-                return args.value.startsWith("Unpin") ? 1 : 0;
-            },
-            false)
-        ->setToolTip("What the close button does on a pinned message banner.");
-
-    view->addDropdown<int>(
-            "Timer display",
-            {"Time + Countdown", "Time only", "Countdown only", "Hover only",
-             "Hidden"},
-            s.pinTimerDisplay,
-            [](auto val) {
-                switch (val)
-                {
-                    case 1:
-                        return QString("Time only");
-                    case 2:
-                        return QString("Countdown only");
-                    case 3:
-                        return QString("Hover only");
-                    case 4:
-                        return QString("Hidden");
-                    default:
-                        return QString("Time + Countdown");
-                }
-            },
-            [](const auto &args) {
-                if (args.value == "Time only")
-                {
-                    return 1;
-                }
-                if (args.value == "Countdown only")
-                {
-                    return 2;
-                }
-                if (args.value == "Hover only")
-                {
-                    return 3;
-                }
-                if (args.value == "Hidden")
-                {
-                    return 4;
-                }
-                return 0;
-            },
-            false)
-        ->setToolTip("Choose how pin time is shown on the banner.");
-
-    view->addDropdown<QString>(
-            "Pin timestamp format",
-            {"Relative", "h:mm", "hh:mm", "h:mm a", "hh:mm a", "h:mm:ss",
-             "hh:mm:ss", "h:mm:ss a", "hh:mm:ss a"},
-            s.pinTimestampFormat,
-            [](auto val) {
-                return val;
-            },
-            [](const auto &args) {
-                return args.value;
-            },
-            false)
-        ->setToolTip("How pin times are formatted.");
 
     SettingWidget::checkbox("Show unpin notifications in chat",
                             s.showUnpinNotifications)

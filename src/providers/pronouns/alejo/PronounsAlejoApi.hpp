@@ -34,9 +34,15 @@ private:
     void loadAvailablePronouns();
     void scheduleAvailablePronounsRetry();
 
+    struct PronounEntry {
+        QString subject;
+        QString object;
+        bool singular;
+    };
+
+    /// Maps alejo.io pronoun IDs to their human readable representation (subject, object, and singularity)
+    std::unordered_map<QString, PronounEntry> pronouns;
     std::shared_mutex mutex;
-    /// Maps alejo.io pronoun IDs to human readable representation like `they/them` or `other`
-    std::unordered_map<QString, QString> pronouns;
     std::atomic_bool pronounsLoadInFlight_{false};
     std::atomic_int pronounsLoadRetryCount_{0};
 

@@ -210,30 +210,26 @@ void PubSubClient::handleMessageResponse(const PubSubMessageMessage &message)
         }
 
         const auto &innerMessage = *oInnerMessage;
+        const auto channelId = message.topic.sliced(
+            static_cast<qsizetype>(sizeof("pinned-chat-updates-v1.") - 1));
 
         switch (innerMessage.type)
         {
-            case PubSubPinnedChatUpdatesV1Message::Type::Pin:
-            case PubSubPinnedChatUpdatesV1Message::Type::Update:
-            case PubSubPinnedChatUpdatesV1Message::Type::Unpin: {
-                qCDebug(chatterinoPubSub)
-                    << "Pinned chat PubSub event" << message.topic
-                    << innerMessage.typeString
-                    << "has data:" << !innerMessage.data.isEmpty();
-
-                QJsonObject payload;
-                payload["type"] = innerMessage.typeString;
-                payload["topic"] = message.topic;
-
-                payload["data"] = innerMessage.data;
-
-                this->manager_.pinnedChat.updated.invoke(payload);
+            case PubSubPinnedChatUpdatesV1Message::Type::PinMessage:
+            case PubSubPinnedChatUpdatesV1Message::Type::UpdateMessage:
+            case PubSubPinnedChatUpdatesV1Message::Type::UnpinMessage: {
+                const PubSubPinnedChatUpdate update{
+                    .channelId = channelId,
+                    .message = innerMessage,
+                };
+                this->manager_.pinnedChatUpdates.updated.invoke(update);
             }
             break;
 
             case PubSubPinnedChatUpdatesV1Message::Type::INVALID:
             default: {
-                qCDebug(chatterinoPubSub) << "Invalid pinned chat event type:"
+                qCDebug(chatterinoPubSub) << "Invalid pinned-chat-updates-v1 "
+                                             "event type:"
                                           << innerMessage.typeString;
             }
             break;

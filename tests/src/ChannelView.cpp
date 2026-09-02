@@ -22,8 +22,10 @@ class MockApplication : public mock::BaseApplication
 {
 public:
     MockApplication()
-        : windowManager(this->args, this->paths_, this->settings, this->theme,
-                        this->fonts) = default;
+        : windowManager(this->args_, this->paths_, this->settings, this->theme,
+                        this->fonts)
+    {
+    }
 
     WindowManager *getWindows() override
     {

@@ -534,6 +534,19 @@ public:
          (FailureCallback<HelixUnpinMessageError, QString>)failureCallback),
         (override));
 
+    MOCK_METHOD(void, getSharedChatSession,
+                (QString broadcasterID,
+                 ResultCallback<HelixSharedChatSession> successCallback,
+                 (FailureCallback<HelixGetSharedChatSessionError, QString>
+                      failureCallback)),
+                (override));
+
+    MOCK_METHOD(void, getModeratedChannels,
+                (QString userID, ResultCallback<QSet<QString>> successCallback,
+                 (FailureCallback<QString> failureCallback),
+                 CancellationToken &&token),
+                (override));
+
     MOCK_METHOD(void, update, (QString clientId, QString oauthToken),
                 (override));
 

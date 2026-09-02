@@ -15,29 +15,27 @@ list(APPEND CMAKE_MODULE_PATH
     "${CMAKE_SOURCE_DIR}/cmake"
     )
 
+if(WIN32 AND NOT MINGW)
+    include(EnableSegmentHeap)
+endif()
+
 option(BUILD_APP "Build Bajerino" ON)
 option(BUILD_TESTS "Build the tests for Bajerino" OFF)
 option(BUILD_BENCHMARKS "Build the benchmarks for Bajerino" OFF)
 option(USE_SYSTEM_PAJLADA_SETTINGS "Use system pajlada settings library" OFF)
 option(USE_SYSTEM_LIBCOMMUNI "Use system communi library" OFF)
-option(USE_SYSTEM_QTKEYCHAIN "Use system QtKeychain library" OFF)
-option(BUILD_WITH_QTKEYCHAIN "Build Bajerino with support for your system key chain" ON)
 option(USE_SYSTEM_MINIAUDIO "Build Bajerino with your system miniaudio" OFF)
 option(BUILD_WITH_CRASHPAD "Build chatterino with crashpad" OFF)
 option(USE_PRECOMPILED_HEADERS "Use precompiled headers (Temporarily not supported on macOS)" ON)
 option(BUILD_WITH_QT6 "Build with Qt6" On)
 option(BUILD_WITH_LIBNOTIFY "Build with libnotify" ON)
 option(CHATTERINO_GENERATE_COVERAGE "Generate coverage files" OFF)
-
-# We don't use translations, and we don't want qtkeychain to build translations
-option(BUILD_TRANSLATIONS "" OFF)
 option(BUILD_SHARED_LIBS "" OFF)
 option(CHATTERINO_LTO "Enable LTO for all targets" OFF)
 # CMake doesn't detect LTO for some compilers (e.g. clang-cl: https://gitlab.kitware.com/cmake/cmake/-/issues/21635),
 # so this skips the check and assumes LTO works.
 cmake_dependent_option(CHATTERINO_FORCE_LTO "Skip check if LTO is supported" OFF CHATTERINO_LTO OFF)
 option(CHATTERINO_NO_AVIF_PLUGIN "Disable AVIF plugin" OFF)
-option(CHATTERINO_FORCE_LTO "Don't check if LTO is supported" OFF)
 option(CHATTERINO_PLUGINS "Enable ALPHA plugin support in Chatterino" ON)
 option(CHATTERINO_USE_GDI_FONTENGINE "Use the legacy GDI fontengine instead of the new DirectWrite one on Windows (Qt 6.8.0 and later)" ON)
 option(CHATTERINO_ALLOW_PRIVATE_QT_API "Allow uses of Qt's private API - when enabling this, Bajerino must use the EXACT Qt version it was compiled against" OFF)
@@ -106,12 +104,14 @@ else()
     set(MAJOR_QT_VERSION "5")
 endif()
 
-find_program(CCACHE_PROGRAM ccache)
 find_program(SCCACHE_PROGRAM sccache)
 if(SCCACHE_PROGRAM)
     set(_compiler_launcher ${SCCACHE_PROGRAM})
-elseif(CCACHE_PROGRAM)
-    set(_compiler_launcher ${CCACHE_PROGRAM})
+else()
+    find_program(CCACHE_PROGRAM ccache)
+    if(CCACHE_PROGRAM)
+        set(_compiler_launcher ${CCACHE_PROGRAM})
+    endif()
 endif()
 
 if(USE_ALTERNATE_LINKER)
@@ -150,7 +150,6 @@ find_package(Qt${MAJOR_QT_VERSION} REQUIRED
     Gui
     Network
     Svg
-    SvgWidgets
     Concurrent
 )
 
@@ -201,34 +200,6 @@ else()
     endif()
 
     add_subdirectory("${LIBCOMMUNI_ROOT_LIB_FOLDER}" EXCLUDE_FROM_ALL)
-endif()
-
-if(BUILD_WITH_QTKEYCHAIN)
-    # Link QtKeychain statically
-    if(USE_SYSTEM_QTKEYCHAIN)
-        find_package(Qt${MAJOR_QT_VERSION}Keychain REQUIRED)
-    else()
-        set(QTKEYCHAIN_ROOT_LIB_FOLDER "${CMAKE_SOURCE_DIR}/lib/qtkeychain")
-
-        if(NOT EXISTS "${QTKEYCHAIN_ROOT_LIB_FOLDER}/CMakeLists.txt")
-            message(FATAL_ERROR "Submodules probably not loaded, unable to find lib/qtkeychain/CMakeLists.txt")
-        endif()
-
-        set(_prev_testing ${BUILD_TESTING})
-        set(BUILD_TESTING Off)
-        add_subdirectory("${QTKEYCHAIN_ROOT_LIB_FOLDER}" EXCLUDE_FROM_ALL)
-        set(BUILD_TESTING ${_prev_testing})
-
-        if(NOT TARGET qt${MAJOR_QT_VERSION}keychain)
-            message(FATAL_ERROR "qt${MAJOR_QT_VERSION}keychain target was not created :@")
-        endif()
-
-        if(MSVC AND "${MAJOR_QT_VERSION}" STREQUAL "5")
-            target_compile_definitions(qt5keychain PRIVATE UNICODE)
-            target_compile_options(qt5keychain PRIVATE /utf-8)
-            set_target_properties(qt5keychain PROPERTIES CXX_STANDARD 17)
-        endif()
-    endif()
 endif()
 
 if (BUILD_TESTS)

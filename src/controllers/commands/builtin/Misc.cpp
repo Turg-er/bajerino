@@ -17,6 +17,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "providers/IvrApi.hpp"
 #include "providers/kick/KickChannel.hpp"
+#include "providers/kick/KickChatServer.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/translation/Translator.hpp"
 #include "providers/twitch/api/Helix.hpp"
@@ -1812,8 +1813,8 @@ QString streamlink(const CommandContext &ctx)
         else
         {
             ctx.channel->addSystemMessage(
-                "/streamlink [channel]. Open specified Twitch channel in "
-                "streamlink. If no channel argument is specified, open the "
+                "/streamlink [channel/URL]. Open specified Twitch channel or "
+                "URL in streamlink. If no argument is specified, open the "
                 "current Twitch channel instead.");
             return "";
         }
@@ -1822,11 +1823,11 @@ QString streamlink(const CommandContext &ctx)
     stripChannelName(target);
     if (ctx.kickChannel)
     {
-        openStreamlinkForChannel(target, u"kick.com/");
+        openStreamlinkForChannelOrUrl(target, u"kick.com/");
     }
     else
     {
-        openStreamlinkForChannel(target);
+        openStreamlinkForChannelOrUrl(target);
     }
 
     return "";
@@ -2178,8 +2179,13 @@ QString openUsercard(const CommandContext &ctx)
         QString channelName = ctx.words[2];
         stripChannelName(channelName);
 
-        ChannelPtr channelTemp =
-            getApp()->getTwitch()->getChannelOrEmpty(channelName);
+        auto channelTemp = [&]() -> ChannelPtr {
+            if (channel->isKickChannel())
+            {
+                return getApp()->getKickChatServer()->findBySlug(channelName);
+            }
+            return getApp()->getTwitch()->getChannelOrEmpty(channelName);
+        }();
 
         if (channelTemp->isEmpty())
         {

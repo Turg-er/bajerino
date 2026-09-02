@@ -73,18 +73,6 @@ ScrollbarHighlight Message::getScrollBarHighlight() const
         };
     }
 
-    if (this->flags.has(MessageFlag::ElevatedMessage))
-    {
-        return {
-            ColorProvider::instance().color(
-                ColorType::ElevatedMessageHighlight),
-            ScrollbarHighlight::Default,
-            false,
-            false,
-            true,
-        };
-    }
-
     if (this->flags.has(MessageFlag::FirstMessage))
     {
         return {
@@ -113,6 +101,14 @@ ScrollbarHighlight Message::getScrollBarHighlight() const
         };
     }
 
+    if (this->flags.has(MessageFlag::UncategorizedNotification))
+    {
+        // TODO: Give this a better/its own color :-)
+        return {
+            ColorProvider::instance().color(ColorType::Subscription),
+        };
+    }
+
     return {};
 }
 
@@ -127,6 +123,7 @@ std::shared_ptr<Message> Message::clone() const
     cloned->loginName = this->loginName;
     cloned->displayName = this->displayName;
     cloned->localizedName = this->localizedName;
+    cloned->userID = this->userID;
     cloned->timeoutUser = this->timeoutUser;
     cloned->channelName = this->channelName;
     cloned->usernameColor = this->usernameColor;
@@ -136,11 +133,14 @@ std::shared_ptr<Message> Message::clone() const
     cloned->externalBadges = this->externalBadges;
     cloned->highlightColor = this->highlightColor;
     cloned->replyThread = this->replyThread;
+    cloned->platform = this->platform;
+    cloned->replyParent = this->replyParent;
+    cloned->translatedFrom = this->translatedFrom;
     cloned->count = this->count;
     cloned->reward = this->reward;
-    cloned->platform = this->platform;
     cloned->bits = this->bits;
     cloned->announcementColor = this->announcementColor;
+    cloned->clientDetection = this->clientDetection;
     std::ranges::transform(this->elements, std::back_inserter(cloned->elements),
                            [](const auto &element) {
                                return element->clone();

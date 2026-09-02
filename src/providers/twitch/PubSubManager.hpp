@@ -5,6 +5,7 @@
 #pragma once
 
 #include "providers/liveupdates/Diag.hpp"
+#include "providers/twitch/pubsubmessages/PinnedChatUpdates.hpp"
 
 #include <pajlada/signals/signal.hpp>
 #include <QJsonObject>
@@ -23,6 +24,11 @@
 namespace chatterino {
 
 class PubSubManagerPrivate;
+
+struct PubSubPinnedChatUpdate {
+    QString channelId;
+    PubSubPinnedChatUpdatesV1Message message;
+};
 
 /**
  * This handles the Twitch PubSub connection
@@ -51,8 +57,8 @@ public:
     } pointReward;
 
     struct {
-        Signal<const QJsonObject &> updated;
-    } pinnedChat;
+        Signal<const PubSubPinnedChatUpdate &> updated;
+    } pinnedChatUpdates;
 
     struct {
         Signal<const QJsonObject &> updated;
@@ -82,6 +88,13 @@ public:
      * PubSub topic: community-points-channel-v1.{channelID}
      */
     void listenToChannelPointRewards(const QString &channelID);
+
+    /**
+     * Listen to real time pin/unpin events in the given channel.
+     * This topic is relevant for everyone.
+     *
+     * PubSub topic: pinned-chat-updates-v1.{channelID}
+     */
     void listenToPinnedChatUpdates(const QString &channelID);
     void listenToPredictions(const QString &channelID);
     void listenToPolls(const QString &channelID);

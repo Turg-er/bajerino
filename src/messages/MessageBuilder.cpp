@@ -15,6 +15,7 @@
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
 #include "controllers/userdata/UserDataController.hpp"
+#include "messages/AsciiArt.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Image.hpp"
 #include "messages/Message.hpp"
@@ -64,6 +65,7 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
+#include <QSet>
 #include <QStringBuilder>
 #include <QTimeZone>
 
@@ -176,6 +178,8 @@ Message::ClientDetectionStatus performClientDetection(const QString &nonce)
     return Status::Abnormal;
 }
 
+constexpr QStringView ANONYMOUS_GIFTER_ID = u"274598607";
+
 struct HypeChatPaidLevel {
     std::chrono::seconds duration;
     uint8_t numeric;
@@ -261,8 +265,7 @@ QString stripTrailingDuplicateBypassSuffix(const QString &content)
 }
 
 void appendRepeatedMessageCounter(MessageBuilder &builder, Channel *channel,
-                                  const QVariantMap &tags,
-                                  const QString &content,
+                                  Communi::TagsRef tags, const QString &content,
                                   bool senderIsBroadcaster)
 {
     auto *detector = getApp()->getRepeatedMessageDetector();
@@ -271,16 +274,17 @@ void appendRepeatedMessageCounter(MessageBuilder &builder, Channel *channel,
         return;
     }
 
-    const auto badges = tags.value("badges").toString();
+    const auto badges = tags.getOrEmpty("badges");
     const RepeatedMessageCheck check{
-        .channelID = tags.value("room-id").toString(),
-        .userID = tags.value("user-id").toString(),
-        .messageID = tags.value("id").toString(),
+        .channelID = tags.getOrEmpty("room-id"),
+        .userID = tags.getOrEmpty("user-id"),
+        .messageID = tags.getOrEmpty("id"),
         .message = content,
-        .historical = tags.contains("historical"),
+        .historical = tags.has("historical"),
         .channelCanModerate = channel->hasModRights(),
-        .senderIsModerator = tags.value("user-type").toString() == u"mod"_s ||
-                             hasBadge(badges, u"moderator"_s),
+        .senderIsModerator = tags.getOrEmpty("user-type") == u"mod"_s ||
+                             hasBadge(badges, u"moderator"_s) ||
+                             hasBadge(badges, u"lead_moderator"_s),
         .senderIsBroadcaster =
             senderIsBroadcaster || hasBadge(badges, u"broadcaster"_s),
         .senderIsVip = hasBadge(badges, u"vip"_s),
@@ -306,6 +310,13 @@ void appendRepeatedMessageCounter(MessageBuilder &builder, Channel *channel,
                               MessageColor(color), FontStyle::ChatMedium)
         ->setTrailingSpace(false);
 }
+
+/// MessageFlag::Subscription message types
+const QSet<QString> SUB_MESSAGE_TYPES{
+    "sub",      //
+    "subgift",  //
+    "resub",    // resub messages
+};
 
 QString formatUpdatedEmoteList(const QString &platform,
                                const std::vector<QString> &emoteNames,
@@ -673,7 +684,7 @@ EmotePtr makeSharedChatBadge(const QString &sourceName,
 }
 
 EmotePtr parseEmote(TwitchChannel *twitchChannel, const QString &userID,
-                    const EmoteName &name)
+                    EmoteNameView name)
 {
     // Emote order:
     //  - 7TV Personal Emotes
@@ -762,6 +773,22 @@ EmotePtr makeDecryptBadge()
     });
 }
 
+std::pair<QString, bool> parseMessageType(Communi::TagsRef tags)
+{
+    auto msgId = tags.getOrEmpty("msg-id");
+
+    bool mirrored = msgId == "sharedchatnotice";
+
+    if (mirrored)
+    {
+        msgId = tags.getOrEmpty("source-msg-id");
+    }
+
+    // TODO: room-id & source-room-id comparison?
+
+    return {msgId, mirrored};
+}
+
 }  // namespace
 
 namespace chatterino {
@@ -810,7 +837,8 @@ MessageBuilder::MessageBuilder(SystemMessageTag, const QString &text,
 
 MessagePtrMut MessageBuilder::makeSystemMessageWithUser(
     const QString &text, const QString &loginName, const QString &displayName,
-    const MessageColor &userColor, const QTime &time)
+    const MessageColor &userColor, const QTime &time,
+    const Communi::IrcMessage &ircMessage, TwitchChannel *channel)
 {
     MessageBuilder builder;
     builder.emplace<TimestampElement>(time);
@@ -833,45 +861,77 @@ MessagePtrMut MessageBuilder::makeSystemMessageWithUser(
     builder->messageText = text;
     builder->searchText = text;
 
+    auto tags = ircMessage.tags();
+
+    builder.parseMessageTags(tags, channel, true);
+
     return builder.release();
 }
 
-MessagePtrMut MessageBuilder::makeSubgiftMessage(const QString &text,
-                                                 const QVariantMap &tags,
+MessagePtrMut MessageBuilder::makeSubgiftMessage(Communi::TagsRef tags,
                                                  const QTime &time,
                                                  TwitchChannel *channel)
 {
+    auto text = parseTagString(tags.getOrEmpty("system-msg"));
+
+    if (auto monthsStr = tags.get("msg-param-gift-months"))
+    {
+        int months = monthsStr->toInt();
+        if (months > 1)
+        {
+            auto plan = tags.getOrEmpty("msg-param-sub-plan");
+            QString name = ANONYMOUS_GIFTER_ID == tags.getOrEmpty("user-id")
+                               ? "An anonymous user"
+                               : tags.getOrEmpty("display-name");
+            text =
+                QString("%1 gifted %2 months of a Tier %3 sub to %4!")
+                    .arg(name, QString::number(months),
+                         plan.isEmpty() ? '1' : plan.at(0),
+                         tags.getOrEmpty("msg-param-recipient-display-name"));
+
+            if (auto countStr = tags.get("msg-param-sender-count"))
+            {
+                int count = countStr->toInt();
+                if (count > months)
+                {
+                    text += QString(" They've gifted %1 months in the channel.")
+                                .arg(QString::number(count));
+                }
+            }
+        }
+    }
+
     const auto *userDataController = getApp()->getUserData();
     assert(userDataController != nullptr);
 
     MessageBuilder builder;
     builder.emplace<TimestampElement>(time);
 
-    auto gifterLogin = tags.value("login").toString();
-    auto gifterDisplayName = tags.value("display-name").toString();
+    auto gifterLogin = tags.getOrEmpty("login");
+    auto gifterDisplayName = tags.getOrEmpty("display-name");
     if (gifterDisplayName.isEmpty())
     {
         gifterDisplayName = gifterLogin;
     }
 
     auto gifterColor =
-        twitch::getUserColor({
-                                 .userLogin = gifterLogin,
-                                 .userID = tags.value("user-id").toString(),
-                                 .userDataController = userDataController,
-                                 .channelChatters = channel,
-                                 .color = tags.value("color").value<QColor>(),
-                             })
+        twitch::getUserColor(
+            {
+                .userLogin = gifterLogin,
+                .userID = tags.getOrEmpty("user-id"),
+                .userDataController = userDataController,
+                .channelChatters = channel,
+                .color = QColor::fromString(tags.getOrEmpty("color")),
+            })
             .value_or(MessageColor::System);
 
-    auto recipientLogin =
-        tags.value("msg-param-recipient-user-name").toString();
+    auto recipientLogin = tags.getOrEmpty("msg-param-recipient-user-name");
     if (recipientLogin.isEmpty())
     {
-        recipientLogin = tags.value("msg-param-recipient-name").toString();
+        recipientLogin = tags.getOrEmpty("msg-param-recipient-name");
     }
     auto recipientDisplayName =
-        tags.value("msg-param-recipient-display-name").toString();
+        tags.getOrEmpty("msg-param-recipient-display-name");
     if (recipientDisplayName.isEmpty())
     {
         recipientDisplayName = recipientLogin;
@@ -881,7 +941,7 @@ MessagePtrMut MessageBuilder::makeSubgiftMessage(const QString &text,
         twitch::getUserColor(
             {
                 .userLogin = recipientLogin,
-                .userID = tags.value("msg-param-recipient-id").toString(),
+                .userID = tags.getOrEmpty("msg-param-recipient-id"),
 
                 .userDataController = userDataController,
                 .channelChatters = channel,
@@ -917,6 +977,8 @@ MessagePtrMut MessageBuilder::makeSubgiftMessage(const QString &text,
     builder->flags.set(MessageFlag::DoNotTriggerNotification);
     builder->messageText = text;
     builder->searchText = text;
+
+    builder.parseMessageTags(tags, channel, true);
 
     return builder.release();
 }
@@ -1309,32 +1371,32 @@ bool MessageBuilder::isIgnored(const QString &originalMessage,
     });
 }
 
-void MessageBuilder::appendOrEmplaceText(const QString &text,
-                                         MessageColor color)
+MessageElement *MessageBuilder::appendOrEmplaceText(
+    const QString &text, MessageColor color, MessageElementFlags messageFlags)
 {
     auto fallback = [&] {
-        this->emplace<TextElement>(text, MessageElementFlag::Text, color);
+        return this->emplace<TextElement>(text, messageFlags, color);
     };
     if (this->message_->elements.empty())
     {
-        fallback();
-        return;
+        return fallback();
     }
 
     auto *back =
         dynamic_cast<TextElement *>(this->message_->elements.back().get());
-    if (!back ||                                         //
-        dynamic_cast<MentionElement *>(back) ||          //
-        dynamic_cast<LinkElement *>(back) ||             //
-        !back->hasTrailingSpace() ||                     //
-        back->getFlags() != MessageElementFlag::Text ||  //
+    if (!back ||                                 //
+        dynamic_cast<MentionElement *>(back) ||  //
+        dynamic_cast<LinkElement *>(back) ||     //
+        !back->hasTrailingSpace() ||             //
+        back->getFlags() != messageFlags ||      //
         back->color() != color)
     {
-        fallback();
-        return;
+        return fallback();
     }
 
     back->appendText(text);
+
+    return back;
 }
 
 void MessageBuilder::appendOrEmplaceSystemTextAndUpdate(const QString &text,
@@ -1376,7 +1438,10 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
 
     if (alert.playSound)
     {
-        getApp()->getWindows()->notifyTrayHighlight(channel, message, true);
+        if (auto *windows = getApp()->getWindows())
+        {
+            windows->notifyTrayHighlight(channel, message, true);
+        }
     }
 }
 
@@ -1713,47 +1778,6 @@ MessagePtr MessageBuilder::makeListOfUsersMessage(
     return builder.release();
 }
 
-MessagePtr MessageBuilder::buildHypeChatMessage(
-    Communi::IrcPrivateMessage *message)
-{
-    auto levelID = message->tag(u"pinned-chat-paid-level"_s).toString();
-    auto currency = message->tag(u"pinned-chat-paid-currency"_s).toString();
-    bool okAmount = false;
-    auto amount = message->tag(u"pinned-chat-paid-amount"_s).toInt(&okAmount);
-    bool okExponent = false;
-    auto exponent =
-        message->tag(u"pinned-chat-paid-exponent"_s).toInt(&okExponent);
-    if (!okAmount || !okExponent || currency.isEmpty())
-    {
-        return {};
-    }
-    // additionally, there's `pinned-chat-paid-is-system-message` which isn't used by Chatterino.
-
-    QString subtitle;
-    auto levelIt = HYPE_CHAT_PAID_LEVEL.find(levelID);
-    if (levelIt != HYPE_CHAT_PAID_LEVEL.end())
-    {
-        const auto &level = levelIt->second;
-        subtitle = u"Level %1 Hype Chat (%2) "_s.arg(level.numeric)
-                       .arg(formatTime(level.duration));
-    }
-    else
-    {
-        subtitle = u"Hype Chat "_s;
-    }
-
-    // actualAmount = amount * 10^(-exponent)
-    double actualAmount = std::pow(10.0, double(-exponent)) * double(amount);
-
-    auto locale = getSystemLocale();
-    subtitle += locale.toCurrencyString(actualAmount, currency);
-
-    auto dt = calculateMessageTime(message);
-    MessageBuilder builder(systemMessage, parseTagString(subtitle), dt.time());
-    builder->flags.set(MessageFlag::ElevatedMessage);
-    return builder.release();
-}
-
 MessagePtrMut MessageBuilder::makeMissingScopesMessage(
     const QString &missingScopes)
 {
@@ -1932,18 +1956,23 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (args.allowIgnore)
     {
         bool ignored = MessageBuilder::isIgnored(
-            content, tags.value("user-id").toString(), channel);
+            content, tags.getOrEmpty("user-id"), channel);
         if (ignored)
         {
             return {};
         }
     }
 
+    const auto hasContent = !content.isEmpty();
+
     auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel);
 
-    auto userID = tags.value("user-id").toString();
+    auto userID = tags.getOrEmpty("user-id");
 
     MessageBuilder builder;
+    // calculate timestamp
+    builder->serverReceivedTime = calculateMessageTime(ircMessage);
+
     builder.parseUsernameColor(tags, userID);
     builder->userID = userID;
 
@@ -1968,6 +1997,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     builder->flags.set(MessageFlag::Collapsed);
 
     bool senderIsBroadcaster = builder->loginName == channel->getName();
+    bool userIsStaffOrBroadcaster = channel->isBroadcaster();
 
     builder->channelName = channel->getName();
 
@@ -1992,148 +2022,161 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
 
     builder.appendChannelName(channel);
 
-    if (tags.contains("client-nonce"))
+    if (auto clientNonce = tags.get("client-nonce"))
     {
-        const auto clientNonce = tags.value("client-nonce").toString();
-        builder.message().clientDetection = performClientDetection(clientNonce);
+        builder.message().clientDetection =
+            performClientDetection(*clientNonce);
     }
 
-    if (tags.contains("rm-deleted"))
+    if (tags.has("rm-deleted"))
     {
         builder->flags.set(MessageFlag::Disabled);
     }
 
-    if (tags.contains("msg-id") &&
-        tags["msg-id"].toString().split(';').contains("highlighted-message"))
+    builder.parseMessageTags(tags, twitchChannel, hasContent);
+
+    if (hasContent)
     {
-        builder->flags.set(MessageFlag::RedeemedHighlight);
-    }
-
-    if (tags.contains("first-msg") && tags["first-msg"].toString() == "1")
-    {
-        builder->flags.set(MessageFlag::FirstMessage);
-    }
-
-    if (tags.contains("pinned-chat-paid-amount"))
-    {
-        builder->flags.set(MessageFlag::ElevatedMessage);
-    }
-
-    if (tags.contains("bits"))
-    {
-        builder->flags.set(MessageFlag::CheerMessage);
-        builder->bits = tags["bits"].toInt();
-    }
-
-    // reply threads
-    builder.parseThread(content, tags, channel, thread, parent);
-
-    // timestamp
-    builder->serverReceivedTime = calculateMessageTime(ircMessage);
-    builder.emplace<TimestampElement>(builder->serverReceivedTime.time());
-
-    const bool senderIsModerator =
-        tags.value("user-type").toString() == u"mod"_s ||
-        hasBadge(tags.value("badges").toString(), u"moderator"_s) ||
-        hasBadge(tags.value("badges").toString(), u"lead_moderator"_s);
-    const bool senderIsModOrBroadcaster =
-        senderIsModerator || senderIsBroadcaster;
-    const auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
-    const bool senderIsCurrentUser =
-        (currentUser->getUserId().isEmpty()
-             ? builder->loginName.compare(currentUser->getUserName(),
-                                          Qt::CaseInsensitive) == 0
-             : userID == currentUser->getUserId());
-
-    bool canModerateUser = [&] {
-        if (senderIsBroadcaster)
+        // Message has text contents
+        if (tags.getOrEmpty("first-msg") == "1")
         {
-            // You cannot timeout the broadcaster
-            return false;
+            builder->flags.set(MessageFlag::FirstMessage);
         }
 
-        if (senderIsModerator && !args.isStaffOrBroadcaster)
+        if (auto bits = tags.get("bits"))
         {
-            // You cannot timeout moderators UNLESS you are Twitch Staff or the broadcaster of the channel
-            return false;
+            builder->flags.set(MessageFlag::CheerMessage);
+            builder->bits = bits->toInt();
         }
 
-        return true;
-    }();
-    if (canModerateUser || senderIsModOrBroadcaster || senderIsCurrentUser)
-    {
-        builder.emplace<TwitchModerationElement>(
-            canModerateUser, senderIsModOrBroadcaster, senderIsCurrentUser);
-    }
+        // reply threads
+        builder.parseThread(content, tags, channel, thread, parent);
 
-    builder.appendTwitchBadges(tags, twitchChannel);
+        // add timestamp
+        builder.emplace<TimestampElement>(builder->serverReceivedTime.time());
 
-    builder.appendTomasBadge(userID);
+        const auto badges = tags.getOrEmpty("badges");
+        const bool senderIsModerator =
+            tags.getOrEmpty("user-type") == u"mod"_s ||
+            hasBadge(badges, u"moderator"_s) ||
+            hasBadge(badges, u"lead_moderator"_s);
+        const bool senderIsModOrBroadcaster =
+            senderIsModerator || senderIsBroadcaster;
+        const auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
+        const bool senderIsCurrentUser =
+            currentUser->getUserId().isEmpty()
+                ? builder->loginName.compare(currentUser->getUserName(),
+                                             Qt::CaseInsensitive) == 0
+                : userID == currentUser->getUserId();
 
-    builder.appendChatterinoBadges(userID);
-    builder.appendFfzBadges(twitchChannel, userID);
-    builder.appendBttvBadges(userID);
-    builder.appendMoltorinoBadges(userID);
-    builder.appendSeventvBadges(userID);
-    builder.appendHomiesBadges(userID);
+        const bool canModerateUser = [&] {
+            if (senderIsBroadcaster)
+            {
+                // You cannot timeout the broadcaster
+                return false;
+            }
 
-    if (decrypted)
-    {
-        builder.emplace<DecryptedBadge>(makeDecryptBadge(),
-                                        MessageElementFlag::BadgeDecrypted);
-    }
+            if (senderIsModerator && !userIsStaffOrBroadcaster)
+            {
+                // You cannot timeout moderators UNLESS you are Twitch Staff or the broadcaster of the channel
+                // TODO: This is actually incorrect now - Twitch Staff do not have universal permission to timeout moderators anymore
+                return false;
+            }
 
-    builder.appendUsername(tags, args);
+            return true;
+        }();
+        if (canModerateUser || senderIsModOrBroadcaster || senderIsCurrentUser)
+        {
+            builder.emplace<TwitchModerationElement>(
+                canModerateUser, senderIsModOrBroadcaster, senderIsCurrentUser);
+        }
 
-    TextState textState{.twitchChannel = twitchChannel, .userID = userID};
-    QString bits;
+        builder.appendTwitchBadges(tags, twitchChannel);
 
-    auto iterator = tags.find("bits");
-    if (iterator != tags.end())
-    {
-        textState.hasBits = true;
-        textState.bitsLeft = iterator.value().toInt();
-        bits = iterator.value().toString();
-    }
+        builder.appendTomasBadge(userID);
+        builder.appendChatterinoBadges(userID);
+        builder.appendFfzBadges(twitchChannel, userID);
+        builder.appendBttvBadges(userID);
+        builder.appendMoltorinoBadges(userID);
+        builder.appendSeventvBadges(userID);
+        builder.appendHomiesBadges(userID);
 
-    // Twitch emotes
-    auto twitchEmotes =
-        parseTwitchEmotes(tags, content, static_cast<int>(messageOffset));
+        if (decrypted)
+        {
+            builder.emplace<DecryptedBadge>(makeDecryptBadge(),
+                                            MessageElementFlag::BadgeDecrypted);
+        }
 
-    // This runs through all ignored phrases and runs its replacements on content
-    processIgnorePhrases(*getSettings()->ignoredMessages.readOnly(), content,
-                         twitchEmotes);
+        builder.appendUsername(tags, args);
 
-    std::ranges::sort(twitchEmotes, [](const auto &a, const auto &b) {
-        return a.start < b.start;
-    });
-    auto uniqueEmotes = std::ranges::unique(
-        twitchEmotes, [](const auto &first, const auto &second) {
-            return first.start == second.start;
+        TextState textState{.twitchChannel = twitchChannel, .userID = userID};
+
+        if (auto optBits = tags.get("bits"))
+        {
+            textState.hasBits = true;
+            textState.bitsLeft = optBits->toInt();
+        }
+
+        // Twitch emotes
+        auto twitchEmotes =
+            parseTwitchEmotes(tags, content, static_cast<int>(messageOffset));
+
+        // This runs through all ignored phrases and runs its replacements on content
+        processIgnorePhrases(*getSettings()->ignoredMessages.readOnly(),
+                             content, twitchEmotes);
+
+        std::ranges::sort(twitchEmotes, [](const auto &a, const auto &b) {
+            return a.start < b.start;
         });
-    twitchEmotes.erase(uniqueEmotes.begin(), uniqueEmotes.end());
+        auto uniqueEmotes = std::ranges::unique(
+            twitchEmotes, [](const auto &first, const auto &second) {
+                return first.start == second.start;
+            });
+        twitchEmotes.erase(uniqueEmotes.begin(), uniqueEmotes.end());
 
-    // words
-    QStringList splits = content.split(' ');
+        if (getSettings()->wrapAsciiArt && isAsciiArt(content))
+        {
+            builder->flags.set(MessageFlag::AsciiArt);
+        }
 
-    builder.addWords(splits, twitchEmotes, textState);
-    appendRepeatedMessageCounter(builder, channel, tags, content,
-                                 senderIsBroadcaster);
+        // words
+        QStringList splits = content.split(' ');
 
-    QString stylizedUsername =
-        stylizeUsername(builder->loginName, builder.message());
+        builder.addWords(splits, twitchEmotes, textState);
+        appendRepeatedMessageCounter(builder, channel, tags, content,
+                                     senderIsBroadcaster);
 
-    builder->messageText = content;
-    builder->searchText = stylizedUsername + " " + builder->localizedName +
-                          " " + builder->loginName + ": " + content + " " +
-                          builder->searchText;
+        QString stylizedUsername =
+            stylizeUsername(builder->loginName, builder.message());
 
-    // highlights
-    HighlightAlert highlight = builder.parseHighlights(tags, content, args);
-    if (tags.contains("historical"))
-    {
-        highlight.playSound = false;
-        highlight.windowAlert = false;
+        builder->messageText = content;
+        builder->searchText = stylizedUsername + " " + builder->localizedName +
+                              " " + builder->loginName + ": " + content + " " +
+                              builder->searchText;
+
+        if (!args.isReceivedWhisper &&
+            tags.getOrEmpty("msg-id") != "announcement" &&
+            !builder->flags.has(MessageFlag::Subscription))
+        {
+            if (thread)
+            {
+                auto &img = getResources().buttons.replyThreadDark;
+                builder
+                    .emplace<CircularImageElement>(
+                        Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
+                        MessageElementFlag::ReplyButton)
+                    ->setLink({Link::ViewThread, thread->rootId()});
+            }
+            else
+            {
+                auto &img = getResources().buttons.replyDark;
+                builder
+                    .emplace<CircularImageElement>(
+                        Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
+                        MessageElementFlag::ReplyButton)
+                    ->setLink({Link::ReplyToMessage, builder->id});
+            }
+        }
     }
 
     // highlighting incoming whispers if requested per setting
@@ -2144,26 +2187,12 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
             ColorProvider::instance().color(ColorType::Whisper);
     }
 
-    if (!args.isReceivedWhisper && tags.value("msg-id") != "announcement")
+    // highlights
+    HighlightAlert highlight = builder.parseHighlights(tags, content, args);
+    if (tags.has("historical"))
     {
-        if (thread)
-        {
-            auto &img = getResources().buttons.replyThreadDark;
-            builder
-                .emplace<CircularImageElement>(
-                    Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
-                    MessageElementFlag::ReplyButton)
-                ->setLink({Link::ViewThread, thread->rootId()});
-        }
-        else
-        {
-            auto &img = getResources().buttons.replyDark;
-            builder
-                .emplace<CircularImageElement>(
-                    Image::fromResourcePixmap(img, 0.15), 2, Qt::gray,
-                    MessageElementFlag::ReplyButton)
-                ->setLink({Link::ReplyToMessage, builder->id});
-        }
+        highlight.playSound = false;
+        highlight.windowAlert = false;
     }
 
     return {builder.release(), highlight};
@@ -2187,7 +2216,8 @@ void MessageBuilder::addTextOrEmote(TextState &state, QString string)
     // Emote name: "forsenPuke" - if string in ignoredEmotes
     // Will match emote regardless of source (i.e. bttv, ffz)
     // Emote source + name: "bttv:nyanPls"
-    if (this->tryAppendEmote(state.twitchChannel, state.userID, {string}))
+    if (this->tryAppendEmote(state.twitchChannel, state.userID,
+                             EmoteNameView{string}))
     {
         // Successfully appended an emote
         return;
@@ -2309,7 +2339,7 @@ TextElement *MessageBuilder::emplaceSystemTextAndUpdate(const QString &text,
                                       MessageColor::System);
 }
 
-void MessageBuilder::parseUsernameColor(const QVariantMap &tags,
+void MessageBuilder::parseUsernameColor(Communi::TagsRef tags,
                                         const QString &userID)
 {
     const auto *userData = getApp()->getUserData();
@@ -2325,21 +2355,20 @@ void MessageBuilder::parseUsernameColor(const QVariantMap &tags,
         }
     }
 
-    const auto iterator = tags.find("color");
-    if (iterator != tags.end())
+    if (const auto color = tags.getOrEmpty("color"); !color.isEmpty())
     {
-        if (const auto color = iterator.value().toString(); !color.isEmpty())
-        {
-            this->usernameColor_ = QColor(color);
-            this->message().usernameColor = this->usernameColor_;
-            return;
-        }
+        this->usernameColor_ = QColor(color);
+        this->message().usernameColor = this->usernameColor_;
+        return;
     }
 
-    if (getSettings()->colorizeNicknames && tags.contains("user-id"))
+    if (getSettings()->colorizeNicknames)
     {
-        this->usernameColor_ = getRandomColor(tags.value("user-id").toString());
-        this->message().usernameColor = this->usernameColor_;
+        if (auto userID = tags.get("user-id"))
+        {
+            this->usernameColor_ = getRandomColor(*userID);
+            this->message().usernameColor = this->usernameColor_;
+        }
     }
 }
 
@@ -2369,17 +2398,213 @@ void MessageBuilder::parseUsername(const Communi::IrcMessage *ircMessage,
     }
 }
 
-void MessageBuilder::parseMessageID(const QVariantMap &tags)
+void MessageBuilder::parseMessageID(Communi::TagsRef tags)
 {
-    auto iterator = tags.find("id");
-
-    if (iterator != tags.end())
+    if (auto id = tags.get("id"))
     {
-        this->message().id = iterator.value().toString();
+        this->message().id = *id;
     }
 }
 
-QString MessageBuilder::parseRoomID(const QVariantMap &tags,
+void MessageBuilder::parseMessageTags(Communi::TagsRef tags,
+                                      TwitchChannel *channel, bool hasContent)
+{
+    const auto [messageType, mirrored] = parseMessageType(tags);
+
+    if (!messageType.isEmpty())
+    {
+        if (messageType == "highlighted-message")
+        {
+            this->message().flags.set(MessageFlag::RedeemedHighlight);
+        }
+        else if (SUB_MESSAGE_TYPES.contains(messageType))
+        {
+            this->message().flags.set(MessageFlag::Subscription);
+
+            if (channel == nullptr)
+            {
+                return;
+            }
+
+            if (messageType == "sub" || messageType == "resub")
+            {
+                if (auto optSystemMsg = tags.get("system-msg"))
+                {
+                    auto messageText = *std::move(optSystemMsg);
+                    if (auto tenure = tags.get("msg-param-multimonth-tenure");
+                        tenure && tenure->toInt() == 0)
+                    {
+                        int months =
+                            tags.getOrEmpty("msg-param-multimonth-duration")
+                                .toInt();
+                        if (months > 1)
+                        {
+                            int tier =
+                                tags.getOrEmpty("msg-param-sub-plan").toInt() /
+                                1000;
+                            messageText =
+                                QString("%1 subscribed at Tier %2 for %3 "
+                                        "months in advance")
+                                    .arg(tags.getOrEmpty("display-name"),
+                                         QString::number(tier),
+                                         QString::number(months));
+                            if (messageType == "resub")
+                            {
+                                int cumulative =
+                                    tags.getOrEmpty(
+                                            "msg-param-cumulative-months")
+                                        .toInt();
+                                messageText +=
+                                    QString(", reaching %1 months cumulatively "
+                                            "so far!")
+                                        .arg(QString::number(cumulative));
+                            }
+                            else
+                            {
+                                messageText += "!";
+                            }
+                        }
+                    }
+
+                    messageText = parseTagString(messageText);
+
+                    auto timestampFlags = hasContent ? MessageElementFlags{
+                            MessageElementFlag::HeaderTimestamp,
+                            MessageElementFlag::SubscriptionHeader,
+                        } : MessageElementFlags{};
+
+                    auto textFlags = hasContent ? MessageElementFlags{
+                            MessageElementFlag::Text,
+                            MessageElementFlag::SubscriptionHeader,
+                        } : MessageElementFlags{
+                            MessageElementFlag::Text,
+                        };
+
+                    auto mentionFlags = hasContent ? MessageElementFlags{
+                            MessageElementFlag::Text,
+                            MessageElementFlag::Mention,
+                            MessageElementFlag::SubscriptionHeader,
+                        } : MessageElementFlags{
+                            MessageElementFlag::Text,
+                            MessageElementFlag::Mention,
+                        };
+
+                    this->emplace<TimestampElement>(
+                            this->message().serverReceivedTime.time(),
+                            timestampFlags)
+                        ->exhaustiveFlags = true;
+
+                    auto displayName = tags.getOrEmpty("display-name");
+                    if (displayName.isEmpty())
+                    {
+                        displayName = this->message_->loginName;
+                    }
+                    const auto userID = tags.getOrEmpty("user-id");
+                    const auto *userDataController = getApp()->getUserData();
+                    assert(userDataController != nullptr);
+                    auto userColor =
+                        twitch::getUserColor(
+                            {
+                                .userLogin = this->message_->loginName,
+                                .userID = userID,
+                                .userDataController = userDataController,
+                                .channelChatters = channel,
+                                .color = QColor::fromString(
+                                    tags.getOrEmpty("color")),
+                            })
+                            .value_or(MessageColor::System);
+
+                    const auto textFragments =
+                        messageText.split(SPACE_REGEX, Qt::SkipEmptyParts);
+
+                    for (const auto &word : textFragments)
+                    {
+                        if (word == displayName)
+                        {
+                            this->emplace<MentionElement>(
+                                    displayName, this->message_->loginName,
+                                    MessageColor::System, userColor,
+                                    mentionFlags)
+                                ->exhaustiveFlags = true;
+                            continue;
+                        }
+                        this->appendOrEmplaceText(word, MessageColor::System,
+                                                  textFlags)
+                            ->exhaustiveFlags = true;
+                    }
+
+                    if (hasContent)
+                    {
+                        this
+                            ->emplace<LinebreakElement>(MessageElementFlags{
+                                MessageElementFlag::SubscriptionHeader,
+                            })
+                            ->exhaustiveFlags = true;
+                    }
+                    else
+                    {
+                        this->message_->messageText = messageText;
+                        this->message_->searchText = messageText;
+
+                        // Message doesn't contain any user input, flag it as a system message
+                        this->message().flags.set(MessageFlag::System);
+                    }
+                }
+            }
+        }
+        else if (messageType == "announcement")
+        {
+            this->message().flags.set(MessageFlag::Announcement);
+
+            if (auto color = tags.get("msg-param-color"))
+            {
+                this->message().announcementColor =
+                    qmagicenum::enumCast<HelixAnnouncementColor>(
+                        *color, qmagicenum::CASE_INSENSITIVE)
+                        .value_or(HelixAnnouncementColor::Primary);
+            }
+
+            this->emplace<TimestampElement>(
+                    this->message().serverReceivedTime.time(),
+                    MessageElementFlags{
+                        MessageElementFlag::HeaderTimestamp,
+                        MessageElementFlag::AnnouncementHeader,
+                    })
+                ->exhaustiveFlags = true;
+
+            this->emplace<TextElement>(
+                    "Announcement",
+                    MessageElementFlags({
+                        MessageElementFlag::Text,
+                        MessageElementFlag::AnnouncementHeader,
+                    }),
+                    MessageColor::System, FontStyle::ChatMediumBold)
+                ->exhaustiveFlags = true;
+
+            this
+                ->emplace<LinebreakElement>(MessageElementFlags{
+                    MessageElementFlag::AnnouncementHeader,
+                })
+                ->exhaustiveFlags = true;
+        }
+        else if (messageType == "viewermilestone" ||
+                 messageType == "modiversary")
+        {
+            this->message().flags.set(MessageFlag::WatchStreak);
+        }
+        else
+        {
+            this->message().flags.set(MessageFlag::UncategorizedNotification);
+        }
+    }
+
+    if (mirrored)
+    {
+        this->message().flags.set(MessageFlag::SharedMessage);
+    }
+}
+
+QString MessageBuilder::parseRoomID(Communi::TagsRef tags,
                                     TwitchChannel *twitchChannel)
 {
     if (twitchChannel == nullptr)
@@ -2387,11 +2612,9 @@ QString MessageBuilder::parseRoomID(const QVariantMap &tags,
         return {};
     }
 
-    auto iterator = tags.find("room-id");
-
-    if (iterator != std::end(tags))
+    if (auto optRoomID = tags.get("room-id"))
     {
-        auto roomID = iterator->toString();
+        const auto &roomID = *optRoomID;
         if (twitchChannel->roomId() != roomID)
         {
             if (twitchChannel->roomId().isEmpty())
@@ -2412,7 +2635,7 @@ QString MessageBuilder::parseRoomID(const QVariantMap &tags,
     return {};
 }
 
-TwitchChannel *MessageBuilder::parseSharedChatInfo(const QVariantMap &tags,
+TwitchChannel *MessageBuilder::parseSharedChatInfo(Communi::TagsRef tags,
                                                    TwitchChannel *twitchChannel)
 {
     if (!twitchChannel)
@@ -2420,9 +2643,9 @@ TwitchChannel *MessageBuilder::parseSharedChatInfo(const QVariantMap &tags,
         return twitchChannel;
     }
 
-    if (auto it = tags.find("source-room-id"); it != tags.end())
+    if (auto optSourceRoom = tags.get("source-room-id"))
     {
-        auto sourceRoom = it.value().toString();
+        const auto &sourceRoom = *optSourceRoom;
         if (twitchChannel->roomId() != sourceRoom)
         {
             this->message().flags.set(MessageFlag::SharedMessage);
@@ -2447,8 +2670,7 @@ TwitchChannel *MessageBuilder::parseSharedChatInfo(const QVariantMap &tags,
 }
 
 void MessageBuilder::parseThread(const QString &messageContent,
-                                 const QVariantMap &tags,
-                                 const Channel *channel,
+                                 Communi::TagsRef tags, const Channel *channel,
                                  const std::shared_ptr<MessageThread> &thread,
                                  const MessagePtr &parent)
 {
@@ -2517,15 +2739,15 @@ void MessageBuilder::parseThread(const QString &messageContent,
                 color, FontStyle::ChatMediumSmall)
             ->setLink({Link::ViewThread, thread->rootId()});
     }
-    else if (tags.find("reply-parent-msg-id") != tags.end())
+    else if (tags.has("reply-parent-msg-id"))
     {
         // Message is a reply but we couldn't find the original message.
         // Render the message using the additional reply tags
 
-        auto replyDisplayName = tags.find("reply-parent-display-name");
-        auto replyBody = tags.find("reply-parent-msg-body");
+        auto replyDisplayName = tags.get("reply-parent-display-name");
+        auto replyBody = tags.get("reply-parent-msg-body");
 
-        if (replyDisplayName != tags.end() && replyBody != tags.end())
+        if (replyDisplayName && replyBody)
         {
             QString body;
 
@@ -2535,7 +2757,7 @@ void MessageBuilder::parseThread(const QString &messageContent,
                 MessageColor::System, FontStyle::ChatMediumSmall);
 
             bool ignored = MessageBuilder::isIgnored(
-                messageContent, tags.value("reply-parent-user-id").toString(),
+                messageContent, tags.getOrEmpty("reply-parent-user-id"),
                 channel);
             if (ignored)
             {
@@ -2543,8 +2765,8 @@ void MessageBuilder::parseThread(const QString &messageContent,
             }
             else
             {
-                auto name = replyDisplayName->toString();
-                body = parseTagString(replyBody->toString());
+                const auto &name = *replyDisplayName;
+                body = parseTagString(*replyBody);
 
                 if (isMaybeEncrypted(body))
                 {
@@ -2575,7 +2797,7 @@ void MessageBuilder::parseThread(const QString &messageContent,
     }
 }
 
-HighlightAlert MessageBuilder::parseHighlights(const QVariantMap &tags,
+HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
                                                const QString &originalMessage,
                                                const MessageParseArgs &args)
 {
@@ -2630,7 +2852,7 @@ void MessageBuilder::appendChannelName(const Channel *channel)
         ->setLink(link);
 }
 
-void MessageBuilder::appendUsername(const QVariantMap &tags,
+void MessageBuilder::appendUsername(Communi::TagsRef tags,
                                     const MessageParseArgs &args)
 {
     auto *app = getApp();
@@ -2638,11 +2860,9 @@ void MessageBuilder::appendUsername(const QVariantMap &tags,
     QString username = this->message_->loginName;
     QString localizedName;
 
-    auto iterator = tags.find("display-name");
-    if (iterator != tags.end())
+    if (auto optDisplayName = tags.get("display-name"))
     {
-        QString displayName =
-            parseTagString(iterator.value().toString()).trimmed();
+        QString displayName = parseTagString(*optDisplayName).trimmed();
 
         if (QString::compare(displayName, username, Qt::CaseInsensitive) == 0)
         {
@@ -2706,7 +2926,7 @@ void MessageBuilder::appendUsername(const QVariantMap &tags,
 
 Outcome MessageBuilder::tryAppendEmote(TwitchChannel *twitchChannel,
                                        const QString &userID,
-                                       const EmoteName &name)
+                                       EmoteNameView name)
 {
     auto emote = parseEmote(twitchChannel, userID, name);
 
@@ -2853,7 +3073,7 @@ void MessageBuilder::addWords(
     }
 }
 
-void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
+void MessageBuilder::appendTwitchBadges(Communi::TagsRef tags,
                                         TwitchChannel *twitchChannel)
 {
     if (twitchChannel == nullptr)
@@ -2863,9 +3083,11 @@ void MessageBuilder::appendTwitchBadges(const QVariantMap &tags,
 
     auto badges = parseBadgeTag(tags);
 
-    if (this->message().flags.has(MessageFlag::SharedMessage))
+    if (this->message().flags.has(MessageFlag::SharedMessage) ||
+        (getSettings()->sharedChatAlwaysShowBadge &&
+         !twitchChannel->getSharedChatSessionParticipants().empty()))
     {
-        const QString sourceId = tags["source-room-id"].toString();
+        const QString sourceId = tags.getOrEmpty("source-room-id");
         QString sourceName;
         QString sourceProfilePicture;
         QString sourceLogin;

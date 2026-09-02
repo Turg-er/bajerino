@@ -49,6 +49,16 @@
                     "type": "TimestampElement"
                 },
                 {
+                    "flags": "ModeratorTools",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TwitchModerationElement"
+                },
+                {
                     "color": "#ffff0000",
                     "flags": "Username",
                     "link": {

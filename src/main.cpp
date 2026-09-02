@@ -50,11 +50,18 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName("bajerino");
     QCoreApplication::setApplicationVersion(CHATTERINO_VERSION);
     QCoreApplication::setOrganizationDomain("bajerino.com");
+    // On some Linux distros such as NixOS, Qt's automatic setting of the desktop file name
+    // leads to a wrong desktop file name ("com.bajerino." instead of "com.bajerino.bajerino"),
+    // which further leads to GNOME not being able to match the window to the desktop file,
+    // so it shows up without any name or icon.
+    QGuiApplication::setDesktopFileName("com.bajerino.bajerino");
 #ifdef Q_OS_WIN
     SetCurrentProcessExplicitAppUserModelID(
         Version::instance().appUserModelID().c_str());
 #endif
 
+    const Args args(a);
+    const Modes modes(args);
     std::unique_ptr<Paths> paths;
 
     // Optional logger override that logs to a file
@@ -62,12 +69,12 @@ int main(int argc, char **argv)
 
     try
     {
-        paths = std::make_unique<Paths>();
+        paths = std::make_unique<Paths>(args, modes);
     }
     catch (std::runtime_error &error)
     {
         QMessageBox box;
-        if (Modes::instance().isPortable)
+        if (modes.isPortable)
         {
             auto errorMessage =
                 error.what() +
@@ -88,8 +95,6 @@ int main(int argc, char **argv)
         return 1;
     }
     ipc::initPaths(paths.get());
-
-    const Args args(a, *paths);
 
 #ifdef CHATTERINO_WITH_CRASHPAD
     const auto crashpadHandler = installCrashHandler(args, *paths);
@@ -139,7 +144,7 @@ int main(int argc, char **argv)
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend protocols:"
                               << QSslSocket::supportedProtocols();
 
-        Settings settings(args, paths->settingsDirectory);
+        Settings settings(modes, args, paths->settingsDirectory);
 #ifndef Q_OS_MACOS
         if (!args.newInstance && !args.remoteRestart &&
             !args.isFramelessEmbed && settings.trayHideOnClose.getValue() &&
@@ -149,14 +154,14 @@ int main(int argc, char **argv)
         }
 #endif
 
-        Updates updates(*paths, settings);
+        Updates updates(modes, *paths, settings);
 
         NetworkConfigurationProvider::applyFromEnv(Env::get());
 
         IvrApi::initialize();
         Helix::initialize();
 
-        runGui(a, *paths, settings, args, updates);
+        runGui(a, modes, *paths, settings, args, updates);
     }
     return 0;
 }
