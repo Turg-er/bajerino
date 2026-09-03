@@ -1,66 +1,75 @@
-![chatterinoLogo](https://user-images.githubusercontent.com/41973452/272541622-52457e89-5f16-4c83-93e7-91866c25b606.png)
-Chatterino7 [![GitHub Actions Build (Windows, Ubuntu, MacOS)](https://github.com/seventv/chatterino7/actions/workflows/build.yml/badge.svg?branch=chatterino7)](https://github.com/SevenTV/chatterino7/actions?query=workflow%3ABuild+branch%3Achatterino7) [![Chocolatey Package](https://img.shields.io/chocolatey/v/chatterino7?include_prereleases)](https://chocolatey.org/packages/chatterino7)
-============
+<p align="center">
+  <img src="resources/icon.png" alt="Bajerino logo" width="128">
+</p>
 
-Bajerino is a fork of Chatterino7, but with useless features.
+# Bajerino [![Build](https://github.com/Turg-er/bajerino/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/Turg-er/bajerino/actions/workflows/build.yml)
 
-Chatterino7 is a fork of Chatterino 2. This fork mainly contains features that aren't accepted into Chatterino 2, most notably 7TV subscriber features.
+Bajerino is a Twitch and Kick chat client based on [Chatterino 2](https://github.com/Chatterino/chatterino2), [Chatterino7](https://github.com/SevenTV/chatterino7), and selected features from [Moltorino](https://codeberg.org/MoltoBenne/Moltorino).
 
-### Features of Bajerino
+## Features
 
-- Message encryption: set an `Encryption Password` in settings, then use the per-channel encryption toggle in the split input to encrypt outgoing messages. Bajerino will also try to decrypt incoming messages with the same password.
+### Bajerino additions
 
-- Anon Mode: the `Join Twitch IRC anonymously` setting reconnects Twitch IRC as an anonymous user while keeping your signed-in account for Helix API actions. This is useful if you want to read chat without exposing your logged-in IRC identity, but it forces chat sending over Helix and disables Twitch EventSub features.
+- **Per-channel message encryption:** encrypt outgoing messages with a shared password, decrypt compatible incoming messages, and show a lock badge on decrypted chat and pinned messages. Encryption can be controlled from the split input, a hotkey, or `/e` and `/d`.
+- **Per-channel anonymous Twitch access:** override the Twitch read identity for individual channels while retaining the signed-in account for supported API actions. Anonymous state is persisted and shown in the channel UI.
+- **Selective Twitch proxying:** route all traffic, all Twitch traffic, or only authenticated Twitch API traffic through `CHATTERINO2_PROXY_URL`. See [Proxying](#proxying) for the exact environment variables and privacy implications.
+- **Channel Points automation:** automatically claim bonus chests and optionally simulate watching open, live channels to earn points, with a configurable concurrency limit, priority order, and blacklist.
+- **Shared Chatterino settings mode:** optionally use the existing Chatterino settings directory instead of a separate Bajerino directory.
+- **Bajerino identity and extras:** Bajerino application names, icons, packaging, the custom Tomas badge, and the optional Big 3 username marker.
 
-- Selective Twitch proxying: `CHATTERINO2_PROXY_URL` is the proxy, applied to all Qt network traffic by default. `BAJERINO_PROXY_TWITCH=1` limits the proxy to Twitch connections (Helix, Twitch GraphQL, PubSub, EventSub, and IRC) while third-party services stay direct. `BAJERINO_PROXY_TWITCH_API_ONLY=1` narrows it further to only authenticated Twitch connections (Helix, Twitch GraphQL, PubSub); IRC and EventSub stay direct, so it pairs well with Anon Mode.
+### Moltorino features
 
-### Bajerino changes
+Bajerino retains selected features from [Moltorino's source repository](https://codeberg.org/MoltoBenne/Moltorino) and the [Moltorino website](https://moltorino.com/). These features have been adapted to Bajerino's current Chatterino7 base.
 
-A summary of notable Bajerino changes on top of Chatterino 7. The full history, including dev and upstream-merge commits, lives in the git log.
+- **Additional Twitch authentication:** save separate broadcaster or moderator accounts for supported channel-management actions without changing the account used for normal chat.
+- **Pinned-message tools:** display Twitch pins, expose moderator pin actions and duration choices, show unpin notifications, and keep encrypted pinned messages readable when the password matches.
+- **Polls and predictions:** banners and dialogs for voting, betting, creating, managing, resolving, and dismissing polls and predictions.
+- **Channel Points and rewards:** show a points balance beside the input, browse and redeem custom rewards, and control popup behavior after a redemption.
+- **Moderation tools:** repeated-message detection, inline moderation and self-delete actions, raid status, chat warnings, and `/nuke`, `/spam`, and `/pyramid` workflows.
+- **Translation and client detection:** translate incoming messages from the message menu, preview or send translated outgoing messages, and optionally highlight messages detected as Twitch Web, Android, or iOS clients.
+- **Expanded usercards:** optional follower, account, stream, followage, subscription, and chatter details; older-message loading; name history; 7TV profile access; and broadcaster role-management actions.
+- **Interface and badge extras:** Moltorino and Homies badges, follow controls in split headers, message-colored tab alerts, and optional hide-to-tray notifications on supported desktops.
 
-- Selective Twitch proxying via `CHATTERINO2_PROXY_URL`, `BAJERINO_PROXY_TWITCH`, and `BAJERINO_PROXY_TWITCH_API_ONLY` (see [Proxying](#proxying)).
-- Anon Mode: join Twitch IRC as a logged-out user while keeping your signed-in account for API actions. (`6f85d48f`)
-- Per-channel message encryption: a toggle in the split input, an encryption hotkey, and a decrypt indicator. Uses AES-CBC with a password, encoding ciphertext as CJK characters. (`1b4f806f`, `143e49d7`, `8264e58a`)
-- Option to store settings in the Chatterino directory. (`d13986b8`)
-- Bajerino branding: rename `chatterino` → `bajerino` in the GUI, a custom app icon, and custom badges. (`6cff983e`, `59365670`, `a4cf35e4`)
-- Rebased onto Chatterino 7.
+### Chatterino7 features
 
-### Features of Chatterino7
+Bajerino tracks [SevenTV/Chatterino7](https://github.com/SevenTV/chatterino7), which extends Chatterino with 7TV-centric and multi-platform functionality.
 
-- 7TV Name Paints
+- **7TV name paints:** gradient and animated image paints on usernames, mentions, replies, and whispers, with configurable shadows.
+- **7TV personal emotes:** personal and entitled emote sets in Twitch and Kick messages, completion, and the emote picker. Keep 7TV live updates enabled for entitlement and cosmetic updates.
+- **7TV cosmetics:** live paint and badge entitlement updates, optional animated 7TV badges, animated 7TV profile avatars, and shortcuts to 7TV user profiles.
+- **Higher-quality images:** 4x image links for 7TV and FFZ plus AVIF support for 7TV images when a decoder is available.
+- **Experimental Kick support:** Kick accounts, chat, replies, emotes, badges, history, stream state, highlights, usercards, room modes, and moderation actions.
+- **Multi-channel splits:** combine Twitch and Kick channels in one split while selecting which channel supplies the sending and moderation context.
+- **Flexible Twitch read connections:** authenticated, anonymous, and parallel-anonymous IRC read modes for efficiently joining many channels.
 
-- 7TV Personal Emotes
-
-- 7TV Animated Profile Avatars
-
-- 4x Images (7TV and FFZ)
-
-### Screenshots
+## Screenshots
 
 ![Example of Personal Emotes](https://user-images.githubusercontent.com/27637025/227032811-837c56eb-7724-431b-b00e-b944c9289dff.png)
 ![Example of Paints](https://user-images.githubusercontent.com/27637025/227034147-cb1fcd76-dbae-4878-9551-96ffa64dd1a9.png)
 
-### Downloads
+## Downloads
 
-**Stable builds** can be downloaded from the [releases section](https://github.com/SevenTV/chatterino7/releases/latest).
+Stable Bajerino builds can be downloaded from the [latest release](https://github.com/Turg-er/bajerino/releases/latest).
 
-To test new features, you can download the **nighly build** [here](https://github.com/SevenTV/chatterino7/releases/tag/nightly-build).
+To test new features, download the [nightly Bajerino build](https://github.com/Turg-er/bajerino/releases/tag/nightly-build).
 
-Windows users can install Chatterino7 [from Chocolatey](https://chocolatey.org/packages/chatterino7).
+The macOS build targets macOS 13 or newer on Apple Silicon (ARM64).
 
-### Issues
+Official Chatterino7 builds remain available from the [Chatterino7 releases](https://github.com/SevenTV/chatterino7/releases/latest).
 
-If you have issues such as crashes or weird behaviour regarding 7TV features, report them [in the issue-section](https://github.com/SevenTV/chatterino7/issues). If you have issues with other features, please report them [in the upstream issue-section](https://github.com/Chatterino/chatterino2/issues).
+## Issues
 
-### Discord
+Report Bajerino-specific problems in the [Bajerino issue tracker](https://gitlab.com/Turger/bajtv-chatterino2/-/issues). Use the [Chatterino7](https://github.com/SevenTV/chatterino7/issues) or [Chatterino 2](https://github.com/Chatterino/chatterino2/issues) issue tracker only when the problem can also be reproduced in that unmodified upstream project.
+
+## Community
 
 If you don't have a GitHub account and want to report issues or want to join the community you can join the official 7TV Discord using the link here: <https://discord.com/invite/7tv>.
 
-### AVIF Support
+## AVIF Support
 
 When building Chatterino 7, you might not have access to a static build of `libavif`. In that case, you can define `CHATTERINO_NO_AVIF_PLUGIN` in CMake. If you have `qavif.so` from [kimageformats](https://invent.kde.org/frameworks/kimageformats) installed on your system, Chatterino will pick it up and use AVIF images.
 
-### Proxying
+## Proxying
 
 If you set `CHATTERINO2_PROXY_URL`, Bajerino proxies all network traffic by default — Qt traffic via the Qt application proxy, and the asio-based connections (EventSub, PubSub, 7TV/BTTV/Kick live updates) explicitly.
 
@@ -82,25 +91,25 @@ If you still receive an error about `MSVCR120.dll missing`, then you should inst
 
 ## Building
 
-To get source code with required submodules run:
+To get the Bajerino source code with its required submodules, run:
 
 ```shell
-git clone --recurse-submodules https://github.com/Chatterino/chatterino2.git
+git clone --recurse-submodules https://github.com/Turg-er/bajerino.git
 ```
 
 or
 
 ```shell
-git clone https://github.com/Chatterino/chatterino2.git
-cd chatterino2
+git clone https://github.com/Turg-er/bajerino.git
+cd bajerino
 git submodule update --init --recursive
 ```
 
-- [Building on Windows](../master/BUILDING_ON_WINDOWS.md)
-- [Building on Windows with vcpkg](../master/BUILDING_ON_WINDOWS_WITH_VCPKG.md)
-- [Building on Linux](../master/BUILDING_ON_LINUX.md)
-- [Building on macOS](../master/BUILDING_ON_MAC.md)
-- [Building on FreeBSD](../master/BUILDING_ON_FREEBSD.md)
+- [Building on Windows](BUILDING_ON_WINDOWS.md)
+- [Building on Windows with vcpkg](BUILDING_ON_WINDOWS_WITH_VCPKG.md)
+- [Building on Linux](BUILDING_ON_LINUX.md)
+- [Building on macOS](BUILDING_ON_MAC.md)
+- [Building on FreeBSD](BUILDING_ON_FREEBSD.md)
 
 ## Git blame
 
