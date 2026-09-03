@@ -2106,20 +2106,31 @@ void TwitchIrcServer::applyModeratedChannelInfo()
 
     auto currentUserName =
         getApp()->getAccounts()->twitch.getCurrent()->getUserName();
-    std::scoped_lock g(this->channelMutex);
-    for (const auto *map : {&this->channels, &this->anonymousChannels})
+
+    std::vector<std::shared_ptr<TwitchChannel>> activeChannels;
     {
-        for (const auto &weak : std::as_const(*map))
+        std::scoped_lock g(this->channelMutex);
+        activeChannels.reserve(this->channels.size() +
+                               this->anonymousChannels.size());
+        for (const auto *map : {&this->channels, &this->anonymousChannels})
         {
-            if (auto chan =
-                    std::dynamic_pointer_cast<TwitchChannel>(weak.lock()))
+            for (const auto &weak : std::as_const(*map))
             {
-                if (chan->getName() != currentUserName)
+                if (auto chan =
+                        std::dynamic_pointer_cast<TwitchChannel>(weak.lock()))
                 {
-                    chan->setMod(
-                        this->moderatedChannels.contains(chan->getName()));
+                    activeChannels.push_back(std::move(chan));
                 }
             }
+        }
+    }
+
+    for (const auto &channel : activeChannels)
+    {
+        if (channel->getName() != currentUserName)
+        {
+            channel->setMod(
+                this->moderatedChannels.contains(channel->getName()));
         }
     }
 }

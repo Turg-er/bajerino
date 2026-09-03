@@ -34,6 +34,7 @@ class SeventvEmotes;
 class RatelimitBucket;
 class BttvLiveUpdates;
 class SeventvEventAPI;
+class TwitchIrcServerTestAccess;
 
 class ITwitchIrcServer
 {
@@ -263,6 +264,8 @@ private:
 
     QSet</* login */ QString> moderatedChannels;
     ScopedCancellationToken moderatedChannelFetchToken;
+
+    friend class TwitchIrcServerTestAccess;
 };
 
 }  // namespace chatterino

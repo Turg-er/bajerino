@@ -28,6 +28,8 @@
 
 namespace chatterino::eventsub {
 
+class ControllerTestAccess;
+
 class IController
 {
 public:
@@ -82,22 +84,33 @@ public:
     void debug() override;
 
 private:
-    void subscribe(const SubscriptionRequest &request, bool isRetry);
+    using SubscriptionGeneration = uint64_t;
+
+    void subscribe(const SubscriptionRequest &request, bool isRetry,
+                   SubscriptionGeneration generation);
 
     void createConnection();
     void createConnection(std::string host, std::string port, std::string path,
                           std::unique_ptr<lib::Listener> listener);
     void registerConnection(std::weak_ptr<lib::Session> &&connection);
 
-    void retrySubscription(const SubscriptionRequest &request);
+    void retrySubscription(const SubscriptionRequest &request,
+                           SubscriptionGeneration generation);
+
+    void deleteSubscription(const SubscriptionRequest &request,
+                            SubscriptionGeneration generation,
+                            const QString &subscriptionID);
 
     void markRequestSubscribed(const SubscriptionRequest &request,
+                               SubscriptionGeneration generation,
                                std::weak_ptr<lib::Session> connection,
                                const QString &subscriptionID);
 
-    void markRequestFailed(const SubscriptionRequest &request);
+    void markRequestFailed(const SubscriptionRequest &request,
+                           SubscriptionGeneration generation);
 
-    void markRequestUnsubscribed(const SubscriptionRequest &request);
+    void markRequestUnsubscribed(const SubscriptionRequest &request,
+                                 SubscriptionGeneration generation);
 
     void clearConnections();
 
@@ -144,6 +157,7 @@ private:
         } state = State::Unsubscribed;
 
         int32_t refCount = 0;
+        SubscriptionGeneration generation = 0;
         std::weak_ptr<lib::Session> connection;
 
         /// The ID of the subscription the Twitch Helix API has given us
@@ -157,9 +171,12 @@ private:
 
     std::mutex subscriptionsMutex;
     std::unordered_map<SubscriptionRequest, Subscription> subscriptions;
+    SubscriptionGeneration nextSubscriptionGeneration = 0;
 
     std::atomic<bool> quitting = false;
     OnceFlag stoppedFlag;
+
+    friend class ControllerTestAccess;
 };
 
 }  // namespace chatterino::eventsub
