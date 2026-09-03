@@ -10,7 +10,7 @@ git describe --exact-match --match 'v*' *> $null;
 $isTagged = $?;
 $ErrorActionPreference = $OldErrorActionPref;
 
-$defines = $null;
+$defines = @();
 if ($isTagged) {
     # This is a release.
     # Make sure, any existing `modes` file is overwritten for the user,
@@ -20,14 +20,14 @@ if ($isTagged) {
 }
 else {
     Write-Output nightly | Out-File Bajerino/modes -Encoding ASCII;
-    $defines = "/DIS_NIGHTLY=1";
+    $defines += "/DIS_NIGHTLY=1";
     $installerBaseName = "Bajerino.Nightly.Installer";
 }
 
 $architecture = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLower()
 if ($architecture -eq 'arm64') {
     $installerBaseName = "Experimental-ARM64-$installerBaseName"
-    $defines = "$defines /DIS_ARM=1".Trim()
+    $defines += "/DIS_ARM=1"
 }
 
 if ($Env:GITHUB_OUTPUT) {
@@ -47,9 +47,7 @@ $VCRTVersion = (Get-Item "$Env:VCToolsRedistDir\vc_redist.$architecture.exe").Ve
 # Build the installer
 ISCC `
     /DWORKING_DIR="$($pwd.Path)\" `
-    /DSTAGING_DIR_NAME="$stagingDirName" `
     /DINSTALLER_BASE_NAME="$installerBaseName" `
-    /DSETUP_ICON_FILE="$setupIconFile" `
     /DSHIPPED_VCRT_MINOR="$($VCRTVersion.FileMinorPart)" `
     /DSHIPPED_VCRT_VERSION="$($VCRTVersion.FileDescription)" `
     /DVCRT_ARCH="$architecture" `
@@ -57,4 +55,6 @@ ISCC `
     /O. `
     "$PSScriptRoot\bajerino-installer.iss";
 
-Move-Item "$installerBaseName.exe" "$installerBaseName.exe"
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}

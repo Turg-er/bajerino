@@ -6,6 +6,9 @@
 #define MyAppPublisher "Bajerino Team"
 #define MyAppURL "https://www.chatterino.com"
 #define MyAppExeName "bajerino.exe"
+#define MyAppProductName "Bajerino"
+#define MyAppDescription "Bajerino Installer"
+#define MyAppCopyright "Copyright (C) Bajerino Team"
 
 ; used in build-installer.ps1
 ; if set, must end in a backslash
@@ -17,9 +20,9 @@
 #define VCRT_ARCH "x64"
 #endif
 
-; Set to the build part of the VCRT version
-#ifndef SHIPPED_VCRT_BUILD
-#define SHIPPED_VCRT_BUILD 0
+; Set to the minor part of the VCRT version
+#ifndef SHIPPED_VCRT_MINOR
+#define SHIPPED_VCRT_MINOR 0
 #endif
 ; Set to the string representation of the VCRT version
 #ifndef SHIPPED_VCRT_VERSION

@@ -36,6 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0 # allows for tags access
           persist-credentials: true # release action
 
@@ -141,6 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0 # allows for tags access
           persist-credentials: false
       - name: Check Release
@@ -161,6 +163,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           fetch-depth: 0 # allows for tags access
           persist-credentials: true # release action
 
@@ -225,7 +228,7 @@ jobs:
         working-directory: build
         run: |
           ls -l
-          mv bajerino-macos-Qt-*-universal.dmg Bajerino.dmg
+          mv bajerino-macos-Qt-*.dmg Bajerino.dmg
 
       - name: Hash files
         working-directory: build

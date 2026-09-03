@@ -1,6 +1,6 @@
 # Building on macOS
 
-Bajerino is built in CI as a universal macOS 13+ app.
+Bajerino's CI artifact is built for Apple Silicon (ARM64) and targets macOS 13 or newer.
 Local dev machines for testing are available on Apple Silicon on macOS 13.
 
 ## Installing dependencies

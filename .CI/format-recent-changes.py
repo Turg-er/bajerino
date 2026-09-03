@@ -26,7 +26,7 @@ def create_artifacts_table(artifact_dir: str, include_installer: bool):
             + (WIN_ARM64_INSTALLERS if include_installer else []),
         },
         "macOS": {
-            "Universal (x86_64, ARM64)": get(r"\.dmg$"),
+            "ARM64": get(r"\.dmg$"),
         },
         "Linux": {"x86_64": get(r"\.(?:AppImage|deb)$")},
     }
