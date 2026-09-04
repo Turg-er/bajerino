@@ -731,13 +731,13 @@ constexpr QSize BASE_BADGE_SIZE(18, 18);
 }  // namespace
 
 TwitchChannel::TwitchChannel(const QString &name,
-                             std::optional<bool> anonymousOverride)
+                             std::optional<TwitchChannelMode> modeOverride)
     : Channel(name, Channel::Type::Twitch)
     , ChannelChatters(*static_cast<Channel *>(this))
     , nameOptions{.displayName = name,
                   .localizedName = name,
                   .actualDisplayName = name}
-    , anonymousOverride_(anonymousOverride)
+    , modeOverride_(modeOverride)
     , subscriptionUrl_("https://www.twitch.tv/subs/" + name)
     , channelUrl_("https://www.twitch.tv/" + name)
     , popoutPlayerUrl_(TWITCH_PLAYER_URL.arg(name))
@@ -936,12 +936,12 @@ void TwitchChannel::initialize()
     this->refreshChatters();
     this->refreshBadges();
 
-    getSettings()->twitchIrcJoinAsAnonymous.connect(
+    getSettings()->twitchDefaultChannelMode.connect(
         [this](auto, const auto &) {
-            if (!this->anonymousOverride_.has_value())
+            if (!this->modeOverride_.has_value())
             {
                 this->refreshPubSub();
-                this->anonymousChanged.invoke();
+                this->channelModeChanged.invoke();
             }
         },
         this->signalHolder_, false);
@@ -954,44 +954,56 @@ bool TwitchChannel::isEmpty() const
 
 bool TwitchChannel::canSendMessage() const
 {
-    return !this->isEmpty() && !this->isAnonymous();
+    return !this->isEmpty() && !this->isBajerinoAnonymous();
 }
 
-bool TwitchChannel::isAnonymous() const
+TwitchChannelMode TwitchChannel::effectiveMode() const
 {
-    return this->anonymousOverride_.value_or(
-        getSettings()->twitchIrcJoinAsAnonymous);
+    return this->modeOverride_.value_or(
+        getSettings()->twitchDefaultChannelMode.getEnum());
+}
+
+bool TwitchChannel::isBajerinoAnonymous() const
+{
+    return this->effectiveMode() == TwitchChannelMode::BajerinoAnonymous;
+}
+
+bool TwitchChannel::usesAuthenticatedFeatures() const
+{
+    return !this->isBajerinoAnonymous();
 }
 
 bool TwitchChannel::usesAnonymousReadConnection() const
 {
-    return this->anonymousOverride_.value_or(
-        getSettings()->twitchIrcJoinAsAnonymous ||
-        getSettings()->twitchReadConnectionMode !=
-            TwitchReadConnectionMode::Authenticated);
+    return this->effectiveMode() != TwitchChannelMode::Authenticated;
 }
 
-std::optional<bool> TwitchChannel::anonymousOverride() const
+std::optional<TwitchChannelMode> TwitchChannel::modeOverride() const
 {
-    return this->anonymousOverride_;
+    return this->modeOverride_;
 }
 
-void TwitchChannel::setAnonymousOverride(std::optional<bool> anonymousOverride)
+void TwitchChannel::setModeOverride(
+    std::optional<TwitchChannelMode> modeOverride)
 {
-    const bool wasAnonymous = this->isAnonymous();
-    const bool usedAnonymousRead = this->usesAnonymousReadConnection();
-    this->anonymousOverride_ = anonymousOverride;
-    const bool isAnonymous = this->isAnonymous();
-    const bool usesAnonymousRead = this->usesAnonymousReadConnection();
-    if (usesAnonymousRead != usedAnonymousRead || isAnonymous != wasAnonymous)
+    if (this->modeOverride_ == modeOverride)
+    {
+        return;
+    }
+
+    const auto previousMode = this->effectiveMode();
+    this->modeOverride_ = modeOverride;
+    const auto currentMode = this->effectiveMode();
+    if (currentMode != previousMode)
     {
         getApp()->getTwitch()->reevaluateChannelRouting();
+        if ((previousMode == TwitchChannelMode::BajerinoAnonymous) !=
+            (currentMode == TwitchChannelMode::BajerinoAnonymous))
+        {
+            this->refreshPubSub();
+        }
     }
-    if (isAnonymous != wasAnonymous)
-    {
-        this->refreshPubSub();
-        this->anonymousChanged.invoke();
-    }
+    this->channelModeChanged.invoke();
 }
 
 const QString &TwitchChannel::getDisplayName() const
@@ -1624,7 +1636,7 @@ QString TwitchChannel::prepareMessage(const QString &message,
 bool TwitchChannel::sendMessageViaIrc(const QString &message,
                                       int duplicateNonce)
 {
-    if (this->isAnonymous())
+    if (this->isBajerinoAnonymous())
     {
         if (!message.isEmpty())
         {
@@ -1880,7 +1892,7 @@ void TwitchChannel::sendMessage(const QString &message)
         return;
     }
 
-    if ((getSettings()->shouldSendHelixChat() || this->isAnonymous()) &&
+    if ((getSettings()->shouldSendHelixChat() || this->isBajerinoAnonymous()) &&
         isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
@@ -2059,7 +2071,7 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
         return;
     }
 
-    if ((getSettings()->shouldSendHelixChat() || this->isAnonymous()) &&
+    if ((getSettings()->shouldSendHelixChat() || this->isBajerinoAnonymous()) &&
         isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
@@ -3360,29 +3372,9 @@ void TwitchChannel::refreshPubSub()
         return;
     }
 
-    // This topic is public and provides the reward metadata needed to render
-    // the redemption banner for IRC messages.
+    // Keep all token-free channel topics above the BajerinoAnonymous cutoff.
+    // Reward metadata is also needed to render redemption banners from IRC.
     getApp()->getTwitchPubSub()->listenToChannelPointRewards(roomId);
-
-    if (this->isAnonymous())
-    {
-        resetEventSubHandles();
-        if (!getApp()->getTwitch()->hasAuthenticatedChannels())
-        {
-            getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
-        }
-        if (getSettings()->enablePinnedMessages)
-        {
-            qCDebug(chatterinoPubSub)
-                << "Subscribing anonymous channel to pinned chat updates"
-                << this->getName() << "room id:" << roomId;
-            getApp()->getTwitchPubSub()->listenToPinnedChatUpdates(roomId);
-            this->refreshPinnedMessage();
-        }
-        return;
-    }
-
-    auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
 
     if (getSettings()->enablePinnedMessages)
     {
@@ -3405,6 +3397,18 @@ void TwitchChannel::refreshPubSub()
     {
         getApp()->getTwitchPubSub()->listenToRaids(roomId);
     }
+
+    if (this->isBajerinoAnonymous())
+    {
+        resetEventSubHandles();
+        if (!getApp()->getTwitch()->hasAuthenticatedChannels())
+        {
+            getApp()->getTwitchPubSub()->clearAuthenticatedTopics();
+        }
+        return;
+    }
+
+    auto currentAccount = getApp()->getAccounts()->twitch.getCurrent();
 
     const auto currentUserId = currentAccount->getUserId();
     if (!currentAccount->isAnon() && !currentUserId.isEmpty())

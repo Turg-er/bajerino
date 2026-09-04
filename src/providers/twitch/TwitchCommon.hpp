@@ -7,11 +7,18 @@
 #include <QColor>
 #include <QString>
 
+#include <cstdint>
 #include <vector>
 
 namespace chatterino {
 
 [[maybe_unused]] inline const char *const ANONYMOUS_USERNAME = "justinfan64537";
+
+enum class TwitchChannelMode : std::uint8_t {
+    Authenticated,
+    AnonymousRead,
+    BajerinoAnonymous,
+};
 
 inline constexpr int TWITCH_MESSAGE_LIMIT = 500;
 

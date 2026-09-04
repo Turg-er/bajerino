@@ -282,8 +282,15 @@ void SplitContainer::addSplit(Split *split)
                     QObject::connect(tab, &QWidget::destroyed, [tab]() mutable {
                         ClosedSplits::invalidateTab(tab);
                     });
+                    std::optional<TwitchChannelMode> twitchChannelMode;
+                    if (const auto *channel = dynamic_cast<TwitchChannel *>(
+                            split->getChannel().get()))
+                    {
+                        twitchChannelMode = channel->modeOverride();
+                    }
                     ClosedSplits::push({split->getChannel()->getName(),
-                                        split->getFilters(), tab});
+                                        split->getFilters(), tab,
+                                        twitchChannelMode});
                 }
                 break;
 
@@ -868,8 +875,8 @@ NodeDescriptor SplitContainer::buildDescriptorRecursively(
                 if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
                         children[i].channel.get()))
                 {
-                    descriptor.children[i].anonymousOverride =
-                        twitchChannel->anonymousOverride();
+                    descriptor.children[i].twitchChannelMode =
+                        twitchChannel->modeOverride();
                 }
             }
         }
@@ -996,7 +1003,8 @@ void SplitContainer::refreshTabTitle()
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
                 chatWidget->getSelectedChannel().get()))
         {
-            if (twitchChannel->isAnonymous() && !channelName.isEmpty() &&
+            if (twitchChannel->isBajerinoAnonymous() &&
+                !channelName.isEmpty() &&
                 getSettings()->showAnonymousChannelIndicator)
             {
                 channelName += " (anonymous)";

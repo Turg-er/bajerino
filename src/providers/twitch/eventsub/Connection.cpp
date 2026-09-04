@@ -117,6 +117,12 @@ bool hasRecentRoleMod(const QString &key)
     });
 }
 
+bool acceptsAuthenticatedEvents(const TwitchChannel *channel)
+{
+    return channel != nullptr && !channel->isEmpty() &&
+           channel->usesAuthenticatedFeatures();
+}
+
 std::optional<QString> deletedMessageID(const MessagePtr &message)
 {
     if (!message || !message->flags.has(MessageFlag::ModerationAction))
@@ -278,7 +284,7 @@ void Connection::onChannelModerate(
     }
 
     auto *channel = dynamic_cast<TwitchChannel *>(channelPtr.get());
-    if (channel == nullptr)
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG)
             << "Channel moderate event for broadcaster is not a Twitch channel?"
@@ -320,7 +326,7 @@ void Connection::onChannelModerate(
                     runInGuiThread([channelPtr, msg, key] {
                         auto *roleChannel =
                             dynamic_cast<TwitchChannel *>(channelPtr.get());
-                        if (roleChannel == nullptr || roleChannel->isEmpty())
+                        if (!acceptsAuthenticatedEvents(roleChannel))
                         {
                             return;
                         }
@@ -343,8 +349,7 @@ void Connection::onChannelModerate(
 
                             auto *delayedChannel =
                                 dynamic_cast<TwitchChannel *>(channelPtr.get());
-                            if (delayedChannel == nullptr ||
-                                delayedChannel->isEmpty())
+                            if (!acceptsAuthenticatedEvents(delayedChannel))
                             {
                                 return;
                             }
@@ -357,6 +362,10 @@ void Connection::onChannelModerate(
                 else
                 {
                     runInGuiThread([channel, msg] {
+                        if (!acceptsAuthenticatedEvents(channel))
+                        {
+                            return;
+                        }
                         if constexpr (std::is_same_v<Action,
                                                      channel_moderate::Delete>)
                         {
@@ -387,7 +396,7 @@ void Connection::onAutomodMessageHold(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG)
             << "Automod message hold for broadcaster we're not interested in"
@@ -403,6 +412,10 @@ void Connection::onAutomodMessageHold(
     auto userLogin = payload.event.userLogin.qt();
 
     runInGuiThread([channel, messageText, userLogin, header, body] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         auto [highlighted, highlightResult] = getApp()->getHighlights()->check(
             {}, {}, userLogin, messageText, body->flags);
         if (highlighted)
@@ -443,7 +456,7 @@ void Connection::onAutomodMessageUpdate(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG)
             << "Automod message hold for broadcaster we're not interested in"
@@ -455,6 +468,10 @@ void Connection::onAutomodMessageUpdate(
     // They are versions of automod_message_(denied|approved) but for mods.
     auto id = "automod_" + payload.event.messageID.qt();
     runInGuiThread([channel, id] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         channel->disableMessage(id);
     });
 }
@@ -478,7 +495,7 @@ void Connection::onChannelSuspiciousUserMessage(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG)
             << "Suspicious message for broadcaster we're not interested in"
@@ -491,6 +508,10 @@ void Connection::onChannelSuspiciousUserMessage(
     auto body = makeSuspiciousUserMessageBody(channel, time, payload.event);
 
     runInGuiThread([channel, header, body] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         channel->addMessage(header, MessageContext::Original);
         channel->addMessage(body, MessageContext::Original);
     });
@@ -505,7 +526,7 @@ void Connection::onChannelSuspiciousUserUpdate(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG) << "Channel Suspicious User Update for broadcaster we're "
                         "not interested in"
@@ -517,6 +538,10 @@ void Connection::onChannelSuspiciousUserUpdate(
     auto message = makeSuspiciousUserUpdate(channel, time, payload.event);
 
     runInGuiThread([channel, message] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         channel->addMessage(message, MessageContext::Original);
     });
 }
@@ -530,7 +555,7 @@ void Connection::onChannelChatUserMessageHold(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG) << "Channel Chat User Message Hold for broadcaster we're "
                         "not interested in"
@@ -542,6 +567,10 @@ void Connection::onChannelChatUserMessageHold(
     auto message = makeUserMessageHeldMessage(channel, time, payload.event);
 
     runInGuiThread([channel, message] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         channel->addMessage(message, MessageContext::Original);
     });
 }
@@ -555,7 +584,7 @@ void Connection::onChannelChatUserMessageUpdate(
             ->getTwitch()
             ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
             .get());
-    if (!channel || channel->isEmpty())
+    if (!acceptsAuthenticatedEvents(channel))
     {
         qCDebug(LOG)
             << "Channel Chat User Message Update for broadcaster we're "
@@ -568,6 +597,10 @@ void Connection::onChannelChatUserMessageUpdate(
     auto message = makeUserMessageUpdateMessage(channel, time, payload.event);
 
     runInGuiThread([channel, message] {
+        if (!acceptsAuthenticatedEvents(channel))
+        {
+            return;
+        }
         channel->addMessage(message, MessageContext::Original);
     });
 }

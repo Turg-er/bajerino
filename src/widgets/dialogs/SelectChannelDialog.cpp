@@ -16,7 +16,6 @@
 #include "widgets/BasePopup.hpp"
 #include "widgets/helper/MicroNotebook.hpp"
 
-#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QEvent>
 #include <QFormLayout>
@@ -189,43 +188,61 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     ui.channelName->setVisible(false);
     layout->addWidget(ui.channelName);
 
-    ui.channelAnonymousOverride =
-        new QCheckBox("Override global anonymous default");
-    ui.channelAnonymousOverride->setVisible(false);
-    ui.channelAnonymousOverride->setToolTip(
-        "Override the global 'Join Twitch channels anonymously by default' "
-        "setting for this channel.");
-    layout->addWidget(ui.channelAnonymousOverride);
+    ui.channelModeLabel = new QLabel("Channel mode");
+    ui.channelModeLabel->setVisible(false);
+    layout->addWidget(ui.channelModeLabel);
 
-    ui.channelAnonymous = new QCheckBox("Join IRC anonymously");
-    ui.channelAnonymous->setVisible(false);
-    ui.channelAnonymous->setEnabled(false);
-    ui.channelAnonymous->setChecked(getSettings()->twitchIrcJoinAsAnonymous);
-    ui.channelAnonymous->setToolTip(
-        "Connect with a Twitch anonymous chat session. Logged-in accounts can "
-        "still send messages through Helix chat.");
-    layout->addWidget(ui.channelAnonymous);
+    ui.channelMode = new QComboBox;
+    ui.channelMode->addItem("Follow default", -1);
+    ui.channelMode->addItem("Authenticated",
+                            static_cast<int>(TwitchChannelMode::Authenticated));
+    ui.channelMode->addItem("Anonymous read",
+                            static_cast<int>(TwitchChannelMode::AnonymousRead));
+    ui.channelMode->addItem(
+        "Bajerino anonymous",
+        static_cast<int>(TwitchChannelMode::BajerinoAnonymous));
+    ui.channelMode->setVisible(false);
+    layout->addWidget(ui.channelMode);
 
-    // The anonymous checkbox is only editable while overriding the global
-    // default; otherwise it mirrors the default in a disabled state.
-    QObject::connect(ui.channelAnonymousOverride, &QCheckBox::toggled, this,
-                     [this](bool checked) {
-                         auto &ui = this->ui_;
-                         ui.channelAnonymous->setEnabled(checked);
-                         if (!checked)
-                         {
-                             ui.channelAnonymous->setChecked(
-                                 getSettings()->twitchIrcJoinAsAnonymous);
-                         }
+    ui.channelModeDescription = new QLabel;
+    ui.channelModeDescription->setWordWrap(true);
+    ui.channelModeDescription->setVisible(false);
+    layout->addWidget(ui.channelModeDescription);
+
+    QObject::connect(ui.channelMode, &QComboBox::currentIndexChanged, this,
+                     [this] {
+                         this->shouldApplyModeOverride_ = true;
+                         this->updateChannelModeDescription();
                      });
+    QObject::connect(
+        ui.channelName, &QLineEdit::textEdited, this,
+        [this](const QString &channelName) {
+            if (this->shouldApplyModeOverride_)
+            {
+                return;
+            }
+
+            std::optional<TwitchChannelMode> modeOverride;
+            const auto existing =
+                getApp()->getTwitch()->getChannelOrEmpty(channelName.trimmed());
+            if (const auto *channel =
+                    dynamic_cast<TwitchChannel *>(existing.get());
+                channel && !channel->isEmpty())
+            {
+                modeOverride = channel->modeOverride();
+            }
+            this->setModeOverrideUi(modeOverride);
+            this->shouldApplyModeOverride_ = false;
+        });
 
     QObject::connect(ui.channel, &AutoCheckedRadioButton::toggled, this,
                      [this](bool enabled) {
                          auto &ui = this->ui_;
                          ui.channelName->setVisible(enabled);
                          ui.channelLabel->setVisible(enabled);
-                         ui.channelAnonymousOverride->setVisible(enabled);
-                         ui.channelAnonymous->setVisible(enabled);
+                         ui.channelModeLabel->setVisible(enabled);
+                         ui.channelMode->setVisible(enabled);
+                         ui.channelModeDescription->setVisible(enabled);
 
                          if (enabled)
                          {
@@ -236,6 +253,7 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
 
     ui.channel->installEventFilter(&this->tabFilter_);
     ui.channelName->installEventFilter(&this->tabFilter_);
+    ui.channelMode->installEventFilter(&this->tabFilter_);
 
     // Whispers
     ui.whispers = new AutoCheckedRadioButton("Whispers");
@@ -441,14 +459,53 @@ void SelectChannelDialog::ok()
     this->close();
 }
 
-void SelectChannelDialog::setAnonymousOverrideUi(
-    std::optional<bool> anonymousOverride) const
+std::optional<TwitchChannelMode> SelectChannelDialog::selectedModeOverride()
+    const
 {
-    const bool overriding = anonymousOverride.has_value();
-    this->ui_.channelAnonymousOverride->setChecked(overriding);
-    this->ui_.channelAnonymous->setEnabled(overriding);
-    this->ui_.channelAnonymous->setChecked(
-        anonymousOverride.value_or(getSettings()->twitchIrcJoinAsAnonymous));
+    const auto value = this->ui_.channelMode->currentData().toInt();
+    if (value < 0)
+    {
+        return std::nullopt;
+    }
+    return static_cast<TwitchChannelMode>(value);
+}
+
+void SelectChannelDialog::updateChannelModeDescription() const
+{
+    const auto override = this->selectedModeOverride();
+    const auto mode =
+        override.value_or(getSettings()->twitchDefaultChannelMode.getEnum());
+    QString description = override ? QString{} : QStringLiteral("Default: ");
+    switch (mode)
+    {
+        case TwitchChannelMode::Authenticated:
+            description +=
+                "Read chat as your signed-in account and keep normal sending, "
+                "PubSub, and EventSub features.";
+            break;
+        case TwitchChannelMode::AnonymousRead:
+            description +=
+                "Read chat anonymously while keeping authenticated sending, "
+                "PubSub, and EventSub features.";
+            break;
+        case TwitchChannelMode::BajerinoAnonymous:
+            description +=
+                "Read IRC anonymously, avoiding authenticated JOIN/PART "
+                "membership. Messages still send through signed-in Helix; "
+                "authenticated PubSub and EventSub are disabled for this "
+                "channel.";
+            break;
+    }
+    this->ui_.channelModeDescription->setText(description);
+}
+
+void SelectChannelDialog::setModeOverrideUi(
+    std::optional<TwitchChannelMode> modeOverride) const
+{
+    const auto value = modeOverride ? static_cast<int>(*modeOverride) : -1;
+    const auto index = this->ui_.channelMode->findData(value);
+    this->ui_.channelMode->setCurrentIndex(index < 0 ? 0 : index);
+    this->updateChannelModeDescription();
 }
 
 void SelectChannelDialog::setSelectedChannel(
@@ -457,7 +514,8 @@ void SelectChannelDialog::setSelectedChannel(
     if (!channel_.has_value())
     {
         this->ui_.channel->setChecked(true);
-        this->setAnonymousOverrideUi(std::nullopt);
+        this->setModeOverrideUi(std::nullopt);
+        this->shouldApplyModeOverride_ = false;
 
         this->hasSelectedChannel_ = false;
         return;
@@ -474,38 +532,34 @@ void SelectChannelDialog::setSelectedChannel(
     {
         case Channel::Type::Twitch: {
             this->ui_.channelName->setText(channel->getName());
-            std::optional<bool> anonymousOverride;
+            std::optional<TwitchChannelMode> modeOverride;
             if (auto *twitchChannel =
                     dynamic_cast<TwitchChannel *>(channel.get()))
             {
-                anonymousOverride = twitchChannel->anonymousOverride();
+                modeOverride = twitchChannel->modeOverride();
             }
-            this->setAnonymousOverrideUi(anonymousOverride);
+            this->setModeOverrideUi(modeOverride);
+            this->shouldApplyModeOverride_ = false;
             this->ui_.channel->setChecked(true);
         }
         break;
         case Channel::Type::TwitchWatching: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.watching->setFocus();
         }
         break;
         case Channel::Type::TwitchMentions: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.mentions->setFocus();
         }
         break;
         case Channel::Type::TwitchWhispers: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.whispers->setFocus();
         }
         break;
         case Channel::Type::TwitchLive: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.live->setFocus();
         }
         break;
         case Channel::Type::TwitchAutomod: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.automod->setFocus();
         }
         break;
@@ -535,7 +589,6 @@ void SelectChannelDialog::setSelectedChannel(
         }
         break;
         default: {
-            this->ui_.channelAnonymous->setChecked(false);
             this->ui_.channel->setChecked(true);
         }
     }
@@ -583,13 +636,12 @@ IndirectChannel SelectChannelDialog::getSelectedChannel() const
     if (this->ui_.channel->isChecked())
     {
         const auto channelName = this->ui_.channelName->text().trimmed();
-        std::optional<bool> anonymousOverride;
-        if (this->ui_.channelAnonymousOverride->isChecked())
+        if (this->shouldApplyModeOverride_)
         {
-            anonymousOverride = this->ui_.channelAnonymous->isChecked();
+            return getApp()->getTwitch()->getOrAddChannel(
+                channelName, this->selectedModeOverride());
         }
-        return getApp()->getTwitch()->getOrAddChannel(channelName,
-                                                      anonymousOverride);
+        return getApp()->getTwitch()->getOrAddChannel(channelName);
     }
 
     if (this->ui_.watching->isChecked())
@@ -638,6 +690,14 @@ bool SelectChannelDialog::EventFilter::eventFilter(QObject *watched,
         auto *keyEvent = dynamic_cast<QKeyEvent *>(event);
         assert(keyEvent);
 
+        if (widget == ui.channelMode &&
+            (keyEvent->key() == Qt::Key_Up ||
+             keyEvent->key() == Qt::Key_Down) &&
+            keyEvent->modifiers() == Qt::NoModifier)
+        {
+            return false;
+        }
+
         if ((keyEvent->key() == Qt::Key_Tab ||
              keyEvent->key() == Qt::Key_Down) &&
             keyEvent->modifiers() == Qt::NoModifier)
@@ -646,7 +706,12 @@ bool SelectChannelDialog::EventFilter::eventFilter(QObject *watched,
 
             if (widget == ui.channelName)
             {
-                // Special case for when current selection is the "Channel" entry's edit box since the Edit box actually has the focus
+                ui.channelMode->setFocus();
+                return true;
+            }
+
+            if (widget == ui.channelMode && keyEvent->key() == Qt::Key_Tab)
+            {
                 ui.whispers->setFocus();
                 return true;
             }
@@ -680,6 +745,12 @@ bool SelectChannelDialog::EventFilter::eventFilter(QObject *watched,
             {
                 // Special case for when current selection is the "Channel" entry's edit box since the Edit box actually has the focus
                 ui.automod->setFocus();
+                return true;
+            }
+
+            if (widget == ui.channelMode)
+            {
+                ui.channelName->setFocus();
                 return true;
             }
 
@@ -737,7 +808,7 @@ void SelectChannelDialog::scaleChangedEvent(float newScale)
         getApp()->getFonts()->getFont(FontStyle::UiMedium, this->scale());
 
     ui.channelName->setFont(uiFont);
-    ui.channelAnonymous->setFont(uiFont);
+    ui.channelMode->setFont(uiFont);
 }
 
 void SelectChannelDialog::addShortcuts()

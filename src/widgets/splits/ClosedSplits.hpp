@@ -4,11 +4,14 @@
 
 #pragma once
 
+#include "providers/twitch/TwitchCommon.hpp"
+
 #include <QList>
 #include <QUuid>
 
 #include <deque>
 #include <mutex>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -23,6 +26,7 @@ public:
         QString channelName;
         QList<QUuid> filters;
         NotebookTab *tab;  // non owning ptr
+        std::optional<TwitchChannelMode> twitchChannelMode;
     };
 
     static void invalidateTab(NotebookTab *const tab);

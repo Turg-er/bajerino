@@ -4,10 +4,10 @@
 
 #pragma once
 
+#include "providers/twitch/TwitchCommon.hpp"
 #include "widgets/BaseWindow.hpp"
 
 #include <pajlada/signals/signal.hpp>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QFocusEvent>
 #include <QLabel>
@@ -54,9 +54,7 @@ public:
     IndirectChannel getSelectedChannel() const;
     bool hasSeletedChannel() const;
 
-    /// Sets the per-channel anonymity controls from an override (nullopt means
-    /// "follow the global default").
-    void setAnonymousOverrideUi(std::optional<bool> anonymousOverride) const;
+    void setModeOverrideUi(std::optional<TwitchChannelMode> modeOverride) const;
 
     pajlada::Signals::NoArgSignal closed;
 
@@ -79,8 +77,9 @@ private:
         detail::AutoCheckedRadioButton *channel;
         QLabel *channelLabel;
         QLineEdit *channelName;
-        QCheckBox *channelAnonymousOverride;
-        QCheckBox *channelAnonymous;
+        QLabel *channelModeLabel;
+        QComboBox *channelMode;
+        QLabel *channelModeDescription;
 
         detail::AutoCheckedRadioButton *whispers;
         QLabel *whispersLabel;
@@ -110,8 +109,12 @@ private:
 
     EventFilter tabFilter_;
 
+    std::optional<TwitchChannelMode> selectedModeOverride() const;
+    void updateChannelModeDescription() const;
+
     ChannelPtr selectedChannel_;
     bool hasSelectedChannel_ = false;
+    bool shouldApplyModeOverride_ = false;
 
     size_t mcChannelIndex = 0;
 

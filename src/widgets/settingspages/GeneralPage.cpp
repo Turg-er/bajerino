@@ -152,33 +152,36 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addDescription(
         u"To know who rules over you, simply find out who you are not allowed to criticise."_s);
 
-    SettingWidget::checkbox("Join Twitch channels anonymously by default",
-                            s.twitchIrcJoinAsAnonymous)
-        ->setTooltip(
-            "The default anonymity for Twitch channels: when enabled, channels "
-            "join chat anonymously unless overridden per-channel in the Add "
-            "Channel dialog. Anonymous channels don't appear in chat, send via "
-            "Helix, and don't use EventSub.")
+    SettingWidget::dropdown("Default Twitch channel mode",
+                            s.twitchDefaultChannelMode)
         ->addKeywords({"bajerino", "irc", "anonymous", "helix", "eventsub",
                        "default", "automod", "mod"})
         ->addTo(layout);
     layout.addDescription(
-        "The default anonymity for Twitch channels. Channels read chat using "
-        "an "
-        "anonymous identity while keeping your signed-in account for Helix API "
-        "actions, so you can keep reading chat even if your account is banned "
-        "in a channel. Individual channels can override this default from the "
-        "Add Channel dialog or the split menu.\n\n"
-        "Anonymous channels send via Helix and do not use EventSub, so "
-        "moderation and AutoMod EventSub features (including the personal "
-        "notice that your message was held by AutoMod) are unavailable on "
-        "them.");
+        "<ul>"
+        "<li><b>Authenticated:</b> Reads chat with your signed-in IRC identity "
+        "and enables authenticated PubSub and EventSub.</li>"
+        "<li><b>Anonymous read:</b> Reads chat with an anonymous IRC identity; "
+        "signed-in sending, PubSub, and EventSub stay enabled.</li>"
+        "<li><b>Bajerino anonymous:</b> Reads chat anonymously and avoids "
+        "authenticated JOIN/PART membership. It uses signed-in Helix for "
+        "messages, but disables authenticated PubSub and EventSub for that "
+        "channel."
+        "</li>"
+        "</ul>");
+
+    SettingWidget::checkbox("Use parallel anonymous read connections",
+                            s.twitchAnonymousReadParallel)
+        ->setTooltip(
+            "Uses multiple anonymous IRC connections to join many channels "
+            "faster. Applies whenever a channel uses anonymous reading.")
+        ->addKeywords({"bajerino", "irc", "anonymous", "parallel", "join"})
+        ->addTo(layout);
 
     SettingWidget::checkbox("Show (anonymous) indicator in channel names",
                             s.showAnonymousChannelIndicator)
         ->setTooltip(
-            "Appends \"(anonymous)\" to the title of channels that are "
-            "joined anonymously.")
+            "Appends \"(anonymous)\" to Bajerino-anonymous channel titles.")
         ->addKeywords({"bajerino", "anonymous", "indicator", "title"})
         ->addTo(layout);
 
@@ -1744,8 +1747,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
         ->setTooltip("'Helix' will use Twitch's Helix API to send "
                      "messages. 'IRC' will use IRC to send messages.\n\n"
-                     "Anonymous channels always send via Helix regardless of "
-                     "this setting.")
+                     "Bajerino-anonymous channels always send via Helix "
+                     "regardless of this setting.")
         ->addTo(layout);
 
     SettingWidget::checkbox("Show send message button", s.showSendButton)
@@ -1772,19 +1775,6 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->setTooltip(
             "If turned off, only messages from other participants have a "
             "shared chat badge")
-        ->addTo(layout);
-
-    SettingWidget::dropdown("Twitch read connection mode",
-                            s.twitchReadConnectionMode)
-        ->setTooltip("The read connection is the one where Chatterino joins a "
-                     "channel and listens to the messages.\n"
-                     "- Authenticated: Join as your logged in user.\n"
-                     "- Anonymous: Join as an anonymous user. This causes to "
-                     "you not show up in the viewer list.\n"
-                     "- Anonymous (parallel): Join as an anonymous user on "
-                     "multiple connections at once. This speeds up the "
-                     "connection phase when joining many channels. The other "
-                     "modes will join in delayed batches.")
         ->addTo(layout);
 
     layout.addStretch();

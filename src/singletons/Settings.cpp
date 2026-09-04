@@ -103,6 +103,14 @@ namespace {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 const auto &LOG = chatterinoSettings;
 
+constexpr int CURRENT_SETTINGS_VERSION = 1;
+constexpr auto LEGACY_BAJERINO_ANONYMOUS_PATH = "/bajerino/joinIrcAsAnonymous";
+constexpr auto LEGACY_TWITCH_READ_MODE_PATH =
+    "/misc/x-7tv/twitchReadConnectionMode";
+constexpr auto TWITCH_CHANNEL_MODE_PATH = "/bajerino/twitchDefaultChannelMode";
+constexpr auto TWITCH_ANONYMOUS_READ_PARALLEL_PATH =
+    "/bajerino/twitchAnonymousReadParallel";
+
 }  // namespace
 
 std::vector<std::weak_ptr<pajlada::Settings::SettingData>> _settings;
@@ -130,6 +138,63 @@ bool Settings::isHighlightedUser(const QString &username)
 
 void Settings::migrate(bool isTest)
 {
+    if (this->settingsVersion.getValue() >= CURRENT_SETTINGS_VERSION)
+    {
+        return;
+    }
+
+    auto manager = pajlada::Settings::SettingManager::getInstance();
+
+    bool legacyBajerinoAnonymous = false;
+    if (const auto *value = manager->get(LEGACY_BAJERINO_ANONYMOUS_PATH);
+        value && value->IsBool())
+    {
+        legacyBajerinoAnonymous = value->GetBool();
+    }
+
+    auto legacyReadMode = QStringLiteral("authenticated");
+    if (const auto *value = manager->get(LEGACY_TWITCH_READ_MODE_PATH);
+        value && value->IsString())
+    {
+        legacyReadMode =
+            QString::fromUtf8(value->GetString(), value->GetStringLength());
+    }
+
+    const bool legacyParallel =
+        legacyReadMode.compare(QStringLiteral("anonymousparallel"),
+                               Qt::CaseInsensitive) == 0;
+    const bool legacyAnonymousRead =
+        legacyParallel || legacyReadMode.compare(QStringLiteral("anonymous"),
+                                                 Qt::CaseInsensitive) == 0;
+
+    if (manager->get(TWITCH_CHANNEL_MODE_PATH) == nullptr)
+    {
+        TwitchChannelMode migratedMode = TwitchChannelMode::Authenticated;
+        if (legacyBajerinoAnonymous)
+        {
+            migratedMode = TwitchChannelMode::BajerinoAnonymous;
+        }
+        else if (legacyAnonymousRead)
+        {
+            migratedMode = TwitchChannelMode::AnonymousRead;
+        }
+        this->twitchDefaultChannelMode.setValue(
+            qmagicenum::enumNameString(migratedMode).toLower());
+    }
+
+    if (manager->get(TWITCH_ANONYMOUS_READ_PARALLEL_PATH) == nullptr)
+    {
+        this->twitchAnonymousReadParallel.setValue(legacyParallel);
+    }
+
+    manager->removeSetting(LEGACY_BAJERINO_ANONYMOUS_PATH);
+    manager->removeSetting(LEGACY_TWITCH_READ_MODE_PATH);
+    this->settingsVersion.setValue(CURRENT_SETTINGS_VERSION);
+
+    if (!isTest)
+    {
+        qCInfo(LOG) << "Migrated Twitch channel mode settings";
+    }
 }
 
 bool Settings::isBlacklistedUser(const QString &username)

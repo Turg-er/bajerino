@@ -14,6 +14,7 @@
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/eventsub/SubscriptionHandle.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
 #include "util/QStringHash.hpp"
 #include "util/ThreadGuard.hpp"
@@ -272,7 +273,7 @@ public:
 
     explicit TwitchChannel(
         const QString &channelName,
-        std::optional<bool> anonymousOverride = std::nullopt);
+        std::optional<TwitchChannelMode> modeOverride = std::nullopt);
     ~TwitchChannel() override;
 
     TwitchChannel(const TwitchChannel &) = delete;
@@ -288,18 +289,17 @@ public:
     // Channel methods
     bool isEmpty() const override;
     bool canSendMessage() const override;
-    /// Whether this channel uses Bajerino's force-anonymous behavior. The
-    /// per-channel override wins over Settings::twitchIrcJoinAsAnonymous.
-    bool isAnonymous() const;
-    /// Whether this channel receives IRC messages through the anonymous read
-    /// pool. This additionally respects Settings::twitchReadConnectionMode.
+    /// The effective mode after applying any per-channel override.
+    TwitchChannelMode effectiveMode() const;
+    /// Whether this channel uses Bajerino's reduced-integration anonymous mode.
+    bool isBajerinoAnonymous() const;
+    /// Whether this channel keeps authenticated PubSub, EventSub, and writes.
+    bool usesAuthenticatedFeatures() const;
+    /// Whether this channel receives IRC messages through the anonymous pool.
     bool usesAnonymousReadConnection() const;
-    /// The explicit per-channel override, or nullopt when following the global
-    /// default.
-    std::optional<bool> anonymousOverride() const;
-    /// Sets the per-channel override. When the effective anonymity changes, the
-    /// channel is re-homed between the authed and anonymous IRC connections.
-    void setAnonymousOverride(std::optional<bool> anonymousOverride);
+    /// The explicit per-channel mode, or nullopt when following the default.
+    std::optional<TwitchChannelMode> modeOverride() const;
+    void setModeOverride(std::optional<TwitchChannelMode> modeOverride);
     void sendMessage(const QString &message) override;
     bool sendMessageViaIrc(const QString &message, int duplicateNonce = 0);
     bool sendSpamMessageViaHelix(
@@ -537,9 +537,8 @@ public:
     pajlada::Signals::Signal<qint64> channelPointsClaimed;
     pajlada::Signals::NoArgSignal followingStatusChanged;
     pajlada::Signals::NoArgSignal raidChanged;
-    /// Fired when the channel's effective anonymity changes, whether from a
-    /// per-channel override or the global default.
-    pajlada::Signals::NoArgSignal anonymousChanged;
+    /// Fired when the channel's effective mode or override changes.
+    pajlada::Signals::NoArgSignal channelModeChanged;
 
     const QString &lastChannelPointsError() const
     {
@@ -623,7 +622,7 @@ private:
         QObjectPtr<Communi::IrcMessage> message;
     };
 
-    std::optional<bool> anonymousOverride_;
+    std::optional<TwitchChannelMode> modeOverride_;
 
     void refreshPubSub();
     void refreshBadges();

@@ -356,6 +356,44 @@ INSTANTIATE_TEST_SUITE_P(
     EventSubMessages, TestEventSubMessagesP,
     testing::ValuesIn(testlib::Snapshot::discoverNested(CATEGORY)));
 
+TEST(EventSubMessages, BajerinoAnonymousIgnoresAuthenticatedEvents)
+{
+    MockApplication app;
+    auto channel = std::make_shared<TwitchChannel>(
+        "pajlada", TwitchChannelMode::BajerinoAnonymous);
+    app.twitch.mockChannels.emplace("pajlada", channel);
+
+    auto log = std::make_shared<eventsub::lib::NullLogger>();
+    std::unique_ptr<eventsub::lib::Listener> listener =
+        std::make_unique<eventsub::Connection>();
+    boost::asio::io_context ioc;
+    boost::asio::ssl::context ssl(
+        boost::asio::ssl::context::method::tls_client);
+    auto session = std::make_shared<eventsub::lib::Session>(
+        ioc, ssl, std::move(listener), log);
+
+    auto payload =
+        makePayload(SUBSCRIPTIONS.at("channel-suspicious-user-update"),
+                    QJsonObject{
+                        {"broadcaster_user_id", "11148817"},
+                        {"broadcaster_user_login", "pajlada"},
+                        {"broadcaster_user_name", "pajlada"},
+                        {"low_trust_status", "restricted"},
+                        {"moderator_user_id", "489584266"},
+                        {"moderator_user_login", "uint128"},
+                        {"moderator_user_name", "uint128"},
+                        {"user_id", "129546453"},
+                        {"user_login", "nerixyz"},
+                        {"user_name", "nerixyz"},
+                    });
+
+    const auto result = session->handleMessage(payload);
+
+    ASSERT_FALSE(result.failed())
+        << result.what() << result.message() << result.location().to_string();
+    EXPECT_EQ(channel->countMessages(), 0);
+}
+
 TEST(TestEventSubMessagesP, Integrity)
 {
     ASSERT_FALSE(UPDATE_SNAPSHOTS);  // make sure fixtures are actually tested

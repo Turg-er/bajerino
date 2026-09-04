@@ -24,6 +24,10 @@ void handleModerateMessage(
     const lib::payload::channel_moderate::v2::Clear & /*action*/)
 {
     runInGuiThread([chan, actor{event.moderatorUserLogin.qt()}, time] {
+        if (!chan->usesAuthenticatedFeatures())
+        {
+            return;
+        }
         chan->addOrReplaceClearChat(
             MessageBuilder::makeClearChatMessage(time, actor), time);
         if (getSettings()->hideModerated)
@@ -102,6 +106,10 @@ void handleModerateMessage(
 
     auto msg = builder.release();
     runInGuiThread([chan, msg, time] {
+        if (!chan->usesAuthenticatedFeatures())
+        {
+            return;
+        }
         chan->addOrReplaceTimeout(msg, time);
     });
 }
@@ -148,6 +156,10 @@ void handleModerateMessage(
 
     auto msg = builder.release();
     runInGuiThread([chan, msg, time] {
+        if (!chan->usesAuthenticatedFeatures())
+        {
+            return;
+        }
         chan->addOrReplaceTimeout(msg, time);
     });
 }
@@ -158,6 +170,10 @@ void handleModerateMessage(
     const lib::payload::channel_moderate::v2::Unraid & /*unused*/)
 {
     runInGuiThread([chan] {
+        if (!chan->usesAuthenticatedFeatures())
+        {
+            return;
+        }
         chan->clearActiveRaid();
     });
 }

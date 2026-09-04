@@ -1642,7 +1642,7 @@ void Split::updateChannelConnections()
     this->roomModeChangedConnection_.disconnect();
     this->sendWaitConnection_ = pajlada::Signals::ScopedConnection{};
     this->sharedChatConnection_ = pajlada::Signals::ScopedConnection{};
-    this->anonymousChangedConnection_ = pajlada::Signals::ScopedConnection{};
+    this->channelModeChangedConnection_ = pajlada::Signals::ScopedConnection{};
     this->bannerSignalHolder_.clear();
     this->getInput().setSendWaitStatus({});
 
@@ -1687,9 +1687,10 @@ void Split::updateChannelConnections()
             [this](const std::vector<HelixMinimalUser> &) {
                 this->header_->updateChannelText();
             });
-        this->anonymousChangedConnection_ =
-            tc->anonymousChanged.connect([this] {
+        this->channelModeChangedConnection_ =
+            tc->channelModeChanged.connect([this] {
                 this->actionRequested.invoke(Action::RefreshTab);
+                getApp()->getWindows()->queueSave();
             });
 
         auto updatePinnedChannel = [this, tc] {
@@ -2282,7 +2283,7 @@ SplitDescriptor Split::buildDescriptor() const
             descriptor.channelName_ = chan.get()->getName();
             if (auto *tc = dynamic_cast<TwitchChannel *>(chan.get().get()))
             {
-                descriptor.anonymousOverride_ = tc->anonymousOverride();
+                descriptor.twitchChannelMode_ = tc->modeOverride();
             }
         }
         break;

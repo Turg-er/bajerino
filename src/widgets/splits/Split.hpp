@@ -210,7 +210,7 @@ private:
     pajlada::Signals::Connection roomModeChangedConnection_;
     pajlada::Signals::ScopedConnection sendWaitConnection_;
     pajlada::Signals::ScopedConnection sharedChatConnection_;
-    pajlada::Signals::ScopedConnection anonymousChangedConnection_;
+    pajlada::Signals::ScopedConnection channelModeChangedConnection_;
 
     pajlada::Signals::Connection indirectChannelChangedConnection_;
 

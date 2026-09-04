@@ -5,6 +5,7 @@
 #pragma once
 
 #include "common/ProviderId.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "util/MultiChannelIndicatorMode.hpp"
 
 #include <QJsonObject>
@@ -41,7 +42,7 @@ enum class WindowType;
 struct ChildChannelDescriptor {
     QString platform;
     QString channelName;
-    std::optional<bool> anonymousOverride;
+    std::optional<TwitchChannelMode> twitchChannelMode;
 
     static ChildChannelDescriptor fromJson(const QJsonObject &obj);
     QJsonObject toJson() const;
@@ -54,8 +55,8 @@ struct SplitDescriptor {
     // Twitch Channel name or IRC channel name
     QString channelName_;
 
-    // Per-channel anonymity override; nullopt follows the global default.
-    std::optional<bool> anonymousOverride_;
+    // Per-channel mode override; nullopt follows the global default.
+    std::optional<TwitchChannelMode> twitchChannelMode_;
 
     // IRC server
     int server_{-1};

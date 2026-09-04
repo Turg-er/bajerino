@@ -41,6 +41,7 @@
 #include "widgets/splits/SplitContainer.hpp"
 #include "widgets/TooltipWidget.hpp"
 
+#include <QActionGroup>
 #include <QDrag>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -855,30 +856,54 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
         }
 
         {
-            auto *action = new QAction(this);
-            action->setText("Join channel anonymously");
-            action->setCheckable(true);
+            auto *channelModeMenu = moreMenu->addMenu("Channel mode");
+            auto *group = new QActionGroup(channelModeMenu);
+            group->setExclusive(true);
+
+            auto addMode = [this, channelModeMenu, group](
+                               const QString &label,
+                               std::optional<TwitchChannelMode> mode) {
+                auto *action = channelModeMenu->addAction(label);
+                action->setCheckable(true);
+                group->addAction(action);
+                QObject::connect(
+                    action, &QAction::triggered, this, [this, mode] {
+                        if (auto *tc = dynamic_cast<TwitchChannel *>(
+                                this->split_->getSelectedChannel().get()))
+                        {
+                            tc->setModeOverride(mode);
+                        }
+                    });
+                return action;
+            };
+
+            auto *followDefault = addMode("Follow default", std::nullopt);
+            auto *authenticated =
+                addMode("Authenticated", TwitchChannelMode::Authenticated);
+            auto *anonymousRead =
+                addMode("Anonymous read", TwitchChannelMode::AnonymousRead);
+            auto *bajerinoAnonymous = addMode(
+                "Bajerino anonymous", TwitchChannelMode::BajerinoAnonymous);
 
             QObject::connect(
-                moreMenu, &QMenu::aboutToShow, this, [action, this]() {
-                    if (auto *tc = dynamic_cast<TwitchChannel *>(
-                            this->split_->getSelectedChannel().get()))
+                channelModeMenu, &QMenu::aboutToShow, this,
+                [this, followDefault, authenticated, anonymousRead,
+                 bajerinoAnonymous] {
+                    auto *channel = dynamic_cast<TwitchChannel *>(
+                        this->split_->getSelectedChannel().get());
+                    if (!channel)
                     {
-                        action->setChecked(tc->isAnonymous());
+                        return;
                     }
+                    const auto mode = channel->modeOverride();
+                    followDefault->setChecked(!mode);
+                    authenticated->setChecked(mode ==
+                                              TwitchChannelMode::Authenticated);
+                    anonymousRead->setChecked(mode ==
+                                              TwitchChannelMode::AnonymousRead);
+                    bajerinoAnonymous->setChecked(
+                        mode == TwitchChannelMode::BajerinoAnonymous);
                 });
-            QObject::connect(action, &QAction::triggered, this, [this]() {
-                if (auto *tc = dynamic_cast<TwitchChannel *>(
-                        this->split_->getSelectedChannel().get()))
-                {
-                    // Set an explicit per-channel override opposite to the
-                    // current effective anonymity. The resulting
-                    // anonymousChanged signal refreshes the title.
-                    tc->setAnonymousOverride(!tc->isAnonymous());
-                }
-            });
-
-            moreMenu->addAction(action);
         }
     }
 
@@ -1081,7 +1106,7 @@ void SplitHeader::handleChannelChanged()
                     this->updateIcons();
                 });
             this->channelConnections_.managedConnect(
-                twitchChannel->anonymousChanged, [this]() {
+                twitchChannel->channelModeChanged, [this]() {
                     this->updateChannelText();
                 });
             this->channelConnections_.managedConnect(
@@ -1242,7 +1267,7 @@ void SplitHeader::updateChannelText()
     if (auto *twitchChannel =
             dynamic_cast<TwitchChannel *>(selectedChannel.get()))
     {
-        if (twitchChannel->isAnonymous() && !title.isEmpty() &&
+        if (twitchChannel->isBajerinoAnonymous() && !title.isEmpty() &&
             getSettings()->showAnonymousChannelIndicator)
         {
             title += " (anonymous)";

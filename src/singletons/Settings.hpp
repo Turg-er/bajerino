@@ -22,6 +22,7 @@
 #include "controllers/nicknames/Nickname.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "providers/emoji/EmojiStyle.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "singletons/NativeMessaging.hpp"
 #include "singletons/Toasts.hpp"
 #include "util/RapidJsonSerializeQHash.hpp"    // IWYU pragma: keep
@@ -101,12 +102,6 @@ enum class EmoteTooltipScale : std::uint8_t {
     Huge,
 };
 
-enum class TwitchReadConnectionMode : uint8_t {
-    Authenticated,
-    Anonymous,
-    AnonymousParallel,
-};
-
 constexpr std::optional<std::string_view> qmagicenumDisplayName(
     EmoteTooltipScale value) noexcept
 {
@@ -123,18 +118,18 @@ constexpr std::optional<std::string_view> qmagicenumDisplayName(
 }
 
 constexpr std::optional<std::string_view> qmagicenumDisplayName(
-    TwitchReadConnectionMode value) noexcept
+    TwitchChannelMode value) noexcept
 {
     switch (value)
     {
-        case TwitchReadConnectionMode::Authenticated:
-            return "Authenticated (default)";
+        case TwitchChannelMode::Authenticated:
+            return "Authenticated";
 
-        case TwitchReadConnectionMode::Anonymous:
-            return {};
+        case TwitchChannelMode::AnonymousRead:
+            return "Anonymous read";
 
-        case TwitchReadConnectionMode::AnonymousParallel:
-            return "Anonymous (parallel)";
+        case TwitchChannelMode::BajerinoAnonymous:
+            return "Bajerino anonymous";
     }
 }
 
@@ -370,8 +365,10 @@ public:
     BoolSetting useLockIconForToggle = {"/encryption/useLockIconForToggle",
                                         true};
     BoolSetting big3Noticer = {"/bajerino/big3Noticer", true};
-    BoolSetting twitchIrcJoinAsAnonymous = {"/bajerino/joinIrcAsAnonymous",
-                                            false};
+    EnumStringSetting<TwitchChannelMode> twitchDefaultChannelMode = {
+        "/bajerino/twitchDefaultChannelMode", TwitchChannelMode::Authenticated};
+    BoolSetting twitchAnonymousReadParallel = {
+        "/bajerino/twitchAnonymousReadParallel", false};
     BoolSetting showAnonymousChannelIndicator = {
         "/bajerino/showAnonymousChannelIndicator", true};
 
@@ -837,10 +834,6 @@ public:
     };
     BoolSetting displaySevenTVAnimatedProfile = {
         "/misc/displaySevenTVAnimatedProfile", false};
-
-    EnumStringSetting<TwitchReadConnectionMode> twitchReadConnectionMode = {
-        "/misc/x-7tv/twitchReadConnectionMode",
-        TwitchReadConnectionMode::Authenticated};
 
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};

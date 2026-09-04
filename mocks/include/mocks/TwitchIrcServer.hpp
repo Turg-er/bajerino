@@ -45,9 +45,15 @@ public:
     {
     }
 
+    ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override
+    {
+        assert(false && "unimplemented getOrAddChannel in mock irc server");
+        return {};
+    }
+
     ChannelPtr getOrAddChannel(
         const QString &dirtyChannelName,
-        std::optional<bool> anonymousOverride = std::nullopt) override
+        std::optional<TwitchChannelMode> modeOverride) override
     {
         assert(false && "unimplemented getOrAddChannel in mock irc server");
         return {};
@@ -56,7 +62,8 @@ public:
     ChannelPtr getOrAddAnonymousChannel(
         const QString &dirtyChannelName) override
     {
-        return this->getOrAddChannel(dirtyChannelName);
+        return this->getOrAddChannel(dirtyChannelName,
+                                     TwitchChannelMode::BajerinoAnonymous);
     }
 
     ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) override
@@ -97,7 +104,7 @@ public:
             (void)name;
             const auto channel =
                 std::dynamic_pointer_cast<TwitchChannel>(weakChannel.lock());
-            if (channel && !channel->isAnonymous())
+            if (channel && channel->usesAuthenticatedFeatures())
             {
                 return true;
             }

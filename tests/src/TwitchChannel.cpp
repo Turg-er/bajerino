@@ -13,6 +13,7 @@
 #include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/PubSubManager.hpp"
 #include "Test.hpp"
+#include "TwitchChannelTestAccess.hpp"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -99,15 +100,6 @@ TEST(TwitchChannelDetail_isUnknownCommand, bad)
 }  // namespace chatterino::detail
 
 namespace chatterino {
-
-class TwitchChannelTestAccess
-{
-public:
-    static void setRoomId(TwitchChannel &channel, const QString &roomId)
-    {
-        channel.setRoomId(roomId);
-    }
-};
 
 namespace {
 
@@ -205,6 +197,53 @@ QJsonObject makePinnedChatUnpinPayload(const QString &pinId)
     };
 }
 
+TEST(TwitchChannel, ResolvesChannelModes)
+{
+    MockApplication app;
+
+    TwitchChannel authenticated("authenticated",
+                                TwitchChannelMode::Authenticated);
+    EXPECT_EQ(authenticated.effectiveMode(), TwitchChannelMode::Authenticated);
+    EXPECT_FALSE(authenticated.usesAnonymousReadConnection());
+    EXPECT_TRUE(authenticated.usesAuthenticatedFeatures());
+    EXPECT_FALSE(authenticated.isBajerinoAnonymous());
+
+    TwitchChannel anonymousRead("anonymous-read",
+                                TwitchChannelMode::AnonymousRead);
+    EXPECT_EQ(anonymousRead.effectiveMode(), TwitchChannelMode::AnonymousRead);
+    EXPECT_TRUE(anonymousRead.usesAnonymousReadConnection());
+    EXPECT_TRUE(anonymousRead.usesAuthenticatedFeatures());
+    EXPECT_FALSE(anonymousRead.isBajerinoAnonymous());
+
+    TwitchChannel bajerinoAnonymous("bajerino-anonymous",
+                                    TwitchChannelMode::BajerinoAnonymous);
+    EXPECT_EQ(bajerinoAnonymous.effectiveMode(),
+              TwitchChannelMode::BajerinoAnonymous);
+    EXPECT_TRUE(bajerinoAnonymous.usesAnonymousReadConnection());
+    EXPECT_FALSE(bajerinoAnonymous.usesAuthenticatedFeatures());
+    EXPECT_TRUE(bajerinoAnonymous.isBajerinoAnonymous());
+}
+
+TEST(TwitchChannel, FollowDefaultTracksGlobalMode)
+{
+    MockApplication app;
+    app.settings.twitchDefaultChannelMode.setValue("authenticated");
+    TwitchChannel channel("pajlada");
+
+    EXPECT_EQ(channel.modeOverride(), std::nullopt);
+    EXPECT_EQ(channel.effectiveMode(), TwitchChannelMode::Authenticated);
+
+    app.settings.twitchDefaultChannelMode.setValue("anonymousread");
+    EXPECT_EQ(channel.effectiveMode(), TwitchChannelMode::AnonymousRead);
+
+    channel.setModeOverride(TwitchChannelMode::BajerinoAnonymous);
+    app.settings.twitchDefaultChannelMode.setValue("authenticated");
+    EXPECT_EQ(channel.effectiveMode(), TwitchChannelMode::BajerinoAnonymous);
+
+    channel.setModeOverride(std::nullopt);
+    EXPECT_EQ(channel.effectiveMode(), TwitchChannelMode::Authenticated);
+}
+
 TEST(TwitchChannel, ChannelPointsDefaultToUnknown)
 {
     MockApplication app;
@@ -267,7 +306,7 @@ TEST(TwitchChannel, EnablingAnonymityClearsAuthenticatedPubSubTopics)
     MockApplication app;
     app.settings.enablePinnedMessages.setValue(false);
 
-    TwitchChannel channel("pajlada", false);
+    TwitchChannel channel("pajlada", TwitchChannelMode::Authenticated);
     TwitchChannelTestAccess::setRoomId(channel, "11148817");
 
     app.pubSub.listenToUserChannelPoints("user-1", "test-token");
@@ -275,7 +314,7 @@ TEST(TwitchChannel, EnablingAnonymityClearsAuthenticatedPubSubTopics)
     ASSERT_EQ(app.pubSub.diag.listenResponses, 1);
 
     app.testMode = false;
-    channel.setAnonymousOverride(true);
+    channel.setModeOverride(TwitchChannelMode::BajerinoAnonymous);
     QTest::qWait(500);
 
     const auto responsesAfterAnonymizing =
@@ -284,6 +323,82 @@ TEST(TwitchChannel, EnablingAnonymityClearsAuthenticatedPubSubTopics)
     QTest::qWait(200);
 
     EXPECT_EQ(app.pubSub.diag.listenResponses, responsesAfterAnonymizing + 1);
+}
+
+TEST(TwitchChannel, BajerinoAnonymousSubscribesToPublicPubSubTopics)
+{
+    MockApplication app;
+    app.settings.enablePinnedMessages.setValue(false);
+    app.settings.enablePredictions.setValue(true);
+    app.settings.enablePolls.setValue(true);
+    app.settings.showRaidStatusAboveInput.setValue(true);
+
+    TwitchChannel channel("pajlada", TwitchChannelMode::BajerinoAnonymous);
+    TwitchChannelTestAccess::setRoomId(channel, "11148817");
+
+    // Open the fixture connection while self-signed test certificates are
+    // accepted, then exercise the production-only refresh path on that socket.
+    app.pubSub.listenToChannelPointRewards("fixture-bootstrap");
+    for (int attempt = 0;
+         attempt < 20 && app.pubSub.diag.listenResponses.load() < 1; ++attempt)
+    {
+        QTest::qWait(100);
+    }
+    ASSERT_EQ(app.pubSub.diag.listenResponses, 1);
+
+    app.testMode = false;
+    TwitchChannelTestAccess::refreshPubSub(channel);
+    for (int attempt = 0;
+         attempt < 20 && app.pubSub.diag.listenResponses.load() < 5; ++attempt)
+    {
+        QTest::qWait(100);
+    }
+
+    // Channel-point rewards, predictions, polls, and raids are all public.
+    EXPECT_EQ(app.pubSub.wsDiag().connectionsOpened, 1);
+    EXPECT_EQ(app.pubSub.wsDiag().connectionsFailed, 0);
+    EXPECT_EQ(app.pubSub.diag.failedListenResponses, 0);
+    EXPECT_EQ(app.pubSub.diag.listenResponses, 5);
+}
+
+TEST(TwitchChannel,
+     AuthenticatedPubSubTopicsRemainUntilLastEligibleChannelChangesMode)
+{
+    MockApplication app;
+    app.settings.enablePinnedMessages.setValue(false);
+
+    auto first = std::make_shared<TwitchChannel>(
+        "pajlada", TwitchChannelMode::Authenticated);
+    auto second = std::make_shared<TwitchChannel>(
+        "forsen", TwitchChannelMode::AnonymousRead);
+    TwitchChannelTestAccess::setRoomId(*first, "11148817");
+    TwitchChannelTestAccess::setRoomId(*second, "22484632");
+    app.twitch.mockChannels.emplace(first->getName(), first);
+    app.twitch.mockChannels.emplace(second->getName(), second);
+
+    app.pubSub.listenToUserChannelPoints("user-1", "test-token");
+    QTest::qWait(200);
+    ASSERT_EQ(app.pubSub.diag.listenResponses, 1);
+
+    app.testMode = false;
+    first->setModeOverride(TwitchChannelMode::BajerinoAnonymous);
+    QTest::qWait(200);
+
+    const auto responsesWithEligibleChannel =
+        app.pubSub.diag.listenResponses.load();
+    app.pubSub.listenToUserChannelPoints("user-1", "test-token");
+    QTest::qWait(200);
+    EXPECT_EQ(app.pubSub.diag.listenResponses, responsesWithEligibleChannel);
+
+    second->setModeOverride(TwitchChannelMode::BajerinoAnonymous);
+    QTest::qWait(200);
+
+    const auto responsesAfterLastEligibleChannel =
+        app.pubSub.diag.listenResponses.load();
+    app.pubSub.listenToUserChannelPoints("user-1", "test-token");
+    QTest::qWait(200);
+    EXPECT_EQ(app.pubSub.diag.listenResponses,
+              responsesAfterLastEligibleChannel + 1);
 }
 
 TEST(TwitchChannel, ChannelPointsPubSubUpdateRequiresMatchingChannel)
@@ -405,6 +520,8 @@ TEST(TwitchChannel, PredictionCanceledClearsActivePrediction)
 TEST(TwitchChannel, DuplicatePinnedChatUnpinOnlyAddsOneSystemMessage)
 {
     MockApplication app;
+    app.settings.enablePinnedMessages.setValue(true);
+    app.settings.showUnpinNotifications.setValue(true);
     TwitchChannel channel("pajlada");
 
     TwitchChannel::PinnedMessage pin;
@@ -432,6 +549,7 @@ TEST(TwitchChannel, DuplicatePinnedChatUnpinOnlyAddsOneSystemMessage)
 TEST(TwitchChannel, StalePinnedChatUnpinDoesNotClearNewerPin)
 {
     MockApplication app;
+    app.settings.enablePinnedMessages.setValue(true);
     TwitchChannel channel("pajlada");
 
     TwitchChannel::PinnedMessage pin;

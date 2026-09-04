@@ -8,6 +8,7 @@
 #include "common/Channel.hpp"
 #include "common/Common.hpp"
 #include "providers/irc/IrcConnection2.hpp"
+#include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchReadConnectionPool.hpp"
 #include "util/CancellationToken.hpp"
 #include "util/RatelimitBucket.hpp"
@@ -52,9 +53,10 @@ public:
                              const QString &message) = 0;
     virtual void sendRawMessage(const QString &rawMessage) = 0;
 
+    virtual ChannelPtr getOrAddChannel(const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getOrAddChannel(
         const QString &dirtyChannelName,
-        std::optional<bool> anonymousOverride = std::nullopt) = 0;
+        std::optional<TwitchChannelMode> modeOverride) = 0;
     virtual ChannelPtr getOrAddAnonymousChannel(
         const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) = 0;
@@ -162,9 +164,10 @@ public:
                      const QString &message) override;
     void sendRawMessage(const QString &rawMessage) override;
 
+    ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override;
     ChannelPtr getOrAddChannel(
         const QString &dirtyChannelName,
-        std::optional<bool> anonymousOverride = std::nullopt) override;
+        std::optional<TwitchChannelMode> modeOverride) override;
     ChannelPtr getOrAddAnonymousChannel(
         const QString &dirtyChannelName) override;
 
@@ -205,7 +208,11 @@ public:
 
 protected:
     std::shared_ptr<Channel> createChannel(
-        const QString &channelName, std::optional<bool> anonymousOverride);
+        const QString &channelName,
+        std::optional<TwitchChannelMode> modeOverride);
+    ChannelPtr getOrAddChannelImpl(
+        const QString &dirtyChannelName,
+        std::optional<TwitchChannelMode> modeOverride, bool updateExisting);
 
     void privateMessageReceived(Communi::IrcPrivateMessage *message,
                                 bool anonymous = false);

@@ -40,7 +40,7 @@ Bajerino tracks [SevenTV/Chatterino7](https://github.com/SevenTV/chatterino7), w
 - **Higher-quality images:** 4x image links for 7TV and FFZ plus AVIF support for 7TV images when a decoder is available.
 - **Experimental Kick support:** Kick accounts, chat, replies, emotes, badges, history, stream state, highlights, usercards, room modes, and moderation actions.
 - **Multi-channel splits:** combine Twitch and Kick channels in one split while selecting which channel supplies the sending and moderation context.
-- **Flexible Twitch read connections:** authenticated, anonymous, and parallel-anonymous IRC read modes for efficiently joining many channels.
+- **Flexible Twitch channel modes:** choose authenticated, anonymous-read, or Bajerino-anonymous behavior per channel, with optional parallel anonymous IRC connections.
 
 ## Screenshots
 

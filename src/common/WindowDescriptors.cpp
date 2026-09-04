@@ -102,6 +102,28 @@ QJsonArray encodeFilters(std::span<const QUuid> filters)
     return arr;
 }
 
+std::optional<TwitchChannelMode> decodeTwitchChannelMode(const QJsonObject &obj)
+{
+    const auto mode = obj["twitchChannelMode"];
+    if (mode.isString())
+    {
+        if (auto parsed = qmagicenum::enumCast<TwitchChannelMode>(
+                mode.toString(), qmagicenum::CASE_INSENSITIVE))
+        {
+            return parsed;
+        }
+    }
+
+    const auto legacyOverride = obj["anonymousOverride"];
+    if (legacyOverride.isBool())
+    {
+        return legacyOverride.toBool() ? TwitchChannelMode::BajerinoAnonymous
+                                       : TwitchChannelMode::Authenticated;
+    }
+
+    return std::nullopt;
+}
+
 }  // namespace
 
 ChildChannelDescriptor ChildChannelDescriptor::fromJson(const QJsonObject &obj)
@@ -111,11 +133,7 @@ ChildChannelDescriptor ChildChannelDescriptor::fromJson(const QJsonObject &obj)
         .channelName = obj["channel"].toString(),
     };
 
-    const auto anonymousOverride = obj["anonymousOverride"];
-    if (anonymousOverride.isBool())
-    {
-        descriptor.anonymousOverride = anonymousOverride.toBool();
-    }
+    descriptor.twitchChannelMode = decodeTwitchChannelMode(obj);
 
     return descriptor;
 }
@@ -127,9 +145,10 @@ QJsonObject ChildChannelDescriptor::toJson() const
         {QLatin1StringView("channel"), this->channelName},
     };
 
-    if (this->anonymousOverride.has_value())
+    if (this->twitchChannelMode.has_value())
     {
-        obj.insert("anonymousOverride", *this->anonymousOverride);
+        obj.insert("twitchChannelMode",
+                   qmagicenum::enumNameString(*this->twitchChannelMode));
     }
 
     return obj;
@@ -142,11 +161,7 @@ SplitDescriptor SplitDescriptor::loadFromJSON(const QJsonObject &root)
     SplitDescriptor descriptor;
     descriptor.type_ = data.value("type").toString();
     descriptor.server_ = data.value("server").toInt(-1);
-    if (data.contains("anonymousOverride"))
-    {
-        descriptor.anonymousOverride_ =
-            data.value("anonymousOverride").toBool();
-    }
+    descriptor.twitchChannelMode_ = decodeTwitchChannelMode(data);
     descriptor.moderationMode_ = root.value("moderationMode").toBool();
     if (data.contains("channel"))
     {
@@ -206,9 +221,10 @@ QJsonObject SplitDescriptor::toJson() const
     {
         data.insert("name"_L1, this->channelName_);
     }
-    if (this->anonymousOverride_.has_value())
+    if (this->twitchChannelMode_.has_value())
     {
-        data.insert("anonymousOverride", *this->anonymousOverride_);
+        data.insert("twitchChannelMode",
+                    qmagicenum::enumNameString(*this->twitchChannelMode_));
     }
     if (this->type_ == u"kick")
     {
@@ -253,8 +269,12 @@ IndirectChannel SplitDescriptor::decodeChannel() const
     switch (*type)
     {
         case Channel::Type::Twitch:
-            return getApp()->getTwitch()->getOrAddChannel(
-                this->channelName_, this->anonymousOverride_);
+            if (this->twitchChannelMode_)
+            {
+                return getApp()->getTwitch()->getOrAddChannel(
+                    this->channelName_, this->twitchChannelMode_);
+            }
+            return getApp()->getTwitch()->getOrAddChannel(this->channelName_);
         case Channel::Type::TwitchMentions:
             return getApp()->getTwitch()->getMentionsChannel();
         case Channel::Type::TwitchWatching:
@@ -276,21 +296,21 @@ IndirectChannel SplitDescriptor::decodeChannel() const
                                     });
         case Channel::Type::Multi: {
             QVarLengthArray<MultiChannel::Spec, 4> specs;
-            QVarLengthArray<std::optional<bool>, 4> anonymousOverrides;
+            QVarLengthArray<std::optional<TwitchChannelMode>, 4> modeOverrides;
             for (const auto &child : this->children)
             {
                 auto spec = MultiChannel::Spec::fromDescriptor(child);
                 if (spec)
                 {
                     specs.emplace_back(*std::move(spec));
-                    anonymousOverrides.emplace_back(child.anonymousOverride);
+                    modeOverrides.emplace_back(child.twitchChannelMode);
                 }
             }
             auto ptr = std::make_shared<MultiChannel>(specs, this->mcIndicator);
             const auto channels = ptr->channels();
             for (size_t i = 0; i < channels.size(); ++i)
             {
-                if (!anonymousOverrides[i].has_value())
+                if (!modeOverrides[i].has_value())
                 {
                     continue;
                 }
@@ -298,7 +318,7 @@ IndirectChannel SplitDescriptor::decodeChannel() const
                 if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
                         channels[i].channel.get()))
                 {
-                    twitchChannel->setAnonymousOverride(anonymousOverrides[i]);
+                    twitchChannel->setModeOverride(modeOverrides[i]);
                 }
             }
             if (!specs.empty())

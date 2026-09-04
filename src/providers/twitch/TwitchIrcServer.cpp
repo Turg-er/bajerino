@@ -332,18 +332,15 @@ void TwitchIrcServer::initialize()
             });
         });
 
-    getSettings()->twitchIrcJoinAsAnonymous.connect(
-        [this](const bool &) {
-            // Re-home channels that follow the default between the authed and
-            // anonymous connections; channels with an explicit override are
-            // unaffected.
+    getSettings()->twitchDefaultChannelMode.connect(
+        [this] {
             postToThread([this] {
                 this->reevaluateChannelRouting();
             });
         },
         false);  // above getAccounts will already trigger this so theres no point
 
-    getSettings()->twitchReadConnectionMode.connect(
+    getSettings()->twitchAnonymousReadParallel.connect(
         [this] {
             postToThread([this] {
                 this->reevaluateChannelRouting();
@@ -484,7 +481,8 @@ void TwitchIrcServer::initialize()
                     return;
                 }
 
-                if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get()))
+                if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get());
+                    channel && channel->usesAuthenticatedFeatures())
                 {
                     channel->handleUserPointsUpdate(payload);
                 }
@@ -541,7 +539,8 @@ void TwitchIrcServer::initialize()
                     return;
                 }
 
-                if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get()))
+                if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get());
+                    channel && channel->usesAuthenticatedFeatures())
                 {
                     channel->handleChatWarningPubSub(payload);
                 }
@@ -657,10 +656,9 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
 }
 
 std::shared_ptr<Channel> TwitchIrcServer::createChannel(
-    const QString &channelName, std::optional<bool> anonymousOverride)
+    const QString &channelName, std::optional<TwitchChannelMode> modeOverride)
 {
-    auto channel =
-        std::make_shared<TwitchChannel>(channelName, anonymousOverride);
+    auto channel = std::make_shared<TwitchChannel>(channelName, modeOverride);
     channel->initialize();
 
     // We can safely ignore these signal connections since the TwitchIrcServer is only
@@ -1148,7 +1146,7 @@ void TwitchIrcServer::onMessageSendRequested(
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() || channel->isAnonymous())
+    if (getSettings()->shouldSendHelixChat() || channel->isBajerinoAnonymous())
     {
         sendHelixMessage(channel, message);
     }
@@ -1172,7 +1170,7 @@ void TwitchIrcServer::onReplySendRequested(
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() || channel->isAnonymous())
+    if (getSettings()->shouldSendHelixChat() || channel->isBajerinoAnonymous())
     {
         sendHelixMessage(channel, message, replyId);
     }
@@ -1578,8 +1576,7 @@ void TwitchIrcServer::rebuildAnonymousReadConnection()
     }
     this->anonymousReadConnectionStarted_ = false;
     this->anonymousReadConnection_.reset(createTwitchConnectionPool(
-        this, getSettings()->twitchReadConnectionMode ==
-                  TwitchReadConnectionMode::AnonymousParallel));
+        this, getSettings()->twitchAnonymousReadParallel));
 
     auto *pool = this->anonymousReadConnection_.get();
     this->signalHolder.managedConnect(pool->messageReceived, [this](auto *msg) {
@@ -1622,7 +1619,7 @@ bool TwitchIrcServer::hasAuthenticatedChannels()
         {
             const auto channel =
                 std::dynamic_pointer_cast<TwitchChannel>(weak.lock());
-            if (channel && !channel->isAnonymous())
+            if (channel && channel->usesAuthenticatedFeatures())
             {
                 return true;
             }
@@ -1867,8 +1864,21 @@ void TwitchIrcServer::onChannelDestroyed(const QString &channelName)
     }
 }
 
+ChannelPtr TwitchIrcServer::getOrAddChannel(const QString &dirtyChannelName)
+{
+    return this->getOrAddChannelImpl(dirtyChannelName, std::nullopt, false);
+}
+
 ChannelPtr TwitchIrcServer::getOrAddChannel(
-    const QString &dirtyChannelName, std::optional<bool> anonymousOverride)
+    const QString &dirtyChannelName,
+    std::optional<TwitchChannelMode> modeOverride)
+{
+    return this->getOrAddChannelImpl(dirtyChannelName, modeOverride, true);
+}
+
+ChannelPtr TwitchIrcServer::getOrAddChannelImpl(
+    const QString &dirtyChannelName,
+    std::optional<TwitchChannelMode> modeOverride, bool updateExisting)
 {
     auto channelName = cleanChannelName(dirtyChannelName);
 
@@ -1897,13 +1907,13 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     }
     if (existing)
     {
-        // Apply the override outside the channelMutex: setAnonymousOverride may
+        // Apply the override outside the channelMutex: setModeOverride may
         // re-home the channel, which re-locks channelMutex.
-        if (anonymousOverride.has_value())
+        if (updateExisting)
         {
             if (auto *tc = dynamic_cast<TwitchChannel *>(existing.get()))
             {
-                tc->setAnonymousOverride(anonymousOverride);
+                tc->setModeOverride(modeOverride);
             }
         }
         return existing;
@@ -1915,7 +1925,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
     {
         std::scoped_lock lock(this->channelMutex);
 
-        chan = this->createChannel(channelName, anonymousOverride);
+        chan = this->createChannel(channelName, modeOverride);
         twitchChannel = dynamic_cast<TwitchChannel *>(chan.get());
         if (!chan || !twitchChannel)
         {
@@ -1940,7 +1950,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
             });
     }
 
-    if (!twitchChannel->isAnonymous())
+    if (twitchChannel->usesAuthenticatedFeatures())
     {
         this->ensureWriteConnection();
     }
@@ -1975,7 +1985,8 @@ ChannelPtr TwitchIrcServer::getOrAddChannel(
 ChannelPtr TwitchIrcServer::getOrAddAnonymousChannel(
     const QString &dirtyChannelName)
 {
-    return this->getOrAddChannel(dirtyChannelName, true);
+    return this->getOrAddChannel(dirtyChannelName,
+                                 TwitchChannelMode::BajerinoAnonymous);
 }
 
 ChannelPtr TwitchIrcServer::getChannelOrEmpty(const QString &dirtyChannelName)
