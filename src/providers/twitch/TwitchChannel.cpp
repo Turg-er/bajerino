@@ -1876,8 +1876,7 @@ void TwitchChannel::sendMessage(const QString &message)
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() &&
-        isUnknownCommand(parsedMessage))
+    if (getSettings()->shouldSendHelixChat() && isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
                                    .arg(parsedMessage.split(' ').first()));
@@ -1910,8 +1909,9 @@ void TwitchChannel::sendMessage(const QString &message)
         {
             if (isUnknownCommand(parsedMessage))
             {
-                this->addSystemMessage(QString("%1 is not a known command.")
-                                           .arg(parsedMessage.split(' ').first()));
+                this->addSystemMessage(
+                    QString("%1 is not a known command.")
+                        .arg(parsedMessage.split(' ').first()));
                 return;
             }
 
@@ -2062,8 +2062,7 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() &&
-        isUnknownCommand(parsedMessage))
+    if (getSettings()->shouldSendHelixChat() && isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
                                    .arg(parsedMessage.split(' ').first()));
@@ -2094,8 +2093,9 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
         {
             if (isUnknownCommand(parsedMessage))
             {
-                this->addSystemMessage(QString("%1 is not a known command.")
-                                           .arg(parsedMessage.split(' ').first()));
+                this->addSystemMessage(
+                    QString("%1 is not a known command.")
+                        .arg(parsedMessage.split(' ').first()));
                 return;
             }
 
