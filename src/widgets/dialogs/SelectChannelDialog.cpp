@@ -204,15 +204,9 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     ui.channelMode->setVisible(false);
     layout->addWidget(ui.channelMode);
 
-    ui.channelModeDescription = new QLabel;
-    ui.channelModeDescription->setWordWrap(true);
-    ui.channelModeDescription->setVisible(false);
-    layout->addWidget(ui.channelModeDescription);
-
     QObject::connect(ui.channelMode, &QComboBox::currentIndexChanged, this,
                      [this] {
                          this->shouldApplyModeOverride_ = true;
-                         this->updateChannelModeDescription();
                      });
     QObject::connect(
         ui.channelName, &QLineEdit::textEdited, this,
@@ -242,7 +236,6 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
                          ui.channelLabel->setVisible(enabled);
                          ui.channelModeLabel->setVisible(enabled);
                          ui.channelMode->setVisible(enabled);
-                         ui.channelModeDescription->setVisible(enabled);
 
                          if (enabled)
                          {
@@ -470,41 +463,12 @@ std::optional<TwitchChannelMode> SelectChannelDialog::selectedModeOverride()
     return static_cast<TwitchChannelMode>(value);
 }
 
-void SelectChannelDialog::updateChannelModeDescription() const
-{
-    const auto override = this->selectedModeOverride();
-    const auto mode =
-        override.value_or(getSettings()->twitchDefaultChannelMode.getEnum());
-    QString description = override ? QString{} : QStringLiteral("Default: ");
-    switch (mode)
-    {
-        case TwitchChannelMode::Authenticated:
-            description +=
-                "Read chat as your signed-in account and keep normal sending, "
-                "PubSub, and EventSub features.";
-            break;
-        case TwitchChannelMode::AnonymousRead:
-            description +=
-                "Read chat anonymously while keeping authenticated sending, "
-                "PubSub, and EventSub features.";
-            break;
-        case TwitchChannelMode::BajerinoAnonymous:
-            description +=
-                "Read IRC anonymously while keeping an unjoined authenticated "
-                "write connection for whispers and sending. Authenticated "
-                "PubSub and EventSub are disabled for this channel.";
-            break;
-    }
-    this->ui_.channelModeDescription->setText(description);
-}
-
 void SelectChannelDialog::setModeOverrideUi(
     std::optional<TwitchChannelMode> modeOverride) const
 {
     const auto value = modeOverride ? static_cast<int>(*modeOverride) : -1;
     const auto index = this->ui_.channelMode->findData(value);
     this->ui_.channelMode->setCurrentIndex(index < 0 ? 0 : index);
-    this->updateChannelModeDescription();
 }
 
 void SelectChannelDialog::setSelectedChannel(

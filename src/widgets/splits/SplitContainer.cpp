@@ -936,6 +936,11 @@ void SplitContainer::applyFromDescriptorRecursively(
         }
         const auto &containerNode = *n;
 
+        if (containerNode.items_.empty())
+        {
+            return;
+        }
+
         bool vertical = containerNode.vertical_;
 
         baseNode->type_ = vertical ? Node::Type::VerticalContainer

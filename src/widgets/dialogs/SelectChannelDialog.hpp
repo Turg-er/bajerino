@@ -79,7 +79,6 @@ private:
         QLineEdit *channelName;
         QLabel *channelModeLabel;
         QComboBox *channelMode;
-        QLabel *channelModeDescription;
 
         detail::AutoCheckedRadioButton *whispers;
         QLabel *whispersLabel;
@@ -110,7 +109,6 @@ private:
     EventFilter tabFilter_;
 
     std::optional<TwitchChannelMode> selectedModeOverride() const;
-    void updateChannelModeDescription() const;
 
     ChannelPtr selectedChannel_;
     bool hasSelectedChannel_ = false;
