@@ -10,6 +10,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
 #include "messages/MessageSimilarity.hpp"
+#include "messages/MessageThread.hpp"
 #include "singletons/Logging.hpp"
 #include "singletons/Settings.hpp"
 #include "util/ChannelHelpers.hpp"
@@ -405,6 +406,76 @@ void Channel::replaceMessage(size_t hint, const MessagePtr &message,
     if (index >= 0)
     {
         this->messageReplaced.invoke(hint, message, replacement);
+    }
+}
+
+void Channel::decryptMessages(const QString &encryptionPassword)
+{
+    const auto messages = this->getMessageSnapshot();
+    std::vector<MessagePtrMut> replacements(messages.size());
+    std::vector<size_t> decrypted;
+
+    for (size_t i = 0; i < messages.size(); i++)
+    {
+        replacements[i] = MessageBuilder::tryMakeDecryptedMessage(
+            this, messages[i], encryptionPassword);
+        if (replacements[i] != nullptr)
+        {
+            decrypted.push_back(i);
+        }
+    }
+
+    for (size_t i = 0; i < messages.size(); i++)
+    {
+        for (const auto parent : decrypted)
+        {
+            const MessagePtr current =
+                replacements[i] != nullptr ? replacements[i] : messages[i];
+            if (auto replacement = MessageBuilder::tryUpdateReplyPreview(
+                    current, messages[parent], replacements[parent]))
+            {
+                replacements[i] = std::move(replacement);
+                break;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < messages.size(); i++)
+    {
+        if (replacements[i] == nullptr)
+        {
+            continue;
+        }
+        for (const auto parent : decrypted)
+        {
+            if (messages[i]->replyParent == messages[parent])
+            {
+                replacements[i]->replyParent = replacements[parent];
+                break;
+            }
+        }
+    }
+
+    std::vector<std::shared_ptr<MessageThread>> threads;
+    for (const auto &message : messages)
+    {
+        if (message->replyThread != nullptr &&
+            std::ranges::find(threads, message->replyThread) == threads.end())
+        {
+            threads.push_back(message->replyThread);
+        }
+    }
+
+    for (size_t i = 0; i < messages.size(); i++)
+    {
+        if (const auto &replacement = replacements[i])
+        {
+            for (const auto &thread : threads)
+            {
+                thread->replaceMessage(messages[i], replacement);
+            }
+            this->replaceMessage(messages[i], replacement);
+        }
     }
 }
 

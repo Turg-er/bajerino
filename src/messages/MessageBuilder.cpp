@@ -2198,6 +2198,137 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     return {builder.release(), highlight};
 }
 
+MessagePtrMut MessageBuilder::tryMakeDecryptedMessage(
+    Channel *channel, const MessagePtr &message,
+    const QString &encryptionPassword)
+{
+    if (message == nullptr ||
+        message->flags.hasNone(MessageFlag::MaybeEncrypted) ||
+        message->flags.has(MessageFlag::Decrypted))
+    {
+        return nullptr;
+    }
+
+    auto content = message->messageText;
+    if (!decryptMessage(content, encryptionPassword))
+    {
+        return nullptr;
+    }
+
+    std::vector<TwitchEmoteOccurrence> twitchEmotes;
+    processIgnorePhrases(*getSettings()->ignoredMessages.readOnly(), content,
+                         twitchEmotes);
+    std::ranges::sort(twitchEmotes, [](const auto &a, const auto &b) {
+        return a.start < b.start;
+    });
+    auto uniqueEmotes = std::ranges::unique(
+        twitchEmotes, [](const auto &first, const auto &second) {
+            return first.start == second.start;
+        });
+    twitchEmotes.erase(uniqueEmotes.begin(), uniqueEmotes.end());
+
+    MessageBuilder contentBuilder;
+    if (message->flags.has(MessageFlag::Action))
+    {
+        contentBuilder.textColor_ = message->usernameColor;
+    }
+    TextState textState{
+        .twitchChannel = dynamic_cast<TwitchChannel *>(channel),
+        .userID = message->userID,
+    };
+    contentBuilder.addWords(content.split(' '), twitchEmotes, textState);
+    auto parsedContent = contentBuilder.release();
+
+    auto replacement = message->clone();
+    auto encryptedContent =
+        std::ranges::find_if(replacement->elements, [&](const auto &element) {
+            const auto flags = element->getFlags();
+            const auto *text = dynamic_cast<const TextElement *>(element.get());
+            return text != nullptr && flags.has(MessageElementFlag::Text) &&
+                   flags.hasNone(MessageElementFlag::RepliedMessage) &&
+                   text->words().join(' ') == message->messageText;
+        });
+    if (encryptedContent == replacement->elements.end())
+    {
+        return nullptr;
+    }
+
+    const auto contentIndex =
+        std::distance(replacement->elements.begin(), encryptedContent);
+    auto insertAt = replacement->elements.erase(encryptedContent);
+    replacement->elements.insert(
+        insertAt, std::make_move_iterator(parsedContent->elements.begin()),
+        std::make_move_iterator(parsedContent->elements.end()));
+
+    auto username =
+        std::ranges::find_if(replacement->elements, [](const auto &element) {
+            return element->getFlags().has(MessageElementFlag::Username);
+        });
+    if (username == replacement->elements.end())
+    {
+        username = replacement->elements.begin() + contentIndex;
+    }
+    replacement->elements.insert(
+        username, std::make_unique<DecryptedBadge>(
+                      makeDecryptBadge(), MessageElementFlag::BadgeDecrypted));
+
+    replacement->flags.unset(MessageFlag::MaybeEncrypted);
+    replacement->flags.set(MessageFlag::Decrypted);
+    replacement->flags.set(MessageFlag::AsciiArt,
+                           getSettings()->wrapAsciiArt && isAsciiArt(content));
+    replacement->messageText = content;
+    replacement->searchText.replace(message->messageText, content);
+    return replacement;
+}
+
+MessagePtrMut MessageBuilder::tryUpdateReplyPreview(
+    const MessagePtr &message, const MessagePtr &previousParent,
+    const MessagePtr &replacementParent)
+{
+    if (message == nullptr || previousParent == nullptr ||
+        replacementParent == nullptr ||
+        message->replyParent != previousParent ||
+        replacementParent->flags.hasNone(MessageFlag::Decrypted))
+    {
+        return nullptr;
+    }
+
+    auto replacement = message->clone();
+    auto previewContent =
+        std::ranges::find_if(replacement->elements, [&](const auto &element) {
+            const auto flags = element->getFlags();
+            const auto *text =
+                dynamic_cast<const SingleLineTextElement *>(element.get());
+            return text != nullptr &&
+                   flags.hasAll(MessageElementFlag::RepliedMessage,
+                                MessageElementFlag::Text) &&
+                   text->words().join(' ') == previousParent->messageText;
+        });
+    if (previewContent == replacement->elements.end())
+    {
+        return nullptr;
+    }
+
+    auto *text = dynamic_cast<SingleLineTextElement *>(previewContent->get());
+    assert(text != nullptr);
+    text->setText(replacementParent->messageText);
+
+    auto badge = std::make_unique<DecryptedBadge>(
+        makeDecryptBadge(),
+        MessageElementFlags({MessageElementFlag::BadgeDecrypted,
+                             MessageElementFlag::RepliedMessage}));
+    badge->setScale(0.7F);
+    badge->setLink((*previewContent)->getLink());
+
+    if (previewContent != replacement->elements.begin())
+    {
+        --previewContent;
+    }
+    replacement->elements.insert(previewContent, std::move(badge));
+    replacement->replyParent = replacementParent;
+    return replacement;
+}
+
 void MessageBuilder::addEmoji(const EmotePtr &emote)
 {
     this->emplace<EmoteElement>(emote, MessageElementFlag::EmojiAll);

@@ -9,6 +9,7 @@
 #include "common/QLogging.hpp"
 #include "controllers/commands/CommandController.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
+#include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
 #include "util/LayoutCreator.hpp"
 #include "widgets/BaseWindow.hpp"
@@ -348,6 +349,7 @@ void SettingsDialog::showDialog(QWidget *parent,
     hasShownBefore = true;
 
     // Resets the cancel button.
+    instance->encryptionKeyOnOpen_ = getSettings()->encryptionKey.getValue();
     getSettings()->saveSnapshot();
 
     switch (preferredTab)
@@ -445,6 +447,21 @@ void SettingsDialog::showEvent(QShowEvent *e)
 ///// Widget creation helpers
 void SettingsDialog::onOkClicked()
 {
+    const auto encryptionKey = getSettings()->encryptionKey.getValue();
+    if (encryptionKey != this->encryptionKeyOnOpen_)
+    {
+        std::vector<ChannelPtr> channels;
+        getApp()->getTwitch()->forEachChannelAndSpecialChannels(
+            [&](const auto &channel) {
+                channels.push_back(channel);
+            });
+        for (const auto &channel : channels)
+        {
+            channel->decryptMessages(encryptionKey);
+        }
+        this->encryptionKeyOnOpen_ = encryptionKey;
+    }
+
     if (!getApp()->getArgs().dontSaveSettings)
     {
         getApp()->getCommands()->save();

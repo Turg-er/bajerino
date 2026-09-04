@@ -12,6 +12,8 @@
 #include "lib/Snapshot.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Message.hpp"
+#include "messages/MessageElement.hpp"
+#include "messages/MessageThread.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "mocks/ChatterinoBadges.hpp"
 #include "mocks/DisabledStreamerMode.hpp"
@@ -32,6 +34,7 @@
 #include "providers/twitch/TwitchBadges.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "Test.hpp"
+#include "util/Crypto.hpp"
 #include "util/IrcHelpers.hpp"
 #include "util/VectorMessageSink.hpp"
 
@@ -713,4 +716,154 @@ TEST_P(TestIrcMessageHandlerP, CloneElements)
                 << QJsonDocument(clonedObj).toJson();
         }
     }
+}
+
+TEST(MessageEncryption, DecryptsPotentialMessagesAndPreservesDecryptedMessages)
+{
+    MockApplication app(SETTINGS_DEFAULT);
+    auto globalEmotes = MockEmotes::global();
+    app.seventvEmotes.setGlobalEmotes(std::move(globalEmotes.seventv));
+    app.bttvEmotes.setEmotes(std::move(globalEmotes.bttv));
+    app.ffzEmotes.setEmotes(std::move(globalEmotes.ffz));
+
+    auto channel =
+        std::make_shared<Channel>(u"pajlada"_s, Channel::Type::Twitch);
+    const auto password = u"correct horse battery staple"_s;
+    const auto plaintext = u"hello encrypted world"_s;
+    const auto encrypted = encryptMessage(plaintext, password);
+
+    auto potentiallyEncrypted = std::make_shared<Message>();
+    potentiallyEncrypted->flags.set(MessageFlag::MaybeEncrypted);
+    potentiallyEncrypted->messageText = encrypted;
+    potentiallyEncrypted->searchText = u"user: "_s + encrypted;
+    potentiallyEncrypted->elements.emplace_back(std::make_unique<TextElement>(
+        u"user:"_s, MessageElementFlag::Username));
+    potentiallyEncrypted->elements.emplace_back(
+        std::make_unique<TextElement>(encrypted, MessageElementFlag::Text));
+    channel->addMessage(potentiallyEncrypted, MessageContext::Repost);
+
+    auto thread = std::make_shared<MessageThread>(potentiallyEncrypted);
+
+    auto alreadyDecrypted = std::make_shared<Message>();
+    alreadyDecrypted->flags.set(MessageFlag::Decrypted);
+    alreadyDecrypted->messageText = u"already decrypted"_s;
+    alreadyDecrypted->searchText = u"user: already decrypted"_s;
+    alreadyDecrypted->elements.emplace_back(std::make_unique<DecryptedBadge>(
+        std::make_shared<Emote>(), MessageElementFlag::BadgeDecrypted));
+    alreadyDecrypted->elements.emplace_back(std::make_unique<TextElement>(
+        u"user:"_s, MessageElementFlag::Username));
+    alreadyDecrypted->elements.emplace_back(std::make_unique<TextElement>(
+        alreadyDecrypted->messageText, MessageElementFlag::Text));
+    channel->addMessage(alreadyDecrypted, MessageContext::Repost);
+
+    auto reply = std::make_shared<Message>();
+    reply->flags.set(MessageFlag::ReplyMessage);
+    reply->messageText = u"partially visible reply"_s;
+    reply->searchText = u"reply-user: partially visible reply"_s;
+    reply->replyThread = thread;
+    reply->replyParent = potentiallyEncrypted;
+    reply->elements.emplace_back(std::make_unique<TextElement>(
+        u"Replying to"_s, MessageElementFlag::RepliedMessage));
+    reply->elements.emplace_back(std::make_unique<TextElement>(
+        u"@user:"_s, MessageElementFlag::RepliedMessage));
+    reply->elements.emplace_back(std::make_unique<SingleLineTextElement>(
+        encrypted, MessageElementFlags({MessageElementFlag::RepliedMessage,
+                                        MessageElementFlag::Text})));
+    reply->elements.emplace_back(std::make_unique<TextElement>(
+        u"reply-user:"_s, MessageElementFlag::Username));
+    reply->elements.emplace_back(std::make_unique<TextElement>(
+        reply->messageText, MessageElementFlag::Text));
+    channel->addMessage(reply, MessageContext::Repost);
+    thread->addToThread(std::shared_ptr<const Message>(reply));
+
+    size_t replacementCount = 0;
+    auto replacementConnection =
+        channel->messageReplaced.connect([&](auto &&...) {
+            replacementCount++;
+        });
+
+    channel->decryptMessages(password);
+
+    const auto messages = channel->getMessageSnapshot();
+    ASSERT_EQ(messages.size(), 3);
+    EXPECT_EQ(replacementCount, 2);
+
+    const auto &decrypted = messages[0];
+    EXPECT_NE(decrypted, potentiallyEncrypted);
+    EXPECT_TRUE(decrypted->flags.has(MessageFlag::Decrypted));
+    EXPECT_FALSE(decrypted->flags.has(MessageFlag::MaybeEncrypted));
+    EXPECT_EQ(decrypted->messageText, plaintext);
+    EXPECT_EQ(decrypted->searchText, u"user: hello encrypted world"_s);
+    EXPECT_EQ(thread->root(), decrypted);
+    EXPECT_TRUE(
+        std::ranges::any_of(decrypted->elements, [](const auto &element) {
+            return dynamic_cast<const DecryptedBadge *>(element.get()) !=
+                   nullptr;
+        }));
+
+    EXPECT_EQ(messages[1], alreadyDecrypted);
+    EXPECT_TRUE(messages[1]->flags.has(MessageFlag::Decrypted));
+    EXPECT_TRUE(
+        std::ranges::any_of(messages[1]->elements, [](const auto &element) {
+            return dynamic_cast<const DecryptedBadge *>(element.get()) !=
+                   nullptr;
+        }));
+
+    const auto &updatedReply = messages[2];
+    EXPECT_NE(updatedReply, reply);
+    EXPECT_EQ(updatedReply->replyParent, decrypted);
+    EXPECT_EQ(updatedReply->messageText, reply->messageText);
+    EXPECT_TRUE(
+        std::ranges::any_of(updatedReply->elements, [](const auto &element) {
+            return dynamic_cast<const DecryptedBadge *>(element.get()) !=
+                       nullptr &&
+                   element->getFlags().hasAll(
+                       MessageElementFlag::BadgeDecrypted,
+                       MessageElementFlag::RepliedMessage);
+        }));
+
+    const auto preview =
+        std::ranges::find_if(updatedReply->elements, [](const auto &element) {
+            return dynamic_cast<const SingleLineTextElement *>(element.get()) !=
+                   nullptr;
+        });
+    ASSERT_NE(preview, updatedReply->elements.end());
+    EXPECT_EQ(dynamic_cast<const SingleLineTextElement *>(preview->get())
+                  ->words()
+                  .join(' '),
+              plaintext);
+    ASSERT_FALSE(thread->replies().empty());
+    EXPECT_EQ(thread->replies().front().lock(), updatedReply);
+}
+
+TEST(MessageEncryption, RecalculatesAsciiArtFromDecryptedContent)
+{
+    MockApplication app(SETTINGS_DEFAULT);
+    auto globalEmotes = MockEmotes::global();
+    app.seventvEmotes.setGlobalEmotes(std::move(globalEmotes.seventv));
+    app.bttvEmotes.setEmotes(std::move(globalEmotes.bttv));
+    app.ffzEmotes.setEmotes(std::move(globalEmotes.ffz));
+    app.settings.wrapAsciiArt = true;
+
+    auto channel =
+        std::make_shared<Channel>(u"pajlada"_s, Channel::Type::Twitch);
+    const auto password = u"ascii art password"_s;
+    const auto plaintext = QString(40, QChar(0x28FF));
+    const auto encrypted = encryptMessage(plaintext, password);
+
+    auto message = std::make_shared<Message>();
+    message->flags.set(MessageFlag::MaybeEncrypted);
+    message->messageText = encrypted;
+    message->searchText = encrypted;
+    message->elements.emplace_back(
+        std::make_unique<TextElement>(encrypted, MessageElementFlag::Text));
+    channel->addMessage(message, MessageContext::Repost);
+
+    channel->decryptMessages(password);
+
+    const auto messages = channel->getMessageSnapshot();
+    ASSERT_EQ(messages.size(), 1);
+    EXPECT_EQ(messages[0]->messageText, plaintext);
+    EXPECT_TRUE(messages[0]->flags.has(MessageFlag::Decrypted));
+    EXPECT_TRUE(messages[0]->flags.has(MessageFlag::AsciiArt));
 }

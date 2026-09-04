@@ -251,6 +251,14 @@ public:
         const std::shared_ptr<MessageThread> &thread = {},
         const MessagePtr &parent = {});
 
+    /// Returns a decrypted clone, or nullptr if the message cannot be decrypted.
+    static MessagePtrMut tryMakeDecryptedMessage(
+        Channel *channel, const MessagePtr &message,
+        const QString &encryptionPassword);
+    static MessagePtrMut tryUpdateReplyPreview(
+        const MessagePtr &message, const MessagePtr &previousParent,
+        const MessagePtr &replacementParent);
+
     static MessagePtrMut makeSystemMessageWithUser(
         const QString &text, const QString &loginName,
         const QString &displayName, const MessageColor &userColor,

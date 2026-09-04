@@ -29,6 +29,8 @@ public:
 
     void addToThread(const std::shared_ptr<const Message> &message);
     void addToThread(const std::weak_ptr<const Message> &message);
+    void replaceMessage(const std::shared_ptr<const Message> &message,
+                        const std::shared_ptr<const Message> &replacement);
 
     /// Returns the number of live reply references
     size_t liveCount() const;
@@ -74,7 +76,7 @@ public:
 
 private:
     const QString rootMessageId_;
-    const std::shared_ptr<const Message> rootMessage_;
+    std::shared_ptr<const Message> rootMessage_;
     std::vector<std::weak_ptr<const Message>> replies_;
 
     Subscription subscription_ = Subscription::None;

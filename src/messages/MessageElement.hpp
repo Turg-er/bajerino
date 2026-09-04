@@ -401,6 +401,8 @@ public:
         return this->words_;
     }
 
+    void setText(const QString &text);
+
 private:
     MessageColor color_;
     FontStyle style_;

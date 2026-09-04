@@ -83,6 +83,7 @@ private:
     std::vector<SettingsDialogTab *> tabs_;
     SettingsDialogTab *selectedTab_{};
     SettingsDialogTab *lastSelectedByUser_{};
+    QString encryptionKeyOnOpen_;
     float dpi_ = 1.0F;
 
     friend class SettingsDialogTab;

@@ -123,6 +123,7 @@ public:
     void replaceMessage(size_t index, const MessagePtr &replacement);
     void replaceMessage(size_t hint, const MessagePtr &message,
                         const MessagePtr &replacement);
+    void decryptMessages(const QString &encryptionPassword);
     void disableMessage(const QString &messageID);
 
     void mergeFrom(std::span<std::span<const MessagePtr>> sources);

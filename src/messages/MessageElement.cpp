@@ -1248,6 +1248,11 @@ SingleLineTextElement::SingleLineTextElement(
 {
 }
 
+void SingleLineTextElement::setText(const QString &text)
+{
+    this->words_ = text.split(' ');
+}
+
 void SingleLineTextElement::addToContainer(MessageLayoutContainer &container,
                                            const MessageLayoutContext &ctx)
 {
