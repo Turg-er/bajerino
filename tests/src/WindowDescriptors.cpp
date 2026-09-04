@@ -14,9 +14,9 @@ namespace {
 
 TEST(WindowDescriptors, TwitchChannelModeRoundTrip)
 {
-    for (const auto mode : {TwitchChannelMode::Authenticated,
-                            TwitchChannelMode::AnonymousRead,
-                            TwitchChannelMode::BajerinoAnonymous})
+    for (const auto mode :
+         {TwitchChannelMode::Authenticated, TwitchChannelMode::AnonymousRead,
+          TwitchChannelMode::BajerinoAnonymous})
     {
         SplitDescriptor descriptor;
         descriptor.type_ = "twitch";
@@ -61,9 +61,8 @@ TEST(WindowDescriptors, LoadsLegacyAnonymousOverride)
 
     EXPECT_EQ(SplitDescriptor::loadFromJSON(makeJson(true)).twitchChannelMode_,
               TwitchChannelMode::BajerinoAnonymous);
-    EXPECT_EQ(
-        SplitDescriptor::loadFromJSON(makeJson(false)).twitchChannelMode_,
-        TwitchChannelMode::Authenticated);
+    EXPECT_EQ(SplitDescriptor::loadFromJSON(makeJson(false)).twitchChannelMode_,
+              TwitchChannelMode::Authenticated);
 }
 
 TEST(WindowDescriptors, ChildTwitchChannelModeRoundTripAndMigration)
@@ -89,8 +88,7 @@ TEST(WindowDescriptors, ChildTwitchChannelModeRoundTripAndMigration)
     auto legacyAuthenticated = legacy;
     legacyAuthenticated["anonymousOverride"] = false;
     EXPECT_EQ(
-        ChildChannelDescriptor::fromJson(legacyAuthenticated)
-            .twitchChannelMode,
+        ChildChannelDescriptor::fromJson(legacyAuthenticated).twitchChannelMode,
         TwitchChannelMode::Authenticated);
 
     QJsonObject followDefault{
