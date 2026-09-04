@@ -53,14 +53,12 @@ std::optional<chatterino::eventsub::lib::ProxyOptions> eventSubProxyOptions(
         return std::nullopt;
     }
 
-    // EventSub is a Twitch connection that requires auth, so it is proxied in
-    // global and BAJERINO_PROXY_TWITCH modes, but not in authed-only mode
-    // (where the user connects anonymously and EventSub does not connect). The
+    // EventSub is authenticated, so it is proxied in every proxy mode. The
     // eventsub lib uses asio sockets that ignore the global Qt application
     // proxy, so the proxy must be passed explicitly.
     const auto &env = Env::get();
-    if (!NetworkConfigurationProvider::shouldProxy(env,
-                                                   ProxyConnection::Twitch))
+    if (!NetworkConfigurationProvider::shouldProxy(
+            env, ProxyConnection::AuthedTwitch))
     {
         return std::nullopt;
     }

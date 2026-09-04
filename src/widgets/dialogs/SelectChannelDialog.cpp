@@ -490,10 +490,9 @@ void SelectChannelDialog::updateChannelModeDescription() const
             break;
         case TwitchChannelMode::BajerinoAnonymous:
             description +=
-                "Read IRC anonymously, avoiding authenticated JOIN/PART "
-                "membership. Messages still send through signed-in Helix; "
-                "authenticated PubSub and EventSub are disabled for this "
-                "channel.";
+                "Read IRC anonymously while keeping an unjoined authenticated "
+                "write connection for whispers and sending. Authenticated "
+                "PubSub and EventSub are disabled for this channel.";
             break;
     }
     this->ui_.channelModeDescription->setText(description);

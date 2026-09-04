@@ -18,16 +18,16 @@ class Env;
 /**
  * The kind of connection being proxied, which together with the environment
  * decides whether a proxy is applied. See NetworkConfigurationProvider for the
- * proxy modes (global, BAJERINO_PROXY_TWITCH, BAJERINO_PROXY_TWITCH_API_ONLY).
+ * proxy modes (global, BAJERINO_PROXY_TWITCH,
+ * BAJERINO_PROXY_TWITCH_AUTHED_ONLY).
  */
 enum class ProxyConnection : std::uint8_t {
-    /// Authenticated Twitch connections (Twitch HTTP API, PubSub). Proxied in
-    /// every proxy mode.
+    /// Authenticated Twitch connections (HTTP API, PubSub, EventSub, IRC).
+    /// Proxied in every proxy mode.
     AuthedTwitch,
-    /// Other Twitch connections (IRC, EventSub). Proxied in global and
-    /// BAJERINO_PROXY_TWITCH modes, but not BAJERINO_PROXY_TWITCH_API_ONLY,
-    /// since they are used anonymously there.
-    Twitch,
+    /// Anonymous Twitch IRC connections. Proxied in global and
+    /// BAJERINO_PROXY_TWITCH modes, but not authed-only mode.
+    AnonymousTwitch,
     /// Third-party connections (7TV, BTTV, Kick). Proxied only in global mode
     /// (proxy everything).
     ThirdParty,
@@ -44,7 +44,7 @@ public:
      * Applies the configuration requested from the environment variables.
      *
      * A global proxy is applied if configured, unless a selective proxying mode
-     * (BAJERINO_PROXY_TWITCH or BAJERINO_PROXY_TWITCH_API_ONLY) is enabled.
+     * (BAJERINO_PROXY_TWITCH or BAJERINO_PROXY_TWITCH_AUTHED_ONLY) is enabled.
      */
     static void applyFromEnv(const Env &env);
 

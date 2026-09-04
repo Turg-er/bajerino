@@ -82,14 +82,14 @@ bool NetworkConfigurationProvider::shouldProxy(const Env &env,
             // Authenticated Twitch connections are proxied in every mode.
             return true;
 
-        case ProxyConnection::Twitch:
-            // Other Twitch connections are proxied in global and
-            // BAJERINO_PROXY_TWITCH modes, but not in authed-only mode.
-            return !env.proxyTwitchApiOnly;
+        case ProxyConnection::AnonymousTwitch:
+            // Anonymous IRC is proxied in global and BAJERINO_PROXY_TWITCH
+            // modes, but remains direct in authed-only mode.
+            return !env.proxyTwitchAuthedOnly;
 
         case ProxyConnection::ThirdParty:
             // Third-party connections are only proxied in global mode.
-            return !env.proxyTwitchApiOnly && !env.proxyTwitch;
+            return !env.proxyTwitchAuthedOnly && !env.proxyTwitch;
     }
 
     return false;
@@ -136,13 +136,13 @@ std::optional<WebSocketProxyOptions>
 
 void NetworkConfigurationProvider::applyFromEnv(const Env &env)
 {
-    if (env.proxyTwitchApiOnly || env.proxyTwitch)
+    if (env.proxyTwitchAuthedOnly || env.proxyTwitch)
     {
         if (!env.proxyUrl)
         {
             qCWarning(chatterinoNetwork)
                 << "Selective proxying (BAJERINO_PROXY_TWITCH or "
-                   "BAJERINO_PROXY_TWITCH_API_ONLY) is enabled but "
+                   "BAJERINO_PROXY_TWITCH_AUTHED_ONLY) is enabled but "
                    "CHATTERINO2_PROXY_URL is not set; requests will be made "
                    "directly";
         }

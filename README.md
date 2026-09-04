@@ -11,8 +11,8 @@ Bajerino is a Twitch and Kick chat client based on [Chatterino 2](https://github
 ### Bajerino additions
 
 - **Per-channel message encryption:** encrypt outgoing messages with a shared password, decrypt compatible incoming messages, and show a lock badge on decrypted chat and pinned messages. Encryption can be controlled from the split input, a hotkey, or `/e` and `/d`.
-- **Per-channel anonymous Twitch access:** override the Twitch read identity for individual channels while retaining the signed-in account for supported API actions. Anonymous state is persisted and shown in the channel UI.
-- **Selective Twitch proxying:** route all traffic, all Twitch traffic, or only authenticated Twitch API traffic through `CHATTERINO2_PROXY_URL`. See [Proxying](#proxying) for the exact environment variables and privacy implications.
+- **Per-channel anonymous Twitch access:** override the Twitch read identity for individual channels while retaining the signed-in account for whispers, sending, and supported API actions. Anonymous state is persisted and shown in the channel UI.
+- **Selective Twitch proxying:** route all traffic, all Twitch traffic, or only authenticated Twitch traffic through `CHATTERINO2_PROXY_URL`. See [Proxying](#proxying) for the exact environment variables and privacy implications.
 - **Channel Points automation:** automatically claim bonus chests and optionally simulate watching open, live channels to earn points, with a configurable concurrency limit, priority order, and blacklist.
 - **Shared Chatterino settings mode:** optionally use the existing Chatterino settings directory instead of a separate Bajerino directory.
 - **Bajerino identity and extras:** Bajerino application names, icons, packaging, the custom Tomas badge, and the optional Big 3 username marker.
@@ -76,9 +76,9 @@ If you set `CHATTERINO2_PROXY_URL`, Bajerino proxies all network traffic by defa
 Two environment variables narrow that scope:
 
 - `BAJERINO_PROXY_TWITCH=1` proxies only Twitch connections — Helix, Twitch GraphQL, PubSub, EventSub, and IRC. Twitch images and third-party services (7TV, BTTV, Kick) stay direct.
-- `BAJERINO_PROXY_TWITCH_API_ONLY=1` is narrower still: it proxies only authenticated Twitch connections — Helix, Twitch GraphQL, and PubSub. IRC and EventSub stay direct. (If both are set, this one wins.)
+- `BAJERINO_PROXY_TWITCH_AUTHED_ONLY=1` is narrower still: it proxies only authenticated Twitch connections, including Helix, Twitch GraphQL, PubSub, EventSub, and authenticated IRC. Anonymous IRC and third-party services stay direct. (If both are set, this one wins.)
 
-`BAJERINO_PROXY_TWITCH_API_ONLY` should be used in tandem with the `Join Twitch IRC anonymously` setting. It proxies your account/API traffic, while IRC and EventSub stay direct. If you enable it **without** anonymous IRC, your authenticated account still connects to Twitch IRC directly, unproxied — leaking exactly the authenticated connection you were trying to keep behind the proxy. With anonymous IRC enabled, IRC connects as a logged-out user (so there is nothing to leak) and EventSub does not connect at all. PubSub is included in the proxied set because, unlike EventSub, its subscriptions do not make your account appear as joined in chat.
+`BAJERINO_PROXY_TWITCH_AUTHED_ONLY` can be combined with `Bajerino anonymous` mode to proxy account traffic while anonymous IRC stays direct. The authenticated write connection is proxied in this mode and does not send `JOIN`, but it still identifies your account to Twitch IRC.
 
 ## Original Chatterino 2 Readme
 

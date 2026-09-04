@@ -85,7 +85,8 @@ Env::Env()
           "CHATTERINO2_LINK_RESOLVER_URL",
           "https://braize.pajlada.com/chatterino/link_resolver/%1"))
     , proxyTwitch(env::readBool("BAJERINO_PROXY_TWITCH", false))
-    , proxyTwitchApiOnly(env::readBool("BAJERINO_PROXY_TWITCH_API_ONLY", false))
+    , proxyTwitchAuthedOnly(
+          env::readBool("BAJERINO_PROXY_TWITCH_AUTHED_ONLY", false))
     , twitchServerHost(qEnvironmentVariable("CHATTERINO2_TWITCH_SERVER_HOST",
                                             "irc.chat.twitch.tv"))
     , twitchServerPort(readPortEnv("CHATTERINO2_TWITCH_SERVER_PORT", 443))

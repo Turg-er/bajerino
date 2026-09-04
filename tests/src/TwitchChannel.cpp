@@ -222,6 +222,7 @@ TEST(TwitchChannel, ResolvesChannelModes)
     EXPECT_TRUE(bajerinoAnonymous.usesAnonymousReadConnection());
     EXPECT_FALSE(bajerinoAnonymous.usesAuthenticatedFeatures());
     EXPECT_TRUE(bajerinoAnonymous.isBajerinoAnonymous());
+    EXPECT_TRUE(bajerinoAnonymous.canSendMessage());
 }
 
 TEST(TwitchChannel, FollowDefaultTracksGlobalMode)

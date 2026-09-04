@@ -164,9 +164,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "<li><b>Anonymous read:</b> Reads chat with an anonymous IRC identity; "
         "signed-in sending, PubSub, and EventSub stay enabled.</li>"
         "<li><b>Bajerino anonymous:</b> Reads chat anonymously and avoids "
-        "authenticated JOIN/PART membership. It uses signed-in Helix for "
-        "messages, but disables authenticated PubSub and EventSub for that "
-        "channel."
+        "authenticated JOIN/PART membership. Authenticated IRC remains "
+        "available for whispers and sending, but authenticated PubSub and "
+        "EventSub are disabled for that channel."
         "</li>"
         "</ul>");
 
@@ -1746,9 +1746,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
 
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
         ->setTooltip("'Helix' will use Twitch's Helix API to send "
-                     "messages. 'IRC' will use IRC to send messages.\n\n"
-                     "Bajerino-anonymous channels always send via Helix "
-                     "regardless of this setting.")
+                     "messages. 'IRC' will use IRC to send messages.")
         ->addTo(layout);
 
     SettingWidget::checkbox("Show send message button", s.showSendButton)

@@ -48,7 +48,8 @@ QString authenticatedTopicUserID(const QString &topic)
 std::optional<WebSocketProxyOptions> twitchPubSubProxyOptions()
 {
     // PubSub is an authenticated Twitch connection, so it is proxied in every
-    // proxy mode (global, BAJERINO_PROXY_TWITCH, BAJERINO_PROXY_TWITCH_API_ONLY).
+    // proxy mode (global, BAJERINO_PROXY_TWITCH,
+    // BAJERINO_PROXY_TWITCH_AUTHED_ONLY).
     return NetworkConfigurationProvider::webSocketProxyFromEnv(
         Env::get(), ProxyConnection::AuthedTwitch);
 }

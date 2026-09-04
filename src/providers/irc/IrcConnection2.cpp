@@ -162,6 +162,7 @@ void IrcConnection::open()
 
 void IrcConnection::close()
 {
+    this->reconnectTimer_.stop();
     this->expectConnectionLoss_ = true;
     Communi::IrcConnection::close();
 }

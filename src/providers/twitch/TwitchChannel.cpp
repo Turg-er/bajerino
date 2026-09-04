@@ -954,7 +954,7 @@ bool TwitchChannel::isEmpty() const
 
 bool TwitchChannel::canSendMessage() const
 {
-    return !this->isEmpty() && !this->isBajerinoAnonymous();
+    return !this->isEmpty();
 }
 
 TwitchChannelMode TwitchChannel::effectiveMode() const
@@ -1542,12 +1542,6 @@ void TwitchChannel::showLoginMessage()
     this->addMessage(builder.release(), MessageContext::Original);
 }
 
-void TwitchChannel::showAnonymousIrcSendBlockedMessage()
-{
-    this->addSystemMessage(
-        "Anonymous channels can only send messages through Helix chat.");
-}
-
 void TwitchChannel::roomIdChanged()
 {
     if (getApp()->isTest())
@@ -1636,16 +1630,6 @@ QString TwitchChannel::prepareMessage(const QString &message,
 bool TwitchChannel::sendMessageViaIrc(const QString &message,
                                       int duplicateNonce)
 {
-    if (this->isBajerinoAnonymous())
-    {
-        if (!message.isEmpty())
-        {
-            this->showAnonymousIrcSendBlockedMessage();
-        }
-
-        return false;
-    }
-
     auto *app = getApp();
     if (!app->getAccounts()->twitch.isLoggedIn())
     {
@@ -1892,7 +1876,7 @@ void TwitchChannel::sendMessage(const QString &message)
         return;
     }
 
-    if ((getSettings()->shouldSendHelixChat() || this->isBajerinoAnonymous()) &&
+    if (getSettings()->shouldSendHelixChat() &&
         isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
@@ -1924,6 +1908,13 @@ void TwitchChannel::sendMessage(const QString &message)
 
         if (botConfig.isValid() && !broadcasterID.isEmpty())
         {
+            if (isUnknownCommand(parsedMessage))
+            {
+                this->addSystemMessage(QString("%1 is not a known command.")
+                                           .arg(parsedMessage.split(' ').first()));
+                return;
+            }
+
             QJsonObject json{{
                 {"broadcaster_id", broadcasterID},
                 {"sender_id", botConfig.senderID},
@@ -2071,7 +2062,7 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
         return;
     }
 
-    if ((getSettings()->shouldSendHelixChat() || this->isBajerinoAnonymous()) &&
+    if (getSettings()->shouldSendHelixChat() &&
         isUnknownCommand(parsedMessage))
     {
         this->addSystemMessage(QString("%1 is not a known command.")
@@ -2101,6 +2092,13 @@ void TwitchChannel::sendReply(const QString &message, const QString &replyId)
 
         if (botConfig.isValid() && !broadcasterID.isEmpty())
         {
+            if (isUnknownCommand(parsedMessage))
+            {
+                this->addSystemMessage(QString("%1 is not a known command.")
+                                           .arg(parsedMessage.split(' ').first()));
+                return;
+            }
+
             QJsonObject json{{
                 {"broadcaster_id", broadcasterID},
                 {"sender_id", botConfig.senderID},

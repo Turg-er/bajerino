@@ -33,7 +33,7 @@ void NetworkManager::init()
     // carries the proxy for requests that opt in via NetworkRequest::useProxy
     // (the Twitch HTTP API). In global mode all requests use the default
     // manager, which honors the application proxy.
-    const bool selectiveProxy = env.proxyTwitchApiOnly || env.proxyTwitch;
+    const bool selectiveProxy = env.proxyTwitchAuthedOnly || env.proxyTwitch;
 
     NetworkManager::accessManager = new QNetworkAccessManager;
     if (selectiveProxy)

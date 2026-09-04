@@ -633,22 +633,29 @@ void TwitchIrcServer::initializeConnection(IrcConnection *connection,
     connection->setPort(Env::get().twitchServerPort);
     connection->setSecure(Env::get().twitchServerSecure);
 
-    // IRC is a Twitch connection, proxied in global and BAJERINO_PROXY_TWITCH
-    // modes but not authed-only mode (where the user connects anonymously). In
-    // global mode this matches the application proxy libcommuni would use
-    // anyway; in BAJERINO_PROXY_TWITCH mode (no global proxy set) it ensures
-    // chat still goes through the proxy. This must come after setSecure(),
-    // which may swap out the underlying socket.
-    if (NetworkConfigurationProvider::shouldProxy(Env::get(),
-                                                  ProxyConnection::Twitch))
+    // Selective proxying sends authenticated IRC through the proxy while
+    // leaving anonymous reads direct in authed-only mode. This must come after
+    // setSecure(), which may swap out the underlying socket.
+    const auto proxyConnection = anonymous ? ProxyConnection::AnonymousTwitch
+                                           : ProxyConnection::AuthedTwitch;
+    const auto &env = Env::get();
+    if (auto *socket = connection->socket())
     {
-        if (const auto proxy =
-                NetworkConfigurationProvider::proxyFromEnv(Env::get()))
+        if (NetworkConfigurationProvider::shouldProxy(env, proxyConnection))
         {
-            if (auto *socket = connection->socket())
+            if (const auto proxy =
+                    NetworkConfigurationProvider::proxyFromEnv(env))
             {
                 socket->setProxy(*proxy);
             }
+            else if (env.proxyTwitchAuthedOnly || env.proxyTwitch)
+            {
+                socket->setProxy(QNetworkProxy::NoProxy);
+            }
+        }
+        else
+        {
+            socket->setProxy(QNetworkProxy::NoProxy);
         }
     }
 
@@ -1146,7 +1153,7 @@ void TwitchIrcServer::onMessageSendRequested(
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() || channel->isBajerinoAnonymous())
+    if (getSettings()->shouldSendHelixChat())
     {
         sendHelixMessage(channel, message);
     }
@@ -1170,7 +1177,7 @@ void TwitchIrcServer::onReplySendRequested(
         return;
     }
 
-    if (getSettings()->shouldSendHelixChat() || channel->isBajerinoAnonymous())
+    if (getSettings()->shouldSendHelixChat())
     {
         sendHelixMessage(channel, message, replyId);
     }
@@ -1745,9 +1752,7 @@ void TwitchIrcServer::connect()
 
     this->disconnect();
 
-    // Explicit/local anonymity suppresses the authenticated write connection.
-    // Upstream's anonymous read modes still retain authenticated writes.
-    if (this->hasAuthenticatedChannels())
+    if (getApp()->getAccounts()->twitch.isLoggedIn())
     {
         this->ensureWriteConnection();
     }
@@ -1857,11 +1862,6 @@ void TwitchIrcServer::onChannelDestroyed(const QString &channelName)
             this->anonymousReadConnection_->close();
         }
     }
-    if (authenticatedEmpty && this->writeConnection_)
-    {
-        this->writeConnectionStarted_ = false;
-        this->writeConnection_->close();
-    }
 }
 
 ChannelPtr TwitchIrcServer::getOrAddChannel(const QString &dirtyChannelName)
@@ -1950,7 +1950,7 @@ ChannelPtr TwitchIrcServer::getOrAddChannelImpl(
             });
     }
 
-    if (twitchChannel->usesAuthenticatedFeatures())
+    if (getApp()->getAccounts()->twitch.isLoggedIn())
     {
         this->ensureWriteConnection();
     }

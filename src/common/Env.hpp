@@ -31,10 +31,9 @@ public:
     /// Proxy all Twitch connections (HTTP API, PubSub, IRC, EventSub) while
     /// leaving third-party services direct. BAJERINO_PROXY_TWITCH
     const bool proxyTwitch;
-    /// Proxy only authenticated Twitch connections (HTTP API, PubSub). IRC and
-    /// EventSub stay direct, so it pairs with anonymous connecting.
-    /// BAJERINO_PROXY_TWITCH_API_ONLY
-    const bool proxyTwitchApiOnly;
+    /// Proxy only authenticated Twitch connections while anonymous IRC and
+    /// third-party services stay direct. BAJERINO_PROXY_TWITCH_AUTHED_ONLY
+    const bool proxyTwitchAuthedOnly;
     const QString twitchServerHost;
     const uint16_t twitchServerPort;
     const bool twitchServerSecure;

@@ -672,9 +672,6 @@ void Settings::disableSave()
 
 bool Settings::shouldSendHelixChat() const
 {
-    // Note: anonymous channels are forced to send via Helix at the call site
-    // (TwitchChannel::isAnonymous), so this reflects only the user's preferred
-    // protocol for authenticated channels.
     switch (this->chatSendProtocol.getEnum())
     {
         case ChatSendProtocol::Helix:
