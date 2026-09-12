@@ -262,6 +262,8 @@ template SettingWidget *SettingWidget::dropdown<BrowserManifestFormat>(
     const QString &label, EnumStringSetting<BrowserManifestFormat> &setting);
 template SettingWidget *SettingWidget::dropdown<TwitchChannelMode>(
     const QString &label, EnumStringSetting<TwitchChannelMode> &setting);
+template SettingWidget *SettingWidget::dropdown<KickConnectionPreference>(
+    const QString &label, EnumStringSetting<KickConnectionPreference> &setting);
 
 template <typename T>
 SettingWidget *SettingWidget::dropdown(const QString &label,

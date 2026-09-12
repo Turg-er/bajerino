@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace chatterino::ws::detail {
 class WebSocketPoolImpl;

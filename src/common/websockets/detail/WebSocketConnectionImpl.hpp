@@ -9,6 +9,7 @@
 
 #include <boost/asio/ssl/context.hpp>
 #include <boost/asio/ssl/stream.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/websocket/stream.hpp>
@@ -103,6 +104,11 @@ private:
 
     void onReadDone(boost::system::error_code ec, size_t bytesRead);
     void onWriteDone(boost::system::error_code ec, size_t bytesWritten);
+    void onHealthCheck(const boost::system::error_code &ec);
+    void onControlFrame(boost::beast::websocket::frame_type frame_type,
+                        std::string_view payload);
+    template <typename Duration>
+    void scheduleHealthCheck(std::chrono::duration<Duration> timeout);
 
     friend Derived;
 
@@ -119,6 +125,9 @@ private:
         proxyConnectResponseParser;
     QByteArray proxyWriteBuffer;
     std::array<char, 512> proxyReadBuffer{};
+
+    boost::asio::steady_timer healthCheckTimer;
+    unsigned int pingProbesTried = 0;
 };
 
 /// A WebSocket connection over TLS (wss://).

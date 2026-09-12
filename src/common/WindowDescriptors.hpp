@@ -6,6 +6,7 @@
 
 #include "common/ProviderId.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
+#include "util/Expected.hpp"
 #include "util/MultiChannelIndicatorMode.hpp"
 
 #include <QJsonObject>
@@ -159,7 +160,7 @@ public:
     /// If no split with the channel exists, a new one is added.
     /// If no window exists, a new one is added.
     void activateOrAddChannel(ProviderId provider, const QString &name);
-    static WindowLayout loadFromFile(const QString &path);
+    static ExpectedStr<WindowLayout> loadFromFile(const QString &path);
 };
 
 }  // namespace chatterino

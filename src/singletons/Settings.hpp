@@ -102,6 +102,13 @@ enum class EmoteTooltipScale : std::uint8_t {
     Huge,
 };
 
+enum class KickConnectionPreference : uint8_t {
+    Default = 0,
+    Pusher = (1 << 0),
+    Centrifugo = (1 << 1),
+    Any = Pusher | Centrifugo,
+};
+
 constexpr std::optional<std::string_view> qmagicenumDisplayName(
     EmoteTooltipScale value) noexcept
 {
@@ -190,6 +197,10 @@ public:
         "/appearance/messages/subscriptions/showHeader",
         true,
     };
+    BoolSetting showWatchStreakHeader = {
+        "/appearance/messages/watchstreaks/showHeader",
+        true,
+    };
     BoolSetting animationsWhenFocused = {
         "/appearance/enableAnimationsWhenFocused", false};
     BoolSetting hideMessageTimestampsWhenLive = {
@@ -215,6 +226,10 @@ public:
         "/appearance/messages/wrapAsciiArt",
         false,
     };
+    BoolSetting showTwitchGifs = {
+        "/appearance/messages/showTwitchGifs",
+        true,
+    };
     BoolSetting separateMessages = {"/appearance/messages/separateMessages",
                                     false};
     BoolSetting fadeMessageHistory = {"/appearance/messages/fadeMessageHistory",
@@ -235,6 +250,10 @@ public:
     EnumSetting<NotebookTabVisibility> tabVisibility = {
         "/appearance/tabVisibility",
         NotebookTabVisibility::AllTabs,
+    };
+    BoolSetting growWrappedNotebookLines = {
+        "/appearance/growWrappedNotebookLines",
+        false,
     };
 
     //    BoolSetting collapseLongMessages =
@@ -820,6 +839,7 @@ public:
 
     BoolSetting loadTwitchMessageHistoryOnConnect = {
         "/misc/twitch/loadMessageHistoryOnConnect", true};
+    QStringSetting messageHistoryUrl = {"/misc/twitch/messageHistoryUrl", ""};
     IntSetting twitchMessageHistoryLimit = {
         "/misc/twitch/messageHistoryLimit",
         800,
@@ -834,6 +854,11 @@ public:
     };
     BoolSetting displaySevenTVAnimatedProfile = {
         "/misc/displaySevenTVAnimatedProfile", false};
+
+    EnumStringSetting<KickConnectionPreference> kickConnectionPreference = {
+        "/misc/x-7tv/kick/connectionPreference",
+        KickConnectionPreference::Default,
+    };
 
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};

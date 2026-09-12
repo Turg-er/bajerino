@@ -10,14 +10,11 @@
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
-#include "util/Backup.hpp"
-#include "util/Expected.hpp"
 #include "util/MultiChannel.hpp"
 #include "util/QMagicEnum.hpp"
 #include "widgets/Window.hpp"
 
 #include <QFile>
-#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
@@ -42,7 +39,7 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
 
     if (!file.open(QIODevice::ReadOnly))
     {
-        return makeUnexpected(u"Failed to open '%1'"_s.arg(settingsPath));
+        return makeUnexpected(u"Failed to open file: " % file.errorString());
     }
 
     QByteArray data = file.readAll();
@@ -450,42 +447,18 @@ TabDescriptor TabDescriptor::loadFromJSON(const QJsonObject &tabObj)
     return tab;
 }
 
-WindowLayout WindowLayout::loadFromFile(const QString &path)
+ExpectedStr<WindowLayout> WindowLayout::loadFromFile(const QString &path)
 {
     WindowLayout layout;
-    QJsonArray windowsArr;
-    bool loaded = false;
-
-    const QFileInfo fileInfo(path);
-    backup::loadWithBackups(
-        backup::FileData{
-            .fileName = fileInfo.fileName(),
-            .directory = fileInfo.absolutePath(),
-            .fileKind = u"Window layout"_s,
-            .fileDescription =
-                u"This file contains your open windows, tabs, splits, and split sizes."_s,
-        },
-        [&]() -> ExpectedStr<void> {
-            auto maybeWindows = loadWindowArray(path);
-            if (!maybeWindows)
-            {
-                return makeUnexpected(maybeWindows.error());
-            }
-
-            windowsArr = maybeWindows.value();
-            loaded = true;
-            return {};
-        });
-
-    if (!loaded)
-    {
-        return layout;
-    }
-
     bool hasSetAMainWindow = false;
 
-    // "deserialize"
-    for (const auto windowVal : windowsArr)
+    auto rootArray = loadWindowArray(path);
+    if (!rootArray)
+    {
+        return makeUnexpected(std::move(rootArray).error());
+    }
+
+    for (const auto windowVal : std::as_const(*rootArray))
     {
         const QJsonObject windowObj = windowVal.toObject();
 

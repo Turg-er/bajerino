@@ -365,6 +365,7 @@ set(SOURCE_FILES
         messages/MessageElement.cpp
         messages/MessageElement.hpp
         messages/MessageFlag.hpp
+        messages/MessageParseArgs.hpp
         messages/MessageSimilarity.cpp
         messages/MessageSimilarity.hpp
         messages/MessageSink.hpp
@@ -455,6 +456,10 @@ set(SOURCE_FILES
         providers/kick/KickLiveUpdates.hpp
         providers/kick/KickMessageBuilder.cpp
         providers/kick/KickMessageBuilder.hpp
+
+        providers/kick/ws/KickCentrifugoManager.cpp
+        providers/kick/ws/KickPusherManager.cpp
+        providers/kick/ws/KickWebSocketCommon.cpp
 
         providers/links/LinkInfo.cpp
         providers/links/LinkInfo.hpp
@@ -1100,7 +1105,7 @@ endif()
 
 if (CHATTERINO_SPELLCHECK)
   target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_SPELLCHECK)
-  target_link_libraries(${LIBRARY_PROJECT} PRIVATE hunspell::hunspell)
+  target_link_libraries(${LIBRARY_PROJECT} PUBLIC hunspell::hunspell)
 endif()
 
 if (CHATTERINO_ALLOW_PRIVATE_QT_API)
@@ -1384,7 +1389,7 @@ if (UNIX)
   if (NOT APPLE AND BUILD_WITH_LIBNOTIFY)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(LIBNOTIFY REQUIRED IMPORTED_TARGET libnotify)
-    target_link_libraries(${LIBRARY_PROJECT} PRIVATE PkgConfig::LIBNOTIFY)
+    target_link_libraries(${LIBRARY_PROJECT} PUBLIC PkgConfig::LIBNOTIFY)
     target_compile_definitions(${LIBRARY_PROJECT} PUBLIC CHATTERINO_WITH_LIBNOTIFY)
   endif ()
 endif ()

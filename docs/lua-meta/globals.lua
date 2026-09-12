@@ -747,7 +747,6 @@ function c2.MessageElementBase:add_flags(flags) end
 ---A chat message
 ---@class c2.Message
 ---@field flags c2.MessageFlag The message's flags
----@field parse_time number Time the message was parsed (in milliseconds since epoch)
 ---@field id string The message ID
 ---@field search_text string Text to check when searching for messages
 ---@field message_text string Text content of this message (used for filters for example)
@@ -781,7 +780,6 @@ function c2.Message:clone() end
 ---@class MessageInit
 ---@field flags? c2.MessageFlag Message flags (see `c2.MessageFlags`)
 ---@field id? string The (ideally unique) message ID
----@field parse_time? number Time the message was parsed (in milliseconds since epoch)
 ---@field search_text? string Text to that is compared when searching for messages
 ---@field message_text? string The message text (used for filters for example)
 ---@field login_name? string The login name of the sender
@@ -848,6 +846,11 @@ c2.MessageElementFlag = {
     EmoteImage = 0,
     EmoteText = 0,
     Emote = 0,
+    BadgeHomiesSupporter = 0,
+    BadgeHomiesCustom = 0,
+    BadgeHomies = 0,
+    BadgeMoltorino = 0,
+    TwitchGif = 0,
     ChannelPointReward = 0,
     ChannelPointRewardImage = 0,
     BitsStatic = 0,
@@ -862,6 +865,7 @@ c2.MessageElementFlag = {
     BadgeSevenTV = 0,
     BadgeBttv = 0,
     BadgeFfz = 0,
+    BadgeDecrypted = 0,
     Badges = 0,
     ChannelName = 0,
     BitsAmount = 0,
@@ -872,15 +876,17 @@ c2.MessageElementFlag = {
     AlwaysShow = 0,
     Collapsed = 0,
     Mention = 0,
+    RepeatedMessageCounter = 0,
     LowercaseLinks = 0,
     RepliedMessage = 0,
     ReplyButton = 0,
-    KickUsername = 0,
-    PlatformBadgeAlways = 0,
-    PlatformBadgeIfUnselected = 0,
     HeaderTimestamp = 0,
     AnnouncementHeader = 0,
     SubscriptionHeader = 0,
+    WatchStreakHeader = 0,
+    KickUsername = 0,
+    PlatformBadgeAlways = 0,
+    PlatformBadgeIfUnselected = 0,
     Default = 0,
 }
 
@@ -935,8 +941,12 @@ c2.MessageFlag = {
     InvalidReplyTarget = 0,
     WatchStreak = 0,
     Announcement = 0,
+    RepeatedMessage = 0,
+    ChatWarning = 0,
     UncategorizedNotification = 0,
     AsciiArt = 0,
+    MaybeEncrypted = 0,
+    Decrypted = 0,
 }
 
 -- End src/messages/MessageFlag.hpp

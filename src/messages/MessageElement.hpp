@@ -55,6 +55,7 @@ enum class MessageElementFlag : int64_t {
     BadgeHomiesCustom = (1LL << 9),
     BadgeHomies = BadgeHomiesSupporter | BadgeHomiesCustom,
     BadgeMoltorino = (1LL << 10),
+    TwitchGif = (1LL << 30),
 
     ChannelPointReward = (1LL << 8),
     ChannelPointRewardImage = ChannelPointReward | EmoteImage,
@@ -157,7 +158,6 @@ enum class MessageElementFlag : int64_t {
 
     // used to check if links should be lowercased
     LowercaseLinks = (1LL << 29),
-    // Unused = (1LL << 30)
     // Unused: (1LL << 31)
 
     // for elements of the message reply
@@ -176,6 +176,9 @@ enum class MessageElementFlag : int64_t {
 
     /// Applied to all elements of subscription and resubscription headers
     SubscriptionHeader = (1LL << 40),
+
+    /// Applied to all elements of watch streak headers
+    WatchStreakHeader = (1LL << 41),
 
     /// `Username` but the username comes from Kick
     KickUsername = (1LL << 50),

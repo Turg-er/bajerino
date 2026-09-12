@@ -32,6 +32,7 @@ env:
   CONAN_VERSION: 2.28.1
 
 jobs:
+  # MARK: Ubuntu
   build-ubuntu-docker:
     # Our Ubuntu builds are built using Docker images that have been pre-published.
     # This speeds up builds for us since we do some pre-building of packages that takes a long time
@@ -156,6 +157,7 @@ jobs:
           name: Bajerino-${{ matrix.os }}.deb
           path: build/Bajerino-${{ matrix.os }}-x86_64.deb
 
+  # MARK: Main build
   build:
     name: "Build ${{ matrix.os }}, Qt ${{ matrix.qt-version }} (LTO:${{ matrix.force-lto }}, crashpad:${{ case(matrix.skip-crashpad, 'off', 'on') }})"
     runs-on: ${{ matrix.os }}
@@ -177,6 +179,7 @@ jobs:
           # macOS (ARM)
           - os: macos-26
             qt-version: 6.9.3
+            macosx-deployment-target: "13.0"
             force-lto: true
             skip-artifact: false
             skip-crashpad: false
@@ -186,6 +189,7 @@ jobs:
       C2_ENABLE_LTO: ${{ matrix.force-lto }}
       C2_ENABLE_CRASHPAD: ${{ matrix.skip-crashpad == false }}
       C2_ARCH: ${{ case(endsWith(matrix.os, '-arm') || startsWith(matrix.os, 'macos'), 'arm', 'x86-64') }}
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macosx-deployment-target }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -226,7 +230,7 @@ jobs:
           modules: qtimageformats
           version: ${{ matrix.qt-version }}
 
-      # WINDOWS
+      # MARK: Windows
       - name: Enable Developer Command Prompt (Windows)
         if: startsWith(matrix.os, 'windows')
         uses: Chatterino/msvc-dev-cmd@24444121cb2805a7adbd23d0f4455d0916af896b # v2.0.7
@@ -236,17 +240,17 @@ jobs:
       - name: Setup sccache (Windows)
         # sccache v0.7.4
         uses: hendrikmuhs/ccache-action@d62db5f07c26379fc4b4e0916f098a92573c3b03 # v1.2.23
-        if: startsWith(matrix.os, 'windows')
+        if: runner.os == 'Windows' || runner.os == 'macOS'
         with:
-          variant: sccache
+          variant: ${{ case(runner.os == 'Windows', 'sccache', 'ccache') }}
           # only save on on the default (master) branch
           save: ${{ github.event_name == 'push' }}
           key: sccache-build-${{ matrix.os }}-${{ runner.arch }}-${{ matrix.qt-version }}-${{ matrix.skip-crashpad }}
           restore-keys: |
             sccache-build-${{ matrix.os }}-${{ runner.arch }}-${{ matrix.qt-version }}
 
-      - name: Cache conan packages (Windows)
-        if: startsWith(matrix.os, 'windows')
+      - name: Cache conan packages (Windows/macOS)
+        if: runner.os == 'Windows' || runner.os == 'macOS'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: ${{ runner.os }}-${{ runner.arch }}-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
@@ -348,11 +352,34 @@ jobs:
           name: bajerino-windows-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}-symbols.pdb.7z
           path: build/bin/bajerino-${{ env.C2_ARCH }}-Qt-${{ matrix.qt-version }}.pdb.7z
 
-      # MACOS
+      # MARK: macOS
       - name: Install dependencies (MacOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install openssl rapidjson p7zip create-dmg tree boost hunspell
+          # binary dependencies
+          brew install rapidjson p7zip create-dmg tree conan ninja
+        shell: bash
+
+      - name: Setup Conan (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          conan --version
+          conan profile detect -f
+        shell: bash
+
+      - name: Install conan dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir build && cd build
+          conan install .. \
+              -s build_type=Release \
+              -c tools.cmake.cmaketoolchain:generator=Ninja \
+              -s arch=armv8 \
+              -s os.version="${MACOSX_DEPLOYMENT_TARGET}" \
+              -b missing \
+              --output-folder=. \
+              -o with_openssl3=True
+          conan cache clean --source --build --download "*"
         shell: bash
 
       - name: Build (MacOS)
@@ -361,21 +388,21 @@ jobs:
           mkdir -p build
           cd build
           cmake \
+              -DCMAKE_TOOLCHAIN_FILE="conan_toolchain.cmake" \
               -DCMAKE_BUILD_TYPE=Release \
-              -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
-              -DOPENSSL_ROOT_DIR="$(brew --prefix openssl)" \
-              -DUSE_PRECOMPILED_HEADERS=ON \
+              -DUSE_PRECOMPILED_HEADERS=OFF \
               -DCHATTERINO_LTO="$C2_ENABLE_LTO" \
               -DCHATTERINO_NO_AVIF_PLUGIN=On \
               -DFORCE_JSON_GENERATION=Off \
               -DCHATTERINO_NIGHTLY_BUILD=${{ steps.build-type.outputs.NIGHTLY_BUILD }} \
               -DCHATTERINO_SPELLCHECK=On \
+              -G Ninja \
               ..
-          make -j"$(sysctl -n hw.logicalcpu)"
+          ninja
         shell: bash
 
       - name: Package (MacOS)
-        if: startsWith(matrix.os, 'macos')
+        if: runner.os == 'macOS'
         env:
           OUTPUT_DMG_PATH: bajerino-macos-Qt-${{ matrix.qt-version }}.dmg
         run: |
@@ -402,6 +429,7 @@ jobs:
           name: bajerino-macos-Qt-${{ matrix.qt-version }}.dmg
           path: build/bajerino-macos-Qt-${{ matrix.qt-version }}.dmg
 
+  # MARK: Create release
   create-release:
     needs: [build-ubuntu-docker, build]
     runs-on: ubuntu-latest
@@ -465,6 +493,7 @@ jobs:
           git push -f origin nightly-build
         shell: bash
 
+  # MARK: Collect
   collect:
     needs: [build, build-ubuntu-docker]
     runs-on: ubuntu-latest

@@ -135,6 +135,12 @@ const QStringList &getSampleMiscMessages()
         // "first time chat" message
         R"(@badge-info=;badges=glhf-pledge/1;client-nonce=5d2627b0cbe56fa05faf5420def4807d;color=#1E90FF;display-name=oldcoeur;emote-only=1;emotes=84608:0-7;first-msg=1;flags=;id=7412fea4-8683-4cc9-a506-4228127a5c2d;mod=0;room-id=11148817;subscriber=0;tmi-sent-ts=1623429859222;turbo=0;user-id=139147886;user-type= :oldcoeur!oldcoeur@oldcoeur.tmi.twitch.tv PRIVMSG #pajlada :cmonBruh)",
 
+        // "viewer milestone" / "watch streak" with message
+        R"(@tmi-sent-ts=1787970789336;subscriber=1;id=e077bbc1-5c82-4e99-8301-6fb66ad27134;room-id=11148817;user-id=931203199;login=xoorler;display-name=xoorler;badges=subscriber/24,squirtle/1;badge-info=subscriber/35;color=#B60728;flags=;user-type=;emotes=175766:0-8;msg-param-category=watch-streak;msg-param-id=852beb7e-cf53-449b-a2d5-51f2e0008d79;msg-id=viewermilestone;msg-param-copoReward=450;msg-param-value=5;system-msg=xoorler\swatched\s5\sconsecutive\sstreams\sand\ssparked\sa\swatch\sstreak! :tmi.twitch.tv USERNOTICE #pajlada :forsenWut)",
+
+        // "viewer milestone" / "watch streak" without message
+        R"(@badges=subscriber/3,sub-gifter/5;mod=0;subscriber=1;flags=;color=#BE0000;rm-received-ts=1780143568293;msg-id=viewermilestone;emotes=;msg-param-id=8f04affa-bab5-4d50-81b9-40f97bff86bb;badge-info=subscriber/3;system-msg=club_reg\swatched\s15\sconsecutive\sstreams\sand\ssparked\sa\swatch\sstreak!;id=12265c31-d7c1-4344-9afd-894b3c290bc9;display-name=club_reg;vip=0;user-type=;msg-param-value=15;msg-param-category=watch-streak;msg-param-copoReward=450;login=club_reg;user-id=28392974;tmi-sent-ts=1780143566057;room-id=11148817 :tmi.twitch.tv USERNOTICE #pajlada)",
+
         // Message with founder badge
         R"(@badge-info=founder/72;badges=founder/0,bits/5000;color=#FF0000;display-name=TranRed;emotes=;first-msg=0;flags=;id=7482163f-493d-41d9-b36f-fba50e0701b7;mod=0;room-id=11148817;subscriber=0;tmi-sent-ts=1641123773885;turbo=0;user-id=57019243;user-type= :tranred!tranred@tranred.tmi.twitch.tv PRIVMSG #pajlada :GFMP pajaE)",
 
@@ -155,6 +161,10 @@ const QStringList &getSampleMiscMessages()
         R"(@flags=;pinned-chat-paid-amount=8761;turbo=0;user-id=35669184;pinned-chat-paid-level=ONE;user-type=;pinned-chat-paid-canonical-amount=8761;badge-info=subscriber/2;badges=subscriber/2,sub-gifter/1;emotes=;pinned-chat-paid-exponent=2;subscriber=1;mod=0;room-id=36340781;returning-chatter=0;id=289b614d-1837-4cff-ac22-ce33a9735323;first-msg=0;tmi-sent-ts=1687631719188;color=#00FF7F;pinned-chat-paid-currency=RUB;display-name=Danis;pinned-chat-paid-is-system-message=0 :danis!danis@danis.tmi.twitch.tv PRIVMSG #pajlada :-1 lulw)",
         // level 2
         R"(@room-id=36340781;tmi-sent-ts=1687970634371;flags=;id=39a80a3d-c16e-420f-9bbb-faba4976a3bb;badges=subscriber/6,premium/1;emotes=;display-name=rickharrisoncoc;pinned-chat-paid-level=TWO;turbo=0;pinned-chat-paid-amount=500;pinned-chat-paid-is-system-message=0;color=#FF69B4;subscriber=1;user-type=;first-msg=0;pinned-chat-paid-currency=USD;pinned-chat-paid-canonical-amount=500;user-id=518404689;badge-info=subscriber/10;pinned-chat-paid-exponent=2;returning-chatter=0;mod=0 :rickharrisoncoc!rickharrisoncoc@rickharrisoncoc.tmi.twitch.tv PRIVMSG #pajlada :forsen please read my super chat. Please.)",
+
+        // Gifs
+        R"(@badge-info=subscriber/30;badges=broadcaster/1,subscriber/0;color=#033700;display-name=TwitchDev;emotes=;first-msg=0;flags=;gifs=0-33|joSNxeswxuc74Juo8X|https://media4.giphy.com/media/joSNxeswxuc74Juo8X/giphy.gif?cid=095d7a5dzizsiwgabonagkmigggv8v1spfai91ac3x0dsiy0&ep=v1_gifs_trending&rid=giphy.gif&ct=g;id=401abf17-7e99-45d6-9bdf-43934e839327;mod=0;returning-chatter=0;room-id=11148817;subscriber=1;tmi-sent-ts=1783632907018;turbo=0;user-id=141981764;user-type= :twitchdev!twitchdev@twitchdev.tmi.twitch.tv PRIVMSG #pajlada :[Y A Y Yes GIF by Djemilah Birnie])",
+        R"(@badge-info=subscriber/30;badges=broadcaster/1,subscriber/0;color=#033700;display-name=TwitchDev;emotes=;first-msg=0;flags=;gifs=7-40|joSNxeswxuc74Juo8X|https://media4.giphy.com/media/joSNxeswxuc74Juo8X/giphy.gif?cid=095d7a5dzizsiwgabonagkmigggv8v1spfai91ac3x0dsiy0&ep=v1_gifs_trending&rid=giphy.gif&ct=g;id=401abf17-7e99-45d6-9bdf-43934e839327;mod=0;returning-chatter=0;room-id=11148817;subscriber=1;tmi-sent-ts=1783632907018;turbo=0;user-id=141981764;user-type= :twitchdev!twitchdev@twitchdev.tmi.twitch.tv PRIVMSG #pajlada :before [Y A Y Yes GIF by Djemilah Birnie] after)",
     };
     return list;
 }
