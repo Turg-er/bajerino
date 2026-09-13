@@ -236,7 +236,7 @@ TEST(SplitInput, ReplyCommandCompletion)
         auto message = std::make_shared<Message>();
         message->displayName = "forsen";
         input.setInputText("");
-        input.setReply(message);
+        input.setReply(message, {});
         input.insertText(trigger);
 
         // Commands are completed at the first word after the reply prefix `@username `
@@ -258,8 +258,8 @@ TEST(SplitInput, ReplyCommandCompletion)
         EXPECT_EQ(input.getInputText(), "@forsen " + trigger);
 
         // Normal command completion works after cancelling a reply
-        input.setReply(message);
-        input.setReply(nullptr);
+        input.setReply(message, {});
+        input.setReply(nullptr, {});
         input.setInputText(trigger);
         edit->moveCursor(QTextCursor::End);
         QApplication::sendEvent(edit, &tab);
@@ -284,7 +284,7 @@ TEST(SplitInput, EmptyReplyUsernameCompletion)
 
     auto message = std::make_shared<Message>();
     message->displayName = "forsen";
-    input.setReply(message);
+    input.setReply(message, {});
 
     // Completing the username in an empty reply does not add a comma
     QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier);
@@ -312,7 +312,7 @@ TEST(SplitInput, ReplyBodyUsernameCompletion)
 
     auto message = std::make_shared<Message>();
     message->displayName = "forsen";
-    input.setReply(message);
+    input.setReply(message, {});
 
     for (bool mentionComma : {true, false})
     {
@@ -346,7 +346,7 @@ TEST(SplitInput, ReplyPrefixFormatting)
 
     auto message = std::make_shared<Message>();
     message->displayName = "forsen";
-    input.setReply(message);
+    input.setReply(message, {});
     input.insertText("pretty much everywhere, it's gonna be hot");
 
     auto prefixFormatting = [&](const QString &prefix) {
@@ -379,7 +379,7 @@ TEST(SplitInput, ReplyPrefixFormatting)
     // Changing the reply target updates the prefix
     auto other = std::make_shared<Message>();
     other->displayName = "pajlada";
-    input.setReply(other);
+    input.setReply(other, {});
     ASSERT_EQ(prefixFormatting("@pajlada ").size(), 1);
     EXPECT_EQ(prefixFormatting("@pajlada ").constFirst().cursor.selectedText(),
               "@pajlada ");
@@ -393,12 +393,12 @@ TEST(SplitInput, ReplyPrefixFormatting)
     EXPECT_TRUE(prefixFormatting("@pajlada ").isEmpty());
 
     // Cancelling the reply invalidates the prefix
-    input.setReply(message);
-    input.setReply(nullptr);
+    input.setReply(message, {});
+    input.setReply(nullptr, {});
     EXPECT_TRUE(prefixFormatting("@forsen ").isEmpty());
 
     // Clearing the input invalidates the reply prefix
-    input.setReply(message);
+    input.setReply(message, {});
     input.setInputText("");
     EXPECT_TRUE(prefixFormatting("@forsen ").isEmpty());
 }
