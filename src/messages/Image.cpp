@@ -355,13 +355,12 @@ void assignFrames(std::weak_ptr<Image> weak, QList<Frame> parsed)
         {
             // FIXME: We should actually scale the pixmaps. However, we'd also
             //        need to cache that.
-            auto firstFrame = shared->frames_->first();
-            if (firstFrame)
+            auto frameSize = shared->frames_->frameSize();
+            if (frameSize)
             {
-                auto actualSize = firstFrame->size();
                 shared->scale_ =
                     static_cast<qreal>(*shared->autoScale_) /
-                    std::max({actualSize.width(), actualSize.height(), 1});
+                    std::max({frameSize->width(), frameSize->height(), 1});
             }
         }
 

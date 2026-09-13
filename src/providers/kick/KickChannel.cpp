@@ -856,10 +856,10 @@ bool KickChannel::tryReplaceLastSeventvAddOrRemove(MessageFlag op,
                                                    const QString &actor,
                                                    const QString &emoteName)
 {
+    auto now = QDateTime::currentDateTime();
     auto last = this->lastSeventvMessage_.lock();
     if (!last || !last->flags.has(op) ||
-        last->parseTime < QTime::currentTime().addSecs(-5) ||
-        last->loginName != actor)
+        last->serverReceivedTime < now.addSecs(-5) || last->loginName != actor)
     {
         return false;
     }

@@ -513,7 +513,6 @@ std::pair<MessagePtrMut, HighlightAlert> KickMessageBuilder::makeChatMessage(
     builder->id = id;
     builder->serverReceivedTime =
         QDateTime::fromString(createdAt, Qt::DateFormat::ISODate).toLocalTime();
-    builder->parseTime = QTime::currentTime();
     builder->displayName = sender["username"].toQString();
     builder->loginName = builder->displayName.toLower();
     builder.senderID = sender["id"].toUint64();
