@@ -288,7 +288,9 @@ SelectChannelDialog::SelectChannelDialog(QWidget *parent)
     ui.watching = new AutoCheckedRadioButton("Watching");
     layout->addWidget(ui.watching);
 
-    ui.watchingLabel = new QLabel("Requires the Bajerino browser extension");
+    // The browser extension is named Chatterino; this label is the one
+    // intentional exception to Bajerino UI branding.
+    ui.watchingLabel = new QLabel("Requires the Chatterino browser extension");
     ui.watchingLabel->setVisible(false);
     layout->addWidget(ui.watchingLabel);
 
