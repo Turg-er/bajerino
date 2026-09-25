@@ -33,6 +33,14 @@ int AccountModel::beforeInsert(const std::shared_ptr<Account> &item,
                                std::vector<QStandardItem *> &row,
                                int proposedIndex)
 {
+    // The proposed index skips category headers. Insert before the next
+    // category's header when adding a new category or appending to this one.
+    if (proposedIndex > 0 && this->rows()[proposedIndex - 1].isCustomRow &&
+        this->rows()[proposedIndex - 1].items[0]->text() != item->getCategory())
+    {
+        --proposedIndex;
+    }
+
     if (this->categoryCount_[item->getCategory()]++ == 0)
     {
         auto newRow = this->createRow();
