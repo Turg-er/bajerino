@@ -29,7 +29,8 @@ void handleModerateMessage(
             return;
         }
         chan->addOrReplaceClearChat(
-            MessageBuilder::makeClearChatMessage(time, actor), time);
+            MessageBuilder::makeClearChatMessage(time, actor, chan->getName()),
+            time);
         if (getSettings()->hideModerated)
         {
             // XXX: This is expensive. We could use a layout request if the layout
