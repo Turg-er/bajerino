@@ -12,6 +12,7 @@
 #include "providers/twitch/TwitchIrc.hpp"
 #include "providers/youtube/YouTubeChannel.hpp"
 #include "providers/youtube/YouTubeTypes.hpp"
+#include "singletons/Settings.hpp"
 #include "util/FormatTime.hpp"
 
 #include <QCryptographicHash>
@@ -252,6 +253,11 @@ QJsonObject normalizeMessage(const Channel &channel, const Message &message,
     {
         if (element->getFlags().hasAny(MessageElementFlag::RepliedMessage,
                                        MessageElementFlag::BadgeSharedChannel))
+        {
+            continue;
+        }
+        if (element->getFlags().has(MessageElementFlag::BadgeJilChat) &&
+            !getSettings()->showBadgesJilChat)
         {
             continue;
         }
