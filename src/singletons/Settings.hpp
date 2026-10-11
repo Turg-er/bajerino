@@ -1375,7 +1375,7 @@ public:
     BoolSetting showFollowButtonInUsercard{
         "/moltorino/showFollowButtonInUsercard", true};
     BoolSetting showDailyPositiveMessage{"/moltorino/dailyMessage/enabled",
-                                         true};
+                                         false};
     QStringSetting dailyPositiveMessageLastDate{
         "/moltorino/dailyMessage/lastShownDate", {}};
     BoolSetting showEditStreamInfoButtonInSplitHeader{
