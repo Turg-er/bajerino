@@ -10,18 +10,24 @@ Local dev machines for testing are available on Apple Silicon on macOS 13.
 1. Install [Homebrew](https://brew.sh/#install)  
    We use this for dependency management on macOS
 1. Install all dependencies:  
-   `brew install boost openssl@3 rapidjson cmake qt@6 libavif`
+   `brew install boost openssl@3 rapidjson cmake qt@6 webp meson ninja nasm pkg-config`
+1. Build the pinned video dependencies from the repository root:
+   `BAJERINO_VIDEO_PREFIX="$PWD/video-deps" bash .CI/build-video-dependencies.sh`
+
+YouTube account credentials and optional account build flags are described in the
+[Linux build guide](BUILDING_ON_LINUX.md#media-and-account-features). TikTok login
+uses the system WebKit framework on macOS.
 
 ## Building
 
 ### Building from terminal
 
 1. Open a terminal
-1. Go to the project directory where you cloned Chatterino2 & its submodules
+1. Go to the project directory where you cloned Bajerino & its submodules
 1. Create a build directory and go into it:  
    `mkdir build && cd build`
 1. Run CMake. To enable Lua plugins in your build add `-DCHATTERINO_PLUGINS=ON` to this command.  
-   `cmake -DCMAKE_PREFIX_PATH=/opt/homebrew/opt/qt@6 ..`
+   `cmake -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/qt@6;$PWD/../video-deps" -DBAJERINO_MEDIA_TOOLS_DIR="$PWD/../video-deps/support/media" ..`
 1. Build:  
    `make`
 

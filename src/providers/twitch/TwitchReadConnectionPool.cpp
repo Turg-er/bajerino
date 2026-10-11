@@ -13,6 +13,7 @@
 #include "util/RatelimitBucket.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
+#include <QTimer>
 
 #include <span>
 
@@ -72,7 +73,9 @@ public:
     TwitchReadConnectionPoolSingle(TwitchIrcServer *parent);
 
     void onChannelCreated(TwitchChannel &channel) override;
+    void removeChannel(const QString &name) override;
     void reconnect() override;
+    void reconnectChannel(TwitchChannel &channel) override;
     void close() override;
 
 private:
@@ -162,11 +165,53 @@ void TwitchReadConnectionPoolSingle::onChannelCreated(TwitchChannel &channel)
         });
 }
 
+void TwitchReadConnectionPoolSingle::removeChannel(const QString &name)
+{
+    this->joinBucket->removePending(name);
+    if (this->channels.erase(name) != 0)
+    {
+        this->connection->sendRaw("PART #" + name);
+    }
+}
+
 void TwitchReadConnectionPoolSingle::reconnect()
 {
     this->connection->close();
     TwitchIrcServer::initializeConnection(
         this->connection.get(), TwitchIrcServer::ConnectionType::Read);
+}
+
+void TwitchReadConnectionPoolSingle::reconnectChannel(TwitchChannel &channel)
+{
+    const auto name = channel.getName();
+    auto it = this->channels.find(name);
+    if (it == this->channels.end() || it->second.lock().get() != &channel ||
+        channel.hasExpectedReconnectPart())
+    {
+        return;
+    }
+    if (!this->connection->isConnected())
+    {
+        this->reconnect();
+        return;
+    }
+    this->joinBucket->removePending(name);
+    const auto generation = channel.expectReconnectPart();
+    this->connection->sendRaw("PART #" + name);
+    QTimer::singleShot(250, this, [this, name, weak = channel.weakFromThis()] {
+        auto current = weak.lock();
+        if (current && current->usesAnonymousReadConnection())
+        {
+            this->joinBucket->send(name);
+        }
+    });
+    QTimer::singleShot(10000, this,
+                       [weak = channel.weakFromThis(), generation] {
+                           if (auto current = weak.lock())
+                           {
+                               current->clearExpectedReconnectPart(generation);
+                           }
+                       });
 }
 
 void TwitchReadConnectionPoolSingle::close()
@@ -270,7 +315,9 @@ public:
     TwitchReadConnectionPoolMulti(TwitchIrcServer *parent);
 
     void onChannelCreated(TwitchChannel &channel) override;
+    void removeChannel(const QString &name) override;
     void reconnect() override;
+    void reconnectChannel(TwitchChannel &channel) override;
     void close() override;
 
 private:
@@ -353,6 +400,28 @@ void TwitchReadConnectionPoolMulti::onChannelCreated(TwitchChannel &channel)
     }
 }
 
+void TwitchReadConnectionPoolMulti::removeChannel(const QString &name)
+{
+    auto entry = this->channels.find(name);
+    if (entry == this->channels.end())
+    {
+        return;
+    }
+    const auto id = entry->second;
+    this->channels.erase(entry);
+    auto connection = this->connections.find(id);
+    if (connection == this->connections.end())
+    {
+        return;
+    }
+    connection->second->connection.sendRaw("PART #" + name);
+    connection->second->channels.erase(name);
+    if (connection->second->channels.empty())
+    {
+        this->connections.erase(connection);
+    }
+}
+
 void TwitchReadConnectionPoolMulti::reconnect()
 {
     for (const auto &[id, conn] : this->connections)
@@ -360,6 +429,45 @@ void TwitchReadConnectionPoolMulti::reconnect()
         conn->reconnect();
     }
     this->everConnected = true;
+}
+
+void TwitchReadConnectionPoolMulti::reconnectChannel(TwitchChannel &channel)
+{
+    const auto name = channel.getName();
+    auto it = this->channels.find(name);
+    if (it == this->channels.end() || channel.hasExpectedReconnectPart())
+    {
+        return;
+    }
+    auto connection = this->connections.find(it->second);
+    if (connection == this->connections.end())
+    {
+        return;
+    }
+    auto *conn = connection->second.get();
+    if (!conn->connection.isConnected())
+    {
+        conn->reconnect();
+        return;
+    }
+    const auto generation = channel.expectReconnectPart();
+    conn->connection.sendRaw("PART #" + name);
+    QTimer::singleShot(
+        250, &conn->connection, [conn, name, weak = channel.weakFromThis()] {
+            auto current = weak.lock();
+            if (current && current->usesAnonymousReadConnection() &&
+                conn->connection.isConnected())
+            {
+                conn->connection.sendRaw("JOIN #" + name);
+            }
+        });
+    QTimer::singleShot(10000, this,
+                       [weak = channel.weakFromThis(), generation] {
+                           if (auto current = weak.lock())
+                           {
+                               current->clearExpectedReconnectPart(generation);
+                           }
+                       });
 }
 
 void TwitchReadConnectionPoolMulti::close()

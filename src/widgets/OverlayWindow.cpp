@@ -27,6 +27,7 @@
 #include <QKeySequence>
 #include <QMessageBox>
 #include <QSizeGrip>
+#include <QWheelEvent>
 #include <QWindow>
 
 #ifdef Q_OS_WIN
@@ -228,25 +229,15 @@ void OverlayWindow::applyTheme()
 
 void OverlayWindow::wheelEvent(QWheelEvent *event)
 {
-    // ignore horizontal mouse wheels
-    if (event->angleDelta().x() != 0)
+    if (event->angleDelta().x() != 0 || event->angleDelta().y() == 0 ||
+        !event->modifiers().testFlag(Qt::ControlModifier))
     {
         return;
     }
-
-    if (event->modifiers().testFlag(Qt::ControlModifier))
-    {
-        if (event->angleDelta().y() > 0)
-        {
-            getSettings()->setClampedOverlayScale(
-                getSettings()->getClampedOverlayScale() + 0.1F);
-        }
-        else
-        {
-            getSettings()->setClampedOverlayScale(
-                getSettings()->getClampedOverlayScale() - 0.1F);
-        }
-    }
+    const auto change = event->angleDelta().y() > 0 ? 0.1F : -0.1F;
+    getSettings()->setClampedOverlayScale(
+        getSettings()->getClampedOverlayScale() + change);
+    event->accept();
 }
 
 float OverlayWindow::desiredScale() const

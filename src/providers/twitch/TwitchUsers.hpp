@@ -6,6 +6,8 @@
 
 #include "common/Aliases.hpp"
 
+#include <pajlada/signals/signal.hpp>
+
 #include <memory>
 
 namespace chatterino {
@@ -48,6 +50,8 @@ public:
 
     /// @see ITwitchUsers::resolveID()
     std::shared_ptr<TwitchUser> resolveID(const UserId &id) override;
+
+    pajlada::Signals::Signal<const QString &> userUpdated;
 
 private:
     // Using a shared_ptr to pass to network callbacks

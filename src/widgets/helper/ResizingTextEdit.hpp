@@ -5,16 +5,21 @@
 #pragma once
 
 #include <pajlada/signals/signal.hpp>
+#include <pajlada/signals/signalholder.hpp>
 #include <QCompleter>
 #include <QKeyEvent>
+#include <QPointer>
 #include <QTextEdit>
 
 namespace chatterino {
+
+class TabCompletionModel;
 
 class ResizingTextEdit : public QTextEdit
 {
 public:
     ResizingTextEdit();
+    ~ResizingTextEdit() override;
 
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
@@ -29,6 +34,8 @@ public:
     pajlada::Signals::NoArgSignal focusLost;
     pajlada::Signals::Signal<const QMimeData *> imagePasted;
     pajlada::Signals::Signal<QMenu *, QPoint> contextMenuRequested;
+    pajlada::Signals::Signal<TabCompletionModel *, int> tabCompletionChanged;
+    pajlada::Signals::NoArgSignal tabCompletionHidden;
 
     void setCompleter(QCompleter *c);
     /**
@@ -36,11 +43,15 @@ public:
      * See `completionInProgress_`.
      */
     void resetCompletion();
+    bool selectCompletionRow(int row);
+    void setGhostText(QString text);
+    const QString &ghostText() const;
 
 protected:
     int heightForWidth(int /*unused*/) const override;
     void keyPressEvent(QKeyEvent *event) override;
     void changeEvent(QEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
 
     void focusInEvent(QFocusEvent *event) override;
     void focusOutEvent(QFocusEvent *event) override;
@@ -53,12 +64,14 @@ protected:
 private:
     qreal documentHeightForWidth(int width) const;
     void invalidateAncestorLayouts();
+    void finishCompletion();
 
     // hadSpace is set to true in case the "textUnderCursor" word was after a
     // space
     QString textUnderCursor(bool *hadSpace = nullptr) const;
 
-    QCompleter *completer_ = nullptr;
+    QPointer<QCompleter> completer_;
+    pajlada::Signals::SignalHolder connections_;
     QString ignoredCompletionPrefix_;
     /**
      * This is true if a completion was done but the user didn't type yet,
@@ -79,6 +92,7 @@ private:
      *   - set `completionInProgress_ = false`
      */
     bool completionInProgress_ = false;
+    QString ghostText_;
 
     bool eventFilter(QObject *obj, QEvent *event) override;
 

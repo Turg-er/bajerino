@@ -5,6 +5,7 @@
 #include "mocks/BaseApplication.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "Test.hpp"
+#include "util/SettingsTransfer.hpp"
 
 #include <pajlada/settings/settingmanager.hpp>
 #include <QJsonDocument>
@@ -155,6 +156,40 @@ TEST(Settings, TwitchChannelModeMigrationPreservesNewParallelOnly)
     EXPECT_EQ(app.settings.twitchDefaultChannelMode.getEnum(),
               TwitchChannelMode::BajerinoAnonymous);
     EXPECT_FALSE(app.settings.twitchAnonymousReadParallel.getValue());
+}
+
+TEST(Settings, SharedSettingsExcludeBajerinoEncryptionKey)
+{
+    mock::BaseApplication app;
+    app.settings.encryptionKey = "private-test-key";
+    app.settings.useLockIconForToggle = false;
+
+    using namespace settingsbackup;
+    EXPECT_FALSE(isSafeSettingPath("/encryption/encryptionKey"));
+    EXPECT_FALSE(isSafeSettingPath("/encryption"));
+    EXPECT_TRUE(isSafeSettingPath("/encryption/useLockIconForToggle"));
+
+    QSet<QString> selected;
+    for (const auto &category : categories())
+    {
+        selected.insert(category.id);
+    }
+    const auto result =
+        createBundle(app.getPaths().settingsDirectory, selected);
+    ASSERT_TRUE(result) << result.error();
+    const auto encoded = QJsonDocument(result.value()).toJson();
+    EXPECT_FALSE(encoded.contains("private-test-key"));
+    EXPECT_FALSE(encoded.contains("encryptionKey"));
+    EXPECT_TRUE(encoded.contains("/encryption/useLockIconForToggle"));
+
+    auto unsafeBundle = result.value();
+    auto settings = unsafeBundle["settings"].toObject();
+    auto other = settings["other"].toObject();
+    other.insert("/encryption/encryptionKey", "injected-key");
+    settings["other"] = other;
+    unsafeBundle["settings"] = settings;
+    EXPECT_FALSE(parseBundle(QJsonDocument(unsafeBundle).toJson()));
+    EXPECT_EQ(app.settings.encryptionKey.getValue(), "private-test-key");
 }
 
 }  // namespace

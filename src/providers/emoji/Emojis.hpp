@@ -7,11 +7,13 @@
 #include "common/FlagsEnum.hpp"
 #include "providers/emoji/EmojiStyle.hpp"
 
+#include <pajlada/signals/scoped-connection.hpp>
 #include <QMap>
 #include <QRegularExpression>
 #include <QVector>
 
 #include <memory>
+#include <mutex>
 #include <variant>
 #include <vector>
 
@@ -41,8 +43,6 @@ struct EmojiData {
     using Capabilities = FlagsEnum<Capability>;
 
     Capabilities capabilities;
-
-    std::vector<EmojiData> variations;
 
     EmotePtr emote;
 };
@@ -74,6 +74,9 @@ public:
     const std::vector<EmojiPtr> &getEmojis() const override;
     const std::vector<QString> &getShortCodes() const override;
 
+    EmotePtr getEmote(const EmojiPtr &emoji) const;
+    EmotePtr getEmote(EmojiData *emoji) const;
+
 private:
     void loadEmojis();
     void sortEmojis();
@@ -90,6 +93,11 @@ private:
     // Maps the first character of the emoji unicode string to a vector of
     // possible emojis
     QMap<QChar, QVector<std::shared_ptr<EmojiData>>> emojiFirstByte_;
+
+    mutable std::mutex emoteMutex_;
+    QString emojiSet_{QStringLiteral("Twitter")};
+    EmojiData::Capability emojiSetCapability_ = EmojiData::Capability::Twitter;
+    pajlada::Signals::ScopedConnection emojiSetConnection_;
 
     bool loaded_ = false;
 };

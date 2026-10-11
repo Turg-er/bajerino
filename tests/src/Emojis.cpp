@@ -112,7 +112,7 @@ TEST(Emojis, Parse)
                 break;
             }
         }
-        return emoji->emote;
+        return emojis.getEmote(emoji);
     };
 
     auto penguin = getEmoji("1F427");

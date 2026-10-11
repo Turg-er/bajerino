@@ -97,11 +97,13 @@ public:
     /// Should only be used for tests
     boost::circular_buffer<ScrollbarHighlight> getHighlights() const;
     void addHighlight(ScrollbarHighlight highlight);
+    void prependHighlight(ScrollbarHighlight highlight);
     void addHighlightsAtStart(
         const std::vector<ScrollbarHighlight> &highlights_);
     void replaceHighlight(size_t index, ScrollbarHighlight replacement);
 
     void clearHighlights();
+    void releaseHighlightsStorage();
 
     void scrollToBottom(bool animate = false);
     void scrollToTop(bool animate = false);
@@ -167,6 +169,8 @@ protected:
     void leaveEvent(QEvent *event) override;
 
 private:
+    void ensureHighlightsStorage();
+
     Q_PROPERTY(qreal currentValue_ READ getCurrentValue WRITE setCurrentValue)
 
     void updateScroll();
@@ -186,6 +190,7 @@ private:
 
     QPropertyAnimation currentValueAnimation_;
 
+    const size_t highlightsLimit_;
     boost::circular_buffer<ScrollbarHighlight> highlights_;
 
     bool atBottom_{true};

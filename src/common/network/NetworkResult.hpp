@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkReply>
+#include <QUrl>
 #include <rapidjson/document.h>
 
 #include <optional>
@@ -19,7 +20,7 @@ public:
     using NetworkError = QNetworkReply::NetworkError;
 
     NetworkResult(NetworkError error, const QVariant &httpStatusCode,
-                  QByteArray data);
+                  QByteArray data, QByteArray etag = {}, QUrl url = {});
 
     /// Parses the result as json and returns the root as an object.
     /// Returns empty object if parsing failed.
@@ -37,6 +38,8 @@ public:
     /// Parses the result as json and returns the document.
     rapidjson::Document parseRapidJson() const;
     const QByteArray &getData() const;
+    const QByteArray &etag() const;
+    const QUrl &url() const;
 
     /// The error code of the reply.
     /// In case of a successful reply, this will be NoError (0)
@@ -57,6 +60,8 @@ public:
 
 private:
     QByteArray data_;
+    QByteArray etag_;
+    QUrl url_;
 
     NetworkError error_;
     std::optional<int> status_;

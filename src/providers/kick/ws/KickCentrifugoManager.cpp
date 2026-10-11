@@ -5,7 +5,6 @@
 #include "providers/kick/ws/KickCentrifugoManager.hpp"
 
 #include "Application.hpp"
-#include "common/Env.hpp"
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
@@ -13,15 +12,16 @@
 #include "providers/kick/ws/KickWebSocketCommon.hpp"
 #include "providers/liveupdates/BasicPubSubClient.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
-#include "providers/NetworkConfigurationProvider.hpp"
 #include "util/BoostJsonWrap.hpp"
-#include "util/Helpers.hpp"
 #include "util/Variant.hpp"
 
 #include <boost/json.hpp>
 #include <boost/unordered/unordered_flat_set.hpp>
 #include <QPointer>
 
+#include <functional>
+#include <limits>
+#include <unordered_map>
 #include <utility>
 
 using namespace Qt::Literals;
@@ -37,20 +37,16 @@ class KickCentrifugoClient
       public std::enable_shared_from_this<KickCentrifugoClient>
 {
 public:
-    KickCentrifugoClient(QString clientID, QPointer<KickChatServer> chatServer);
+    KickCentrifugoClient(QString clientID, QPointer<KickChatServer> chatServer,
+                         std::function<void()> onReady);
 
-    void onOpen() /* override */;
+    void onOpen();
 
     void onMessage(const QByteArray &msg);
 
-    std::chrono::steady_clock::time_point lastHeartbeat() const
+    bool isOpen() const
     {
-        return this->lastHeartbeat_;
-    }
-
-    std::chrono::milliseconds heartbeatInterval() const
-    {
-        return this->heartbeatInterval_;
+        return BasicPubSubClient::isOpen() && !this->retryBackoff_;
     }
 
     void checkHeartbeat();
@@ -58,16 +54,28 @@ public:
     void subscribeImpl(const Subscription &topic);
     void unsubscribeImpl(const Subscription &topic);
 
-    // unimplemented
-    QByteArray encodeSubscription(const Subscription &subscription);
-    QByteArray encodeUnsubscription(const Subscription &subscription);
+    void onClose(const std::unordered_set<QString> &subscriptions)
+    {
+        this->closed_ = true;
+        this->refreshTimer.stop();
+        kick::ws::disconnected(this->chatServer_, subscriptions);
+    }
 
 private:
+    void fail()
+    {
+        this->retryBackoff_ = true;
+        this->refreshTimer.stop();
+        this->closed_ = true;
+        this->close();
+    }
+
     void onMessageUi(QByteArrayView msg);
-    void onResponseOrUnk(BoostJsonObject root, QByteArrayView raw);
+    void onResponse(BoostJsonObject root);
 
     void doRefresh();
     void sendRefreshOrConnect();
+    void notifyReady();
 
     std::string encodeSubImpl(std::string channel);
     std::string encodeUnsubImpl(std::string_view channel);
@@ -78,20 +86,24 @@ private:
     QTimer refreshTimer;
     bool isRefreshing = false;
     bool isConnected = false;
+    bool closed_ = false;
+    bool retryBackoff_ = false;
+    bool joinedChat_ = false;
+    bool pong_ = true;
+    std::chrono::steady_clock::time_point responseDeadline_;
     uint32_t nextId = 1;
 
     QString clientID;
     std::string token;
 
     QPointer<KickChatServer> chatServer_;
+    std::function<void()> onReady_;
 
     struct SubCompletion {
         std::string channel;
     };
-    struct Refresh {
-    };
-    struct Connect {
-    };
+    struct Refresh {};
+    struct Connect {};
     using CompletionData = std::variant<SubCompletion, Refresh, Connect>;
 
     boost::unordered_flat_set<QString> subscriptionBacklog;
@@ -99,12 +111,14 @@ private:
 };
 
 KickCentrifugoClient::KickCentrifugoClient(QString clientID,
-                                           QPointer<KickChatServer> chatServer)
-    : BasicPubSubClient(500)  // FIXME: Is this limit correct?
+                                           QPointer<KickChatServer> chatServer,
+                                           std::function<void()> onReady)
+    : BasicPubSubClient(100)
     , lastHeartbeat_(std::chrono::steady_clock::now())
     , heartbeatInterval_(MAX_HEARTBEAT_INTERVAL)
     , clientID(std::move(clientID))
     , chatServer_(std::move(chatServer))
+    , onReady_(std::move(onReady))
 {
     this->refreshTimer.setSingleShot(true);
     // NOLINTNEXTLINE(clazy-connect-3arg-lambda)
@@ -115,14 +129,14 @@ KickCentrifugoClient::KickCentrifugoClient(QString clientID,
 
 void KickCentrifugoClient::onOpen()
 {
-    BasicPubSubClient::onOpen();
     this->lastHeartbeat_ = std::chrono::steady_clock::now();
+    this->responseDeadline_ = this->lastHeartbeat_ + std::chrono::seconds(30);
     this->doRefresh();
 }
 
 void KickCentrifugoClient::doRefresh()
 {
-    if (this->isRefreshing)
+    if (this->isRefreshing || this->closed_)
     {
         return;
     }
@@ -131,32 +145,36 @@ void KickCentrifugoClient::doRefresh()
     NetworkRequest(u"https://web.kick.com/api/v1/realtime/auth/connection"_s,
                    NetworkRequestType::Post)
         .json(QJsonObject{{"client_id"_L1, this->clientID}})
+        .timeout(10'000)
+        .maximumResponseSize(64 * 1024)
+        .hideRequestBody()
         .onSuccess([weak = this->weak_from_this()](const NetworkResult &res) {
             auto self = weak.lock();
-            if (!self)
+            if (!self || self->closed_)
             {
                 return;
             }
-            // FIXME: Use QAnyStringView.
             self->token = res.parseJson()
                               .value("data"_L1)["token"_L1]
                               .toString()
                               .toStdString();
+            if (self->token.empty())
+            {
+                self->fail();
+                return;
+            }
             self->sendRefreshOrConnect();
         })
         .onError([weak = this->weak_from_this()](const NetworkResult &res) {
             auto self = weak.lock();
-            if (!self)
+            if (!self || self->closed_)
             {
                 return;
             }
             self->isRefreshing = false;
             qCWarning(chatterinoKick)
                 << "Failed to get centrifugo token:" << res.formatError();
-            if (!self->isConnected)
-            {
-                self->close();
-            }
+            self->fail();
         })
         .execute();
 }
@@ -166,6 +184,8 @@ void KickCentrifugoClient::sendRefreshOrConnect()
     assert(this->isRefreshing);
     assertInGuiThread();
     this->isRefreshing = false;
+    this->responseDeadline_ =
+        std::chrono::steady_clock::now() + std::chrono::seconds(30);
 
     QByteArray data;
     if (this->isConnected)
@@ -196,22 +216,15 @@ void KickCentrifugoClient::sendRefreshOrConnect()
             },
             {"id", id},
         }));
-        this->isConnected = true;
     }
 
-    auto subs = std::exchange(this->subscriptionBacklog, {});
-    for (const auto &sub : subs)
-    {
-        data.append('\n');
-        data.append(this->encodeSubImpl(sub.toStdString()));
-    }
     this->sendText(data);
 }
 
 void KickCentrifugoClient::subscribeImpl(const Subscription &topic)
 {
     assertInGuiThread();
-    if (this->isConnected)
+    if (this->isConnected && !this->closed_)
     {
         this->sendText(QByteArray::fromStdString(
             this->encodeSubImpl(topic.toStdString())));
@@ -225,7 +238,14 @@ void KickCentrifugoClient::subscribeImpl(const Subscription &topic)
 void KickCentrifugoClient::unsubscribeImpl(const Subscription &topic)
 {
     assertInGuiThread();
-    if (this->isConnected)
+    const auto name = topic.toStdString();
+    boost::unordered::erase_if(
+        this->pendingCompletions, [&](const auto &entry) {
+            const auto *sub = std::get_if<SubCompletion>(&entry.second);
+            return sub && sub->channel == name;
+        });
+    this->notifyReady();
+    if (this->isConnected && !this->closed_)
     {
         this->sendText(QByteArray::fromStdString(
             this->encodeUnsubImpl(topic.toStdString())));
@@ -234,6 +254,26 @@ void KickCentrifugoClient::unsubscribeImpl(const Subscription &topic)
     {
         this->subscriptionBacklog.erase(topic);
     }
+}
+
+void KickCentrifugoClient::notifyReady()
+{
+    if (this->closed_ || !this->joinedChat_ || !this->onReady_)
+    {
+        return;
+    }
+    for (const auto &[id, completion] : this->pendingCompletions)
+    {
+        const auto *sub = std::get_if<SubCompletion>(&completion);
+        if (sub && sub->channel.starts_with("chatrooms.") &&
+            sub->channel.ends_with(".v2"))
+        {
+            return;
+        }
+    }
+
+    auto ready = std::exchange(this->onReady_, {});
+    ready();
 }
 
 std::string KickCentrifugoClient::encodeSubImpl(std::string channel)
@@ -245,13 +285,17 @@ std::string KickCentrifugoClient::encodeSubImpl(std::string channel)
             "subscribe",
             boost::json::object{
                 {"channel", channel},
-                // Web enables channel compaction, but Kick doesn't support
-                // that and I don't feel the need to implement it.
+
                 {"flag", 0},
             },
         },
         {"id", id},
     });
+    if (this->pendingCompletions.empty())
+    {
+        this->responseDeadline_ =
+            std::chrono::steady_clock::now() + std::chrono::seconds(30);
+    }
     this->pendingCompletions.emplace(id, SubCompletion{std::move(channel)});
 
     return res;
@@ -276,14 +320,14 @@ void KickCentrifugoClient::onMessage(const QByteArray &msg)
 {
     runInGuiThread([weak = this->weak_from_this(), msg] {
         auto self = weak.lock();
-        if (self)
+        if (self && !self->closed_)
         {
             QByteArrayView ba = msg;
-            while (!ba.empty())
+            while (!ba.empty() && !self->closed_)
             {
-                auto [part, rest] = splitOnce(ba, '\n');
-                self->onMessageUi(part);
-                ba = rest;
+                const auto end = ba.indexOf('\n');
+                self->onMessageUi(end < 0 ? ba : ba.first(end));
+                ba = end < 0 ? QByteArrayView{} : ba.sliced(end + 1);
             }
         }
     });
@@ -296,135 +340,161 @@ void KickCentrifugoClient::onMessageUi(QByteArrayView msg)
         boost::json::parse(std::string_view(msg.data(), msg.size()), ec);
     if (ec)
     {
-        qCWarning(chatterinoKick)
-            << "Failed to parse message:" << ec.message() << msg;
+        qCWarning(chatterinoKick) << "Failed to parse message:" << ec.message();
         return;
     }
     BoostJsonValue rootRef(rootJv);
+    if (!rootRef.isObject())
+    {
+        return;
+    }
+    this->lastHeartbeat_ = std::chrono::steady_clock::now();
     auto rootObj = rootRef.toObject();
     if (rootObj.empty())
     {
-        // Heartbeats are empty objects.
-        this->sendText("{}"_ba);
-        this->lastHeartbeat_ = std::chrono::steady_clock::now();
+        if (this->pong_)
+        {
+            this->sendText("{}"_ba);
+        }
         return;
     }
 
     auto pushEvent = rootObj["push"].toObject();
     if (pushEvent.empty())
     {
-        this->onResponseOrUnk(rootObj, msg);
+        this->onResponse(rootObj);
         return;
     }
 
-    auto pubData = pushEvent["pub"]["data"].toObject();
-    auto event = pubData["event"].toStringView();
-
-    auto dataStr = pubData["data"].toStringView();
-    BoostJsonValue data;
-    boost::json::value dataJv;
-    if (!dataStr.empty() && dataStr != "{}")
+    const auto channel = pushEvent["channel"].toQString();
+    if (pushEvent.contains("disconnect") ||
+        (pushEvent.contains("unsubscribe") && this->isSubscribed(channel)))
     {
-        dataJv = boost::json::parse(dataStr, ec);
-        data = BoostJsonValue(dataJv);
+        this->fail();
+        return;
     }
-
-    bool isApp = kick::ws::stripPrefix(event, "App\\Events\\");
-
-    auto channel = pushEvent["channel"].toStringView();
-    auto ids = kick::ws::parseIDs(channel);
-    if (this->chatServer_ && (ids.roomID > 0 || ids.channelID > 0))
+    if (!this->isConnected || !this->isSubscribed(channel))
     {
-        bool handled = this->chatServer_->onAppEvent(ids.roomID, ids.channelID,
-                                                     event, data.toObject());
-        if (!handled)
-        {
-            qCWarning(chatterinoKick).noquote()
-                << "Unknown event" << event << "isApp:" << isApp
-                << "channel:" << channel << "data:" << dataStr;
-        }
+        return;
     }
+    const auto publication = pushEvent["pub"]["data"].toObject();
+    kick::ws::dispatch(this->chatServer_, pushEvent["channel"].toStringView(),
+                       publication["event"].toStringView(),
+                       publication["data"]);
 }
 
-void KickCentrifugoClient::onResponseOrUnk(BoostJsonObject root,
-                                           QByteArrayView raw)
+void KickCentrifugoClient::onResponse(BoostJsonObject root)
 {
-    auto id = static_cast<uint32_t>(root["id"].toUint64());
+    const auto rawID = root["id"].toUint64();
+    if (!rawID || rawID > std::numeric_limits<uint32_t>::max())
+    {
+        return;
+    }
+    auto id = static_cast<uint32_t>(rawID);
     auto it = this->pendingCompletions.find(id);
     if (it == this->pendingCompletions.end())
     {
-        qCWarning(chatterinoKick) << "Unexpected centrifugo message:" << raw;
         return;
     }
     auto completion = std::move(it->second);
     this->pendingCompletions.erase(it);
 
-    auto error = [&] -> std::optional<std::string_view> {
-        auto o = root["error"];
-        if (o.isObject())
-        {
-            return o["message"].toStringView();
-        }
-        return std::nullopt;
-    }();
-
-    if (error)
+    const auto error = root["error"];
+    if (error.isObject())
     {
         qCWarning(chatterinoKick)
-            << "[Centrifugo] id" << id << "errored: " << *error;
+            << "[Centrifugo] id" << id
+            << "errored: " << error["message"].toStringView();
+
+        const auto *sub = std::get_if<SubCompletion>(&completion);
+        if (!sub || (sub->channel.starts_with("chatrooms.") &&
+                     sub->channel.ends_with(".v2")))
+        {
+            this->fail();
+        }
         return;
     }
 
-    variant::Overloaded{
-        [&](const SubCompletion &sub) {
-            // That's the main chat subscription.
-            if (sub.channel.starts_with("chatrooms.") &&
-                sub.channel.ends_with(".v2"))
-            {
-                auto ids = kick::ws::parseIDs(sub.channel);
-                if (this->chatServer_ && ids.roomID > 0)
+    std::visit(
+        variant::Overloaded{
+            [&](const SubCompletion &sub) {
+                if (sub.channel.starts_with("chatrooms.") &&
+                    sub.channel.ends_with(".v2"))
                 {
-                    this->chatServer_->onJoin(ids.roomID);
+                    auto ids = kick::ws::parseIDs(sub.channel);
+                    if (ids.roomID > 0 &&
+                        this->isSubscribed(QString::fromStdString(sub.channel)))
+                    {
+                        this->joinedChat_ = true;
+                        this->notifyReady();
+                        if (this->chatServer_)
+                        {
+                            this->chatServer_->onJoin(ids.roomID);
+                        }
+                    }
                 }
-            }
+            },
+            [&](Connect) {
+                const auto o = root["connect"].toObject();
+                if (!root["connect"].isObject())
+                {
+                    this->fail();
+                    return;
+                }
+                BasicPubSubClient::onOpen();
+                this->isConnected = true;
+                const auto ping =
+                    std::clamp<int64_t>(o["ping"].toInt64(), 0, 300);
+                this->heartbeatInterval_ = std::chrono::seconds(ping);
+                this->pong_ = o["pong"].toBool();
+                if (o["expires"].toBool())
+                {
+                    const auto ttl = std::clamp<int64_t>(o["ttl"].toInt64(1800),
+                                                         11, 24 * 60 * 60) -
+                                     10;
+                    this->refreshTimer.start(std::chrono::seconds(ttl));
+                }
+                const auto subs = std::exchange(this->subscriptionBacklog, {});
+                for (const auto &sub : subs)
+                {
+                    this->subscribeImpl(sub);
+                }
+            },
+            [&](Refresh) {
+                const auto o = root["refresh"].toObject();
+                if (!root["refresh"].isObject())
+                {
+                    this->fail();
+                    return;
+                }
+                if (o["expires"].toBool())
+                {
+                    const auto ttl = std::clamp<int64_t>(o["ttl"].toInt64(1800),
+                                                         11, 24 * 60 * 60) -
+                                     10;
+                    this->refreshTimer.start(std::chrono::seconds(ttl));
+                }
+            },
         },
-        [&](Connect) {
-            auto o = root["connect"].toObject();
-            auto hb = o["ping"].toInt64();
-            this->heartbeatInterval_ = std::chrono::seconds(hb);
-            qCDebug(chatterinoKick) << "[Centrifugo] Connected.";
-            if (o["expires"].toBool())
-            {
-                std::chrono::seconds ttl(o["ttl"].toInt64(30LL * 60) - 10);
-                qCDebug(chatterinoKick) << "[Centrifugo] Using TTL:" << ttl;
-                this->refreshTimer.start(ttl);
-            }
-        },
-        [&](Refresh) {
-            auto o = root["refresh"].toObject();
-            if (o["expires"].toBool())
-            {
-                std::chrono::seconds ttl(o["ttl"].toInt64(30LL * 60) - 10);
-                qCDebug(chatterinoKick) << "[Centrifugo] Using TTL:" << ttl;
-                this->refreshTimer.start(ttl);
-            }
-        },
-    }
-        .visit(completion);
+        completion);
 }
 
 void KickCentrifugoClient::checkHeartbeat()
 {
-    if (!this->isOpen())
+    if (this->closed_ ||
+        this->responseDeadline_ == std::chrono::steady_clock::time_point{})
     {
         return;
     }
-
-    if ((std::chrono::steady_clock::now() - this->lastHeartbeat_) >
-        this->heartbeatInterval_ * 1.5)
+    const auto now = std::chrono::steady_clock::now();
+    if ((!this->pendingCompletions.empty() && now > this->responseDeadline_) ||
+        (!this->isConnected && now > this->responseDeadline_) ||
+        (this->isConnected && this->heartbeatInterval_.count() > 0 &&
+         now - this->lastHeartbeat_ >
+             this->heartbeatInterval_ + std::chrono::seconds(10)))
     {
-        qCDebug(chatterinoKick) << "Heartbeat timed out";
-        this->close();
+        qCDebug(chatterinoKick) << "Centrifugo response timed out";
+        this->fail();
     }
 }
 
@@ -445,7 +515,6 @@ public:
     std::shared_ptr<KickCentrifugoClient> makeClient();
     void checkHeartbeats();
 
-    std::chrono::milliseconds heartbeatInterval = MAX_HEARTBEAT_INTERVAL;
     QTimer heartbeatTimer;
     QString clientID;
 
@@ -455,14 +524,12 @@ private:
 
 KickCentrifugoManagerPrivate::KickCentrifugoManagerPrivate(QString url,
                                                            QString clientID)
-    : BasicPubSubManager(std::move(url), "kick",
-                         NetworkConfigurationProvider::webSocketProxyFromEnv(
-                             Env::get(), ProxyConnection::ThirdParty))
+    : BasicPubSubManager(std::move(url), "kick")
     , clientID(std::move(clientID))
 {
     QObject::connect(&this->heartbeatTimer, &QTimer::timeout, this,
                      &KickCentrifugoManagerPrivate::checkHeartbeats);
-    this->heartbeatTimer.setInterval(this->heartbeatInterval);
+    this->heartbeatTimer.setInterval(std::chrono::seconds(5));
     this->heartbeatTimer.setSingleShot(false);
     this->heartbeatTimer.start();
 }
@@ -472,25 +539,22 @@ KickCentrifugoManagerPrivate::~KickCentrifugoManagerPrivate()
     this->stop();
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 std::shared_ptr<KickCentrifugoClient> KickCentrifugoManagerPrivate::makeClient()
 {
     return std::make_shared<KickCentrifugoClient>(
-        this->clientID, getApp()->getKickChatServer());
+        this->clientID, getApp()->getKickChatServer(), [self = QPointer(this)] {
+            if (self)
+            {
+                self->resetConnectBackoff();
+            }
+        });
 }
 
 void KickCentrifugoManagerPrivate::checkHeartbeats()
 {
-    auto minInterval = std::chrono::milliseconds::max();
     for (const auto &[id, client] : this->clients())
     {
         client->checkHeartbeat();
-        minInterval = std::min(minInterval, client->heartbeatInterval());
-    }
-    if (minInterval != std::chrono::milliseconds::max())
-    {
-        this->heartbeatInterval = minInterval;
-        this->heartbeatTimer.setInterval(this->heartbeatInterval);
     }
 }
 

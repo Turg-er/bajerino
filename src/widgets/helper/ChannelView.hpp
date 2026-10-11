@@ -19,7 +19,9 @@
 #include <QGestureEvent>
 #include <QMenu>
 #include <QPaintEvent>
+#include <QPixmap>
 #include <QPointer>
+#include <QRegion>
 #include <QScroller>
 #include <QSet>
 #include <QTimer>
@@ -27,15 +29,22 @@
 #include <QWheelEvent>
 #include <QWidget>
 
+#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+
+class QPainterPath;
 
 namespace chatterino {
 struct TabHighlight {
     HighlightState state = HighlightState::None;
     std::shared_ptr<QColor> color;
 };
+class ThemeVideo;
+class Image;
+enum class MessagePlatform : uint8_t;
 
 class Channel;
 using ChannelPtr = std::shared_ptr<Channel>;
@@ -56,6 +65,7 @@ class LabelButton;
 struct Link;
 class MessageLayoutElement;
 class Split;
+struct YouTubeAuthor;
 class FilterSet;
 using FilterSetPtr = std::shared_ptr<FilterSet>;
 
@@ -110,6 +120,8 @@ public:
                          Context context = Context::None,
                          size_t messagesLimit = 1000);
 
+    ~ChannelView() override;
+
     void queueUpdate();
     void queueUpdate(const QRect &area);
     Scrollbar &getScrollBar();
@@ -128,6 +140,7 @@ public:
     bool getEnableScrollingToBottom() const;
     void setOverrideFlags(std::optional<MessageElementFlags> value);
     void setCollapseMessages(bool value);
+    void setHighlightsEnabled(bool enabled);
     void setOverrideSeparateMessages(std::optional<bool> value);
     const std::optional<MessageElementFlags> &getOverrideFlags() const;
     void updateLastReadMessage();
@@ -142,6 +155,10 @@ public:
      * @return <code>true</code> if the message was found and highlighted.
      */
     bool scrollToMessageId(const QString &id);
+
+    bool containsMessage(const MessagePtr &message) const;
+    bool canReplyToMessage(const MessagePtr &message) const;
+    bool replyToMessage(const MessagePtr &message);
 
     void setNukePreviewMessageIds(QSet<QString> messageIds);
     void clearNukePreview();
@@ -166,6 +183,7 @@ public:
     void performLayout(bool causedByScrollbar = false,
                        bool disableAnimation = false);
     void layoutVisibleMessages(const std::vector<MessageLayoutPtr> &messages);
+    int contentHeight(int maximum);
 
     void setOverrideEmoteScale(std::optional<float> value);
     std::optional<float> getOverrideEmoteScale() const;
@@ -183,6 +201,7 @@ public:
     /// It's **not** equal to the channel passed in #setChannel().
     /// @see #underlyingChannel()
     ChannelPtr channel() const;
+    void addRecordingNotice(const MessagePtr &message);
 
     /// @brief The channel this view displays messages for
     ///
@@ -216,6 +235,21 @@ public:
     void setFilters(const QList<QUuid> &ids);
     QList<QUuid> getFilterIds() const;
     FilterSetPtr getFilterSet() const;
+
+    void setMessagePredicate(std::function<bool(const MessagePtr &)> predicate);
+    void refilterMessages();
+
+    const QString &autoModReviewSelectedKey() const;
+    void setAutoModReviewSelectedKey(QString key);
+    bool selectAutoModReview(int direction, bool actionableOnly = false);
+    bool approveSelectedAutoMod();
+    bool denySelectedAutoMod();
+    bool retrySelectedAutoMod();
+    bool openSelectedAutoModUsercard();
+    bool copySelectedAutoModDetails();
+    bool timeoutSelectedAutoMod();
+    bool banSelectedAutoMod();
+    bool handleAutoModReviewKey(QKeyEvent *event);
 
     /// @brief The channel this is derived from
     ///
@@ -254,6 +288,8 @@ public:
      **/
     void showUserInfoPopup(const QString &userName, MessagePlatform platform,
                            const QString &alternativePopoutChannel = {});
+    void showTikTokUserPopup(const QString &userID, const QString &handle,
+                             const QString &channelName);
 
     /**
      * @brief This method is meant to be used when filtering out channels.
@@ -270,8 +306,9 @@ public:
     /// will be used. Otherwise, regular message-colors will be used.
     void setIsOverlay(bool isOverlay);
 
-    Scrollbar *scrollbar();
+    void setHoverAnimateOnly(bool value, bool animatedPreviews = false);
 
+    Scrollbar *scrollbar();
     Split *findParentSplit() const;
 
     using ChannelViewID = std::size_t;
@@ -286,14 +323,15 @@ public:
     pajlada::Signals::NoArgSignal selectionChanged;
     pajlada::Signals::Signal<TabHighlight> tabHighlightRequested;
     pajlada::Signals::NoArgSignal liveStatusChanged;
+    pajlada::Signals::NoArgSignal layoutChanged;
     pajlada::Signals::Signal<const MessageLayoutElement *,
                              Qt::KeyboardModifiers>
         elementClicked;
     pajlada::Signals::Signal<const Link &, Qt::KeyboardModifiers> linkClicked;
-    pajlada::Signals::Signal<QString, FromTwitchLinkOpenChannelIn>
-        openChannelIn;
     pajlada::Signals::Signal<QMenu *, const MessageLayoutElement *>
         messageMenuCreated;
+    pajlada::Signals::Signal<QString, FromTwitchLinkOpenChannelIn>
+        openChannelIn;
 
     /// This signal fires when a message passed filters and was added to the channel view
     Q_SIGNAL void messageAddedToChannel(MessagePtr &message);
@@ -320,6 +358,7 @@ protected:
 
     void hideEvent(QHideEvent * /*event*/) override;
     void showEvent(QShowEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
     void handleLinkClick(QMouseEvent *event, const Link &link,
                          MessageLayout *layout);
@@ -328,8 +367,7 @@ protected:
                          QPointF &relativePos, int &index);
 
 private:
-    struct InternalCtor {
-    };
+    struct InternalCtor {};
 
     ChannelView(InternalCtor tag, QWidget *parent, Split *split,
                 Context context, size_t messagesLimit);
@@ -338,8 +376,15 @@ private:
     void initializeScrollbar();
     void initializeSignals();
 
+    void setChannel(const ChannelPtr &channel,
+                    std::vector<MessagePtr> snapshot);
+    void refilterMessages(std::vector<MessagePtr> snapshot);
+    void replaceFilteredMessage(size_t index, const MessagePtr &previous,
+                                const MessagePtr &replacement);
+
     void messageAppended(MessagePtr &message,
                          std::optional<MessageFlags> overridingFlags);
+    void messagePrepended(MessagePtr &message, const MessagePtr &evicted);
     void messageAddedAtStart(std::vector<MessagePtr> &messages);
     void messageRemoveFromStart(MessagePtr &message);
     void messageReplaced(size_t hint, const MessagePtr &prev,
@@ -350,7 +395,21 @@ private:
                          bool causedByScrollbar, bool disableAnimation);
     void updateScrollWidgetGeometries();
 
-    void drawMessages(QPainter &painter, const QRect &area);
+    void resetMessageState();
+    bool isLogicallyAtBottom() const;
+    bool isLogicallyAtTop() const;
+    bool isAtFollowedEdge() const;
+    void scrollToFollowedEdge(bool animate = false);
+    bool canReleaseHiddenMessageLayouts() const;
+    void materializeMessageLayouts();
+    void releaseHiddenMessageLayouts();
+
+    void drawMessages(QPainter &painter, const QRegion &area);
+    void measureScrollbarForScrollRestore();
+    void updateMessageCaches(
+        const std::vector<MessageLayoutPtr> &messagesSnapshot, size_t start,
+        const MessageLayout *end);
+    void clearMessageCaches();
     void setSelection(const SelectionItem &start, const SelectionItem &end);
     void setSelection(const Selection &newSelection);
     void selectWholeMessage(MessageLayout *layout, int &messageIndex);
@@ -364,6 +423,12 @@ private:
                                     const MessageLayoutPtr &layout);
     void addTwitchLinkContextMenuItems(
         QMenu *menu, const MessageLayoutElement *hoveredElement);
+    void addUsernameContextMenuItems(QMenu *menu,
+                                     const MessageLayoutElement *hoveredElement,
+                                     const MessageLayoutPtr &layout);
+    void showYouTubeUserPopup(const MessagePtr &message,
+                              const YouTubeAuthor &author);
+    void showTikTokUserPopup(const MessagePtr &message);
     void addCommandExecutionContextMenuItems(
         QMenu *menu, const MessageLayoutElement *hoveredElement,
         const MessageLayoutPtr &layout);
@@ -371,6 +436,11 @@ private:
     void maybeAutoTranslateMessage(const MessagePtr &message);
 
     int getLayoutWidth() const;
+    float effectiveBadgeScale() const;
+    MessageLayoutContext makeLayoutContext(const Message &message,
+                                           MessageElementFlags flags,
+                                           Channel *selectedChannel,
+                                           int width) const;
     void updatePauses();
     void unpaused();
 
@@ -385,7 +455,7 @@ private:
      */
     void scrollToMessageLayout(MessageLayout *layout, size_t messageIdx);
 
-    void setInputReply(const MessagePtr &message);
+    bool setInputReply(const MessagePtr &message);
     void showReplyThreadPopup(const MessagePtr &message);
     bool canReplyToMessages() const;
 
@@ -396,14 +466,14 @@ private:
     ChannelViewID id_{};
 
     bool layoutQueued_ = false;
+    std::weak_ptr<const Message> lastClearedMessage_;
     bool bufferInvalidationQueued_ = false;
 
     bool lastMessageHasAlternateBackground_ = false;
     bool lastMessageHasAlternateBackgroundReverse_ = true;
 
-    /// Tracks the area of animated elements in the last full repaint.
-    /// If this is empty (QRect::isEmpty()), no animated element is shown.
-    QRect animationArea_;
+    QRegion animationRegion_;
+    QRegion selfTimedAnimationRegion_;
 
     bool pausable_ = false;
     QTimer pauseTimer_;
@@ -412,8 +482,12 @@ private:
     std::optional<SteadyClock::time_point> pauseEnd_;
     int pauseScrollMinimumOffset_ = 0;
     int pauseScrollMaximumOffset_ = 0;
+    qreal pauseScrollValueOffset_ = 0;
     // Keeps track how many message indices we need to offset the selection when we resume scrolling
-    uint32_t pauseSelectionOffset_ = 0;
+    int pauseSelectionIndexOffset_ = 0;
+    bool pauseSelectionNeedsRemap_ = false;
+    bool pauseLastReadNeedsRemap_ = false;
+    MessagePtr pauseLastReadTarget_;
 
     std::optional<MessageElementFlags> overrideFlags_;
     bool collapseMessages_{false};
@@ -449,6 +523,7 @@ private:
     /// @see #hasSourceChannel()
     ChannelPtr sourceChannel_ = nullptr;
     Split *split_;
+    std::vector<MessagePtr> recordingNotices_;
 
     Scrollbar *scrollBar_;
     LabelButton *goToBottom_{};
@@ -465,7 +540,7 @@ private:
 
     // This variable can be used to decide whether or not we should render the
     // "Show latest messages" button
-    bool showingLatestMessages_ = true;
+    bool followingScrollEdge_ = true;
     bool enableScrollingToBottom_ = true;
 
     bool onlyUpdateEmotes_ = false;
@@ -511,22 +586,58 @@ private:
     Selection doubleClickSelection_;
 
     const Context context_;
+    const size_t messagesLimit_;
 
     LimitedQueue<MessageLayoutPtr> messages_;
+
+    bool messageLayoutsMaterialized_ = true;
+
+    bool newestFirstAutoModOrder_ = false;
+
+    bool followTop_ = false;
+    bool virtualizedAtBottom_ = true;
+    bool virtualizedAtTop_ = false;
+    qreal virtualizedScrollFraction_ = 0;
+    size_t virtualizedDistanceFromBottom_ = 0;
+    MessagePtr virtualizedScrollAnchor_;
+    MessagePtr virtualizedLastReadMessage_;
+    std::vector<MessagePtr> virtualizedExpandedMessages_;
+
+    std::vector<size_t> virtualizedAlternateBreaksFromBottom_;
 
     pajlada::Signals::SignalHolder signalHolder_;
 
     // channelConnections_ will be cleared when the underlying channel of the channelview changes
     pajlada::Signals::SignalHolder channelConnections_;
+    pajlada::Signals::SignalHolder proxyConnections_;
 
     std::unordered_set<std::shared_ptr<MessageLayout>> messagesOnScreen_;
 
     MessageColors messageColors_;
     MessagePreferences messagePreferences_;
 
+    QString wallpaperCacheKey_;
+    std::shared_ptr<QPixmap> wallpaperPixmap_;
+    std::shared_ptr<ThemeVideo> wallpaperVideo_;
+    QMetaObject::Connection wallpaperVideoConnection_;
+    QSize chatFramePathSize_;
+    qreal chatFramePathRadius_{-1};
+    qreal chatFramePathWidth_{-1};
+    std::unique_ptr<QPainterPath> chatFrameContentPath_;
+    std::unique_ptr<QPainterPath> chatFrameOutsidePath_;
+    std::unique_ptr<QPainterPath> chatFrameBorderPath_;
+
+    void refreshWallpaper();
+    void releaseVideoWallpaper();
+    void paintWallpaper(QPainter &painter);
+    bool ensureChatFramePaths();
+    void updateRoundedChildMasks();
+    std::pair<QColor, QColor> chatFrameSurfaces() const;
+    void paintChatFrame(QPainter &painter);
+
     void scrollUpdateRequested();
 
-    TooltipWidget *const tooltipWidget_{};
+    TooltipWidget *tooltipWidget_{};
 
     /// Pointer to a link info that hasn't loaded yet
     QPointer<LinkInfo> pendingLinkInfo_;
@@ -538,6 +649,30 @@ private:
 
     /// Slot for the LinkInfo::stateChanged signal.
     void pendingLinkInfoStateChanged();
+    void clearPendingLinkInfo();
+    TooltipWidget *ensureTooltipWidget();
+    void hideTooltip();
+    void releaseTooltip();
+
+    void showAutoModTimeoutMenu(const QString &key, const QPoint &globalPos);
+    bool confirmAutoModBan(QString key);
+    QString autoModReviewDetails(const QString &key) const;
+
+    std::function<bool(const MessagePtr &)> messagePredicate_;
+    QString autoModReviewSelectedKey_;
+    bool autoModReviewDirty_ = false;
+    bool revealAutoModSelectionOnMaterialize_ = false;
+
+    bool hoverAnimateOnly_ = false;
+    bool animatedPicker_ = false;
+    const MessageLayoutElement *hoveredLayoutElement_ = nullptr;
+    std::weak_ptr<Image> hoveredAnimationImage_;
+    std::weak_ptr<MessageLayout> hoveredMessageLayout_;
+    QRect hoveredElementRect_;
+
+    void updateHoveredAnimationImage(const MessageLayoutElement *layoutElement);
+    void releaseHoveredAnimation();
+    void clearHoveredAnimation();
 };
 
 }  // namespace chatterino

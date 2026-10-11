@@ -389,7 +389,7 @@ void NativeMessagingServer::ReceiverThread::run()
 
     while (!this->isInterruptionRequested())
     {
-        auto buf = messageQueue->receive();
+        auto buf = messageQueue->receive(std::chrono::milliseconds(100));
         if (buf.isEmpty())
         {
             continue;

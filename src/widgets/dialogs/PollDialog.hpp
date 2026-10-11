@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QPointer>
 
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -62,7 +63,7 @@ private:
     void createPoll();
     void castVote(bool extraVote);
     int currentUserTotalVotes() const;
-    void applySizeConstraints(bool preserveCurrentPosition = true);
+    void applySizeConstraints();
     void fitCreateOptionsList();
     void fitVoteOptionsList();
     int remainingPollSeconds() const;
@@ -70,7 +71,7 @@ private:
     void updateCountdownTimer();
     bool isBroadcasterView() const;
 
-    TwitchChannel *channel_{};
+    std::shared_ptr<TwitchChannel> channel_;
     std::optional<TwitchChannel::PollEvent> currentPoll_;
     QDateTime pollSnapshotAt_;
 

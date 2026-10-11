@@ -21,8 +21,9 @@
 #include <QTimeZone>
 #include <QUuid>
 
-using namespace Qt::StringLiterals;
+#include <cstdint>
 
+using namespace Qt::StringLiterals;
 namespace {
 
 const QString ZERO_WIDTH_JOINER = QStringLiteral("\u200D");
@@ -286,19 +287,44 @@ QString formatChannelPoints(qint64 points)
 QColor getRandomColor(const QString &userId)
 {
     bool ok = true;
-    int colorSeed = userId.toInt(&ok);
-    if (!ok)
+    const int numericSeed = userId.toInt(&ok);
+    std::size_t colorIndex = 0;
+    if (ok && numericSeed >= 0)
     {
-        // We were unable to convert the user ID to an integer, this means Twitch started to use non-integer user IDs (or we're on IRC)
-        // Use sum of unicode values of all characters in id / IRC nick
-        colorSeed = 0;
+        colorIndex = static_cast<std::size_t>(numericSeed) %
+                     TWITCH_USERNAME_COLORS.size();
+    }
+    else
+    {
+        bool isLargeNumericId = !userId.isEmpty();
+        std::size_t legacyNumericSeed = 0;
         for (const auto &c : userId)
         {
-            colorSeed += c.digitValue();
+            if (!c.isDigit())
+            {
+                isLargeNumericId = false;
+                break;
+            }
+            legacyNumericSeed += static_cast<std::size_t>(c.digitValue());
+        }
+
+        if (isLargeNumericId)
+        {
+            colorIndex = legacyNumericSeed % TWITCH_USERNAME_COLORS.size();
+        }
+        else
+        {
+            std::uint32_t colorSeed = 2166136261U;
+            for (const auto &c : userId)
+            {
+                colorSeed ^= c.unicode();
+                colorSeed *= 16777619U;
+            }
+            colorIndex = static_cast<std::size_t>(colorSeed) %
+                         TWITCH_USERNAME_COLORS.size();
         }
     }
 
-    const auto colorIndex = colorSeed % TWITCH_USERNAME_COLORS.size();
     return TWITCH_USERNAME_COLORS[colorIndex];
 }
 
@@ -509,9 +535,10 @@ void writeProviderEmotesCache(const QString &id, const QString &provider,
         return;
     }
 
-    threadPool->start([bytes, id, provider]() {
-        QString cacheKey = id % "." % provider;
-        QFile responseCache(getApp()->getPaths().cacheFilePath(cacheKey));
+    const auto cachePath =
+        getApp()->getPaths().cacheFilePath(id % "." % provider);
+    threadPool->start([bytes, id, provider, cachePath]() {
+        QFile responseCache(cachePath);
 
         if (responseCache.open(QIODevice::WriteOnly))
         {

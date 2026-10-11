@@ -13,6 +13,8 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "util/Twitch.hpp"
 
+#include <QDateTime>
+
 namespace chatterino::commands {
 
 QString addModerator(const CommandContext &ctx)
@@ -57,8 +59,13 @@ QString addModerator(const CommandContext &ctx)
         [twitchChannel{ctx.twitchChannel},
          channel{ctx.channel}](const HelixUser &targetUser) {
             getHelix()->addChannelModerator(
-                twitchChannel->roomId(), targetUser.id, [] {},
-                [channel, targetUser](auto error, const auto &message) {
+                twitchChannel->roomId(), targetUser.id,
+                [channel, twitchChannel, targetUser] {
+                    twitchChannel->setKnownModeratorStatus(
+                        targetUser.login, true,
+                        QDateTime::currentDateTimeUtc());
+                },
+                [channel, targetUser](auto error, auto message) {
                     QString errorMessage =
                         QString("Failed to add channel moderator - ");
 

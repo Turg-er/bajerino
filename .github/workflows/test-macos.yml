@@ -31,7 +31,7 @@ jobs:
             qt-version: 6.12.0
       fail-fast: false
     env:
-      QT_MODULES: qtimageformats
+      QT_MODULES: qtimageformats qtsvg
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -54,8 +54,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # brew install openssl rapidjson p7zip create-dmg cmake boost hunspell
-          brew install openssl rapidjson p7zip create-dmg boost hunspell
+          brew install openssl rapidjson p7zip create-dmg boost hunspell webp meson ninja nasm pkg-config
+          bash .CI/build-video-dependencies.sh
 
       - name: Install httpbox
         run: |
@@ -72,6 +72,7 @@ jobs:
               -DCMAKE_BUILD_TYPE=RelWithDebInfo \
               -DBUILD_TESTS=On \
               -DBUILD_APP=OFF \
+              -DCMAKE_PREFIX_PATH="$BAJERINO_VIDEO_PREFIX" \
               -DUSE_PRECOMPILED_HEADERS=OFF \
               -DCHATTERINO_SPELLCHECK=On \
               ..

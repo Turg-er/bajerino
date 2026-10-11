@@ -9,6 +9,7 @@
 #include "common/Modes.hpp"
 #include "common/network/NetworkManager.hpp"
 #include "common/QLogging.hpp"
+#include "common/Version.hpp"
 #include "singletons/CrashHandler.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Resources.hpp"
@@ -22,12 +23,15 @@
 
 #include <QApplication>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QFile>
 #include <QGuiApplication>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QPalette>
+#include <QSaveFile>
 #include <QSessionManager>
+#include <QStyle>
 #include <QStyleFactory>
 #include <Qt>
 #include <QtConcurrent>
@@ -157,7 +161,7 @@ void installCustomPalette()
     QApplication::setPalette(dark);
 }
 
-void initQt(const Args &args)
+void initQt(const Args &args, [[maybe_unused]] const Settings &settings)
 {
     if (args.useOldScaling)
     {
@@ -172,7 +176,25 @@ void initQt(const Args &args)
     QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
 #endif
 
-    QApplication::setStyle(QStyleFactory::create("Fusion"));
+#ifdef Q_OS_LINUX
+    const bool useQtSystemStyle = settings.useQtSystemStyle.getValue();
+#else
+    constexpr bool useQtSystemStyle = false;
+#endif
+
+    if (useQtSystemStyle)
+    {
+        qCInfo(chatterinoApp)
+            << "Using the Linux desktop Qt style for application controls:"
+            << (QApplication::style() != nullptr
+                    ? QApplication::style()->objectName()
+                    : QStringLiteral("unknown"));
+    }
+    else
+    {
+        QApplication::setStyle(QStyleFactory::create("Fusion"));
+        installCustomPalette();
+    }
 
 #ifndef Q_OS_MAC
     QApplication::setWindowIcon(QIcon(":/icon.ico"));
@@ -186,8 +208,6 @@ void initQt(const Args &args)
     // Enable mnemonics (menu hotkeys) on macOS - they are disabled by default
     qt_set_sequence_auto_mnemonic(true);
 #endif
-
-    installCustomPalette();
 }
 
 void showLastCrashDialog(const Args &args, const Paths &paths)
@@ -253,12 +273,12 @@ void initSignalHandler()
     auto *sigintHandler = new UnixSignalHandler(SIGINT);
     QObject::connect(sigintHandler, &UnixSignalHandler::signalFired, [] {
         qCInfo(chatterinoApp) << "Received SIGINT, request application quit";
-        QApplication::quit();
+        requestApplicationQuit();
     });
     auto *sigtermHandler = new UnixSignalHandler(SIGTERM);
     QObject::connect(sigtermHandler, &UnixSignalHandler::signalFired, [] {
         qCInfo(chatterinoApp) << "Received SIGTERM, request application quit";
-        QApplication::quit();
+        requestApplicationQuit();
     });
 #endif
 }
@@ -346,12 +366,20 @@ bool activateExistingGuiInstance(const Paths &paths)
     return true;
 }
 
-void runGui(QApplication & /*a*/, const Modes &modes, const Paths &paths,
+void runGui(QApplication &a, const Modes &modes, const Paths &paths,
             Settings &settings, const Args &args, Updates &updates)
 {
-    initQt(args);
+    initQt(args, settings);
     initResources();
     initSignalHandler();
+
+#ifdef Q_OS_MACOS
+
+    if (!args.isFramelessEmbed && !args.dontLoadMainWindow)
+    {
+        a.setQuitOnLastWindowClosed(false);
+    }
+#endif
 
 #ifdef Q_OS_WIN
     if (args.crashRecovery)
@@ -396,6 +424,31 @@ void runGui(QApplication & /*a*/, const Modes &modes, const Paths &paths,
     Application app(settings, paths, args, modes, updates);
     app.initialize(settings, paths);
 
+#ifdef Q_OS_MACOS
+    QObject macReopenContext;
+    if (!args.isFramelessEmbed && !args.dontLoadMainWindow)
+    {
+        QObject::connect(
+            &a, &QGuiApplication::applicationStateChanged, &macReopenContext,
+            [&app](Qt::ApplicationState state) {
+                if (state != Qt::ApplicationActive || isAppAboutToQuit())
+                {
+                    return;
+                }
+
+                for (auto *widget : QApplication::topLevelWidgets())
+                {
+                    if (widget != nullptr && widget->isVisible())
+                    {
+                        return;
+                    }
+                }
+
+                app.getWindows()->showMainWindow();
+            });
+    }
+#endif
+
 #ifndef QT_NO_SESSIONMANAGER
     QObject::connect(qApp, &QGuiApplication::commitDataRequest, qApp,
                      [&settings](QSessionManager &) {
@@ -412,6 +465,7 @@ void runGui(QApplication & /*a*/, const Modes &modes, const Paths &paths,
     {
         activationServer = createGuiActivationServer(paths);
     }
+
     app.run();
 
     chatterino::NetworkManager::deinit();

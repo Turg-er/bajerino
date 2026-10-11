@@ -5,13 +5,11 @@
 #include "providers/kick/ws/KickPusherManager.hpp"
 
 #include "Application.hpp"
-#include "common/Env.hpp"
 #include "common/QLogging.hpp"
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/kick/ws/KickWebSocketCommon.hpp"
 #include "providers/liveupdates/BasicPubSubClient.hpp"
 #include "providers/liveupdates/BasicPubSubManager.hpp"
-#include "providers/NetworkConfigurationProvider.hpp"
 #include "util/BoostJsonWrap.hpp"
 
 #include <boost/json.hpp>
@@ -26,8 +24,6 @@ namespace {
 using namespace chatterino;
 
 constexpr std::chrono::seconds MAX_HEARTBEAT_INTERVAL{20};
-const QString WS_URL =
-    u"wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false"_s;
 
 class KickPusherClient : public BasicPubSubClient<QString, KickPusherClient>,
                          public std::enable_shared_from_this<KickPusherClient>
@@ -39,24 +35,26 @@ public:
         , heartbeatInterval_(MAX_HEARTBEAT_INTERVAL)
         , chatServer_(std::move(chatServer))
     {
+        this->heartbeatTimer_.setInterval(this->heartbeatInterval_);
+        QObject::connect(&this->heartbeatTimer_, &QTimer::timeout,
+                         &this->heartbeatTimer_, [this] {
+                             this->checkHeartbeat();
+                         });
     }
 
-    void onOpen() /* override */
+    void onOpen()
     {
         BasicPubSubClient::onOpen();
         this->lastHeartbeat_ = std::chrono::steady_clock::now();
+        this->heartbeatTimer_.start();
     }
 
     void onMessage(const QByteArray &msg);
-
-    std::chrono::steady_clock::time_point lastHeartbeat() const
+    void onClose(const std::unordered_set<QString> &subscriptions)
     {
-        return this->lastHeartbeat_;
-    }
-
-    std::chrono::milliseconds heartbeatInterval() const
-    {
-        return this->heartbeatInterval_;
+        this->closed_ = true;
+        this->heartbeatTimer_.stop();
+        kick::ws::disconnected(this->chatServer_, subscriptions);
     }
 
     void checkHeartbeat();
@@ -70,13 +68,15 @@ private:
     std::chrono::steady_clock::time_point lastHeartbeat_;
     std::chrono::milliseconds heartbeatInterval_;
     QPointer<KickChatServer> chatServer_;
+    QTimer heartbeatTimer_;
+    bool closed_ = false;
 };
 
 void KickPusherClient::onMessage(const QByteArray &msg)
 {
     runInGuiThread([weak = this->weak_from_this(), msg] {
         auto self = weak.lock();
-        if (self)
+        if (self && !self->closed_)
         {
             self->onMessageUi(msg);
         }
@@ -98,26 +98,36 @@ void KickPusherClient::onMessageUi(const QByteArray &msg)
     auto event = rootObj["event"].toStringView();
 
     auto dataStr = rootObj["data"].toStringView();
-    BoostJsonValue data;
+    BoostJsonValue data = rootObj["data"];
     boost::json::value dataJv;
     if (!dataStr.empty() && dataStr != "{}")
     {
         dataJv = boost::json::parse(dataStr, ec);
+        if (ec)
+        {
+            return;
+        }
         data = BoostJsonValue(dataJv);
     }
 
-    if (event == "pusher:pong")
+    if (event == "pusher:ping")
+    {
+        this->lastHeartbeat_ = std::chrono::steady_clock::now();
+        this->sendText(R"({"event":"pusher:pong","data":{}})"_ba);
+    }
+    else if (event == "pusher:pong")
     {
         this->lastHeartbeat_ = std::chrono::steady_clock::now();
     }
     else if (event == "pusher_internal:subscription_succeeded")
     {
         auto channel = rootObj["channel"].toStdString();
-        // that's the main chat subscription
+
         if (channel.starts_with("chatrooms.") && channel.ends_with(".v2"))
         {
             auto ids = kick::ws::parseIDs(channel);
-            if (this->chatServer_ && ids.roomID > 0)
+            if (this->chatServer_ && ids.roomID > 0 &&
+                this->isSubscribed(QString::fromStdString(channel)))
             {
                 this->chatServer_->onJoin(ids.roomID);
             }
@@ -129,38 +139,27 @@ void KickPusherClient::onMessageUi(const QByteArray &msg)
     }
     else if (event == "pusher:connection_established")
     {
-        std::chrono::seconds activityTimeout{
-            data["activity_timeout"].toInt64()};
-        if (activityTimeout.count() > 2 &&
-            activityTimeout < this->heartbeatInterval_)
+        const auto timeout = data["activity_timeout"].toInt64();
+        if (timeout > 2 && timeout < MAX_HEARTBEAT_INTERVAL.count())
         {
-            this->heartbeatInterval_ = activityTimeout;
+            this->heartbeatInterval_ = std::chrono::seconds(timeout - 1);
+            this->heartbeatTimer_.setInterval(this->heartbeatInterval_);
         }
     }
     else
     {
-        bool isApp = kick::ws::stripPrefix(event, "App\\Events\\");
-
-        auto channel = rootObj["channel"].toStringView();
-        auto ids = kick::ws::parseIDs(channel);
-        if (this->chatServer_ && (ids.roomID > 0 || ids.channelID > 0))
+        const auto channel = rootObj["channel"].toQString();
+        if (this->isSubscribed(channel))
         {
-            bool handled = this->chatServer_->onAppEvent(
-                ids.roomID, ids.channelID, event, data.toObject());
-            if (!handled)
-            {
-                qCWarning(chatterinoKick).noquote()
-                    << "Unknown event" << event << "isApp:" << isApp
-                    << "channel:" << rootObj["channel"].toStringView()
-                    << "data:" << dataStr;
-            }
+            kick::ws::dispatch(this->chatServer_,
+                               rootObj["channel"].toStringView(), event, data);
         }
     }
 }
 
 void KickPusherClient::checkHeartbeat()
 {
-    if (!this->isOpen())
+    if (!this->isOpen() || this->closed_)
     {
         return;
     }
@@ -170,6 +169,7 @@ void KickPusherClient::checkHeartbeat()
     {
         qCDebug(chatterinoKick) << "Heartbeat timed out";
         this->close();
+        return;
     }
 
     this->sendText(R"({"event":"pusher:ping","data":0})"_ba);
@@ -200,25 +200,6 @@ QByteArray KickPusherClient::encodeUnsubscription(const Subscription &sub)
 }
 // NOLINTEND(readability-convert-member-functions-to-static)
 
-QString makeUrl(QStringView appKey, QStringView cluster)
-{
-    const auto isSimple = [](QStringView s) {
-        return !s.empty() && std::ranges::all_of(s, [](QChar c) {
-            return c == u'_' || c == u'-' || c == u'+' || c.isLetterOrNumber();
-        });
-    };
-
-    if (!isSimple(appKey) || !isSimple(cluster))
-    {
-        qCWarning(chatterinoKick)
-            << "Unexpected appKey:" << appKey << "cluster:" << cluster;
-        return WS_URL;
-    }
-
-    return u"wss://ws-" % cluster % u".pusher.com/app/" % appKey %
-           u"?protocol=7&client=js&version=8.4.0&flash=false";
-}
-
 }  // namespace
 
 namespace chatterino {
@@ -227,32 +208,20 @@ class KickPusherManagerPrivate
     : public BasicPubSubManager<KickPusherManagerPrivate, KickPusherClient>
 {
 public:
-    KickPusherManagerPrivate(QStringView appKey, QStringView cluster);
+    explicit KickPusherManagerPrivate(QString url);
     ~KickPusherManagerPrivate() override;
 
     Q_DISABLE_COPY_MOVE(KickPusherManagerPrivate);
 
     std::shared_ptr<KickPusherClient> makeClient();
-    void checkHeartbeats();
-
-    std::chrono::milliseconds heartbeatInterval = MAX_HEARTBEAT_INTERVAL;
-    QTimer heartbeatTimer;
 
 private:
     friend KickPusherManager;
 };
 
-KickPusherManagerPrivate::KickPusherManagerPrivate(QStringView appKey,
-                                                   QStringView cluster)
-    : BasicPubSubManager(makeUrl(appKey, cluster), "kick",
-                         NetworkConfigurationProvider::webSocketProxyFromEnv(
-                             Env::get(), ProxyConnection::ThirdParty))
+KickPusherManagerPrivate::KickPusherManagerPrivate(QString url)
+    : BasicPubSubManager(std::move(url), "kick")
 {
-    QObject::connect(&this->heartbeatTimer, &QTimer::timeout, this,
-                     &KickPusherManagerPrivate::checkHeartbeats);
-    this->heartbeatTimer.setInterval(this->heartbeatInterval);
-    this->heartbeatTimer.setSingleShot(false);
-    this->heartbeatTimer.start();
 }
 
 KickPusherManagerPrivate::~KickPusherManagerPrivate()
@@ -266,23 +235,13 @@ std::shared_ptr<KickPusherClient> KickPusherManagerPrivate::makeClient()
     return std::make_shared<KickPusherClient>(getApp()->getKickChatServer());
 }
 
-void KickPusherManagerPrivate::checkHeartbeats()
+KickPusherManager::KickPusherManager(QStringView appKey, QStringView cluster)
+    : KickPusherManager(kick::ws::pusherUrl(appKey, cluster))
 {
-    auto minInterval = std::chrono::milliseconds::max();
-    for (const auto &[id, client] : this->clients())
-    {
-        client->checkHeartbeat();
-        minInterval = std::min(minInterval, client->heartbeatInterval());
-    }
-    if (minInterval != std::chrono::milliseconds::max())
-    {
-        this->heartbeatInterval = minInterval;
-        this->heartbeatTimer.setInterval(this->heartbeatInterval);
-    }
 }
 
-KickPusherManager::KickPusherManager(QStringView appKey, QStringView cluster)
-    : private_(new KickPusherManagerPrivate(appKey, cluster))
+KickPusherManager::KickPusherManager(QString url)
+    : private_(new KickPusherManagerPrivate(std::move(url)))
 {
 }
 KickPusherManager::~KickPusherManager() = default;

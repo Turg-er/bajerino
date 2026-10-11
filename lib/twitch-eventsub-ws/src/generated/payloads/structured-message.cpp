@@ -320,10 +320,25 @@ boost::json::result_for<Message, boost::json::value>::type tag_invoke(
             vfragments = std::move(fragments.value());
         }
     }
+    std::optional<chatterino::eventsub::lib::String> messageID = std::nullopt;
+    const auto *jvmessageID = root.if_contains("message_id");
+    if (jvmessageID != nullptr && !jvmessageID->is_null())
+    {
+        auto tmessageID =
+            boost::json::try_value_to<chatterino::eventsub::lib::String>(
+                *jvmessageID);
+
+        if (tmessageID.has_error())
+        {
+            return tmessageID.error();
+        }
+        messageID = std::move(tmessageID.value());
+    }
 
     return Message{
         .text = std::move(text.value()),
         .fragments = std::move(vfragments),
+        .messageID = std::move(messageID),
     };
 }
 

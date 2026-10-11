@@ -1,4 +1,6 @@
 #pragma once
+#include <QPointer>
+class QDialog;
 
 #include <QComboBox>
 #include <QFormLayout>
@@ -15,8 +17,10 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
+    QPointer<QDialog> authDialog_;
     struct {
         QFormLayout *layout = nullptr;
         QLabel *topLabel = nullptr;

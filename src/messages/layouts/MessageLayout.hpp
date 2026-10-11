@@ -9,6 +9,7 @@
 #include "messages/layouts/MessageLayoutContainer.hpp"
 
 #include <QPixmap>
+#include <QRegion>
 
 #include <cinttypes>
 #include <memory>
@@ -28,17 +29,20 @@ enum class MessageElementFlag : int64_t;
 using MessageElementFlags = FlagsEnum<MessageElementFlag>;
 
 enum class MessageLayoutFlag : uint8_t {
+    AutoModReviewSelected = 1 << 0,
     RequiresBufferUpdate = 1 << 1,
     RequiresLayout = 1 << 2,
     AlternateBackground = 1 << 3,
     Collapsed = 1 << 4,
     Expanded = 1 << 5,
     IgnoreHighlights = 1 << 6,
+    AutoModReviewChannel = 1 << 7,
 };
 using MessageLayoutFlags = FlagsEnum<MessageLayoutFlag>;
 
 struct MessagePaintResult {
-    bool hasAnimatedElements = false;
+    QRegion animatedRegion;
+    QRegion selfTimedAnimatedRegion;
 };
 
 class MessageLayout
@@ -67,11 +71,13 @@ public:
 
     bool layout(const MessageLayoutContext &ctx, bool shouldInvalidateBuffer);
 
-    // Painting
+    bool layoutForMeasurement(const MessageLayoutContext &ctx);
+
     MessagePaintResult paint(const MessagePaintContext &ctx);
     void invalidateBuffer();
     void deleteBuffer();
     void deleteCache();
+    bool hasCache() const;
 
     /**
      * Returns a raw pointer to the element at the given point
@@ -118,7 +124,8 @@ public:
     bool isDisabled() const;
 
 private:
-    // methods
+    bool layoutImpl(const MessageLayoutContext &ctx,
+                    bool shouldInvalidateBuffer, bool retainContainer);
     void actuallyLayout(const MessageLayoutContext &ctx);
     void updateBuffer(QPixmap *buffer, const MessagePaintContext &ctx);
 
@@ -127,11 +134,16 @@ private:
 
     // variables
     const MessagePtr message_;
-    MessageLayoutContainer container_;
+    std::unique_ptr<MessageLayoutContainer> container_;
     std::unique_ptr<QPixmap> buffer_;
     bool bufferValid_ = false;
 
     qreal height_ = 0;
+    int firstLineHeight_ = 0;
+    int width_ = 0;
+    uint32_t lineCount_ = 0;
+    uint32_t firstMessageCharacterIndex_ = 0;
+    uint32_t lastCharacterIndex_ = 0;
     int currentLayoutWidth_ = -1;
     int layoutState_ = -1;
     float scale_ = -1;
@@ -139,6 +151,8 @@ private:
     float emoteScale_ = -1.F;
     float badgeScale_ = -1.F;
     bool centerBadges_ = false;
+    bool autoModReviewExpanded_ = false;
+    bool showHighlights_ = true;
     MessageElementFlags currentWordFlags_;
 
 #ifdef FOURTF

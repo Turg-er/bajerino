@@ -23,7 +23,8 @@ void handleModerateMessage(
     const lib::payload::channel_moderate::v2::Event &event,
     const lib::payload::channel_moderate::v2::Clear & /*action*/)
 {
-    runInGuiThread([chan, actor{event.moderatorUserLogin.qt()}, time] {
+    runInGuiThread([chan = chan->sharedFromThis(),
+                    actor{event.moderatorUserLogin.qt()}, time] {
         if (!chan->usesAuthenticatedFeatures())
         {
             return;
@@ -86,6 +87,10 @@ void handleModerateMessage(
             ->setLink({Link::UserInfo, event.sourceBroadcasterUserLogin->qt()})
             ->setTrailingSpace(false);
         builder->flags.set(MessageFlag::SharedMessage);
+        if (event.sourceBroadcasterUserID)
+        {
+            builder->sharedChatSourceId = event.sourceBroadcasterUserID->qt();
+        }
         builder->channelName = event.sourceBroadcasterUserLogin->qt();
     }
 
@@ -106,7 +111,7 @@ void handleModerateMessage(
     builder->timeoutUser = action.userLogin.qt();
 
     auto msg = builder.release();
-    runInGuiThread([chan, msg, time] {
+    runInGuiThread([chan = chan->sharedFromThis(), msg, time] {
         if (!chan->usesAuthenticatedFeatures())
         {
             return;
@@ -139,6 +144,10 @@ void handleModerateMessage(
         builder.appendUser(*event.sourceBroadcasterUserName,
                            *event.sourceBroadcasterUserLogin, text, false);
         builder->flags.set(MessageFlag::SharedMessage);
+        if (event.sourceBroadcasterUserID)
+        {
+            builder->sharedChatSourceId = event.sourceBroadcasterUserID->qt();
+        }
         builder->channelName = event.sourceBroadcasterUserLogin->qt();
     }
 
@@ -156,7 +165,7 @@ void handleModerateMessage(
     builder->timeoutUser = action.userLogin.qt();
 
     auto msg = builder.release();
-    runInGuiThread([chan, msg, time] {
+    runInGuiThread([chan = chan->sharedFromThis(), msg, time] {
         if (!chan->usesAuthenticatedFeatures())
         {
             return;
@@ -170,7 +179,7 @@ void handleModerateMessage(
     const lib::payload::channel_moderate::v2::Event & /*unused*/,
     const lib::payload::channel_moderate::v2::Unraid & /*unused*/)
 {
-    runInGuiThread([chan] {
+    runInGuiThread([chan = chan->sharedFromThis()] {
         if (!chan->usesAuthenticatedFeatures())
         {
             return;

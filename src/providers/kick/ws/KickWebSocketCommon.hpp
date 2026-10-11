@@ -2,8 +2,20 @@
 //
 // SPDX-License-Identifier: MIT
 
+#pragma once
+
+#include <QJsonObject>
+#include <QString>
+
 #include <cstdint>
+#include <optional>
 #include <string_view>
+#include <unordered_set>
+
+namespace chatterino {
+class KickChatServer;
+class BoostJsonValue;
+}  // namespace chatterino
 
 namespace chatterino::kick::ws {
 
@@ -17,5 +29,17 @@ struct IDs {
 };
 
 IDs parseIDs(std::string_view channel);
+
+struct Connection {
+    bool centrifugo = false;
+    QString url;
+};
+
+QString pusherUrl(QStringView appKey = {}, QStringView cluster = {});
+std::optional<Connection> parseConnection(const QJsonObject &response);
+void dispatch(KickChatServer *server, std::string_view channel,
+              std::string_view event, BoostJsonValue data);
+void disconnected(KickChatServer *server,
+                  const std::unordered_set<QString> &subscriptions);
 
 }  // namespace chatterino::kick::ws

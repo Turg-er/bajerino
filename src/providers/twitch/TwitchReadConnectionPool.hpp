@@ -15,7 +15,9 @@ public:
     TwitchReadConnectionPool(TwitchIrcServer *parent);
 
     virtual void onChannelCreated(TwitchChannel &channel) = 0;
+    virtual void removeChannel(const QString &name) = 0;
     virtual void reconnect() = 0;
+    virtual void reconnectChannel(TwitchChannel &channel) = 0;
     virtual void close() = 0;
 
     pajlada::Signals::Signal<Communi::IrcMessage *> messageReceived;

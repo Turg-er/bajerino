@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo pacman -Syu --noconfirm
-          sudo pacman -S --noconfirm qt6-base qt6-tools boost-libs qt6-imageformats qtkeychain-qt6 qt6-svg libnotify git boost cmake benchmark
+          sudo pacman -S --noconfirm qt6-base qt6-tools boost-libs qt6-imageformats qtkeychain-qt6 qt6-svg libnotify git boost cmake benchmark libwebp libvpx libyuv libsecret webkit2gtk-4.1 json-glib ffmpeg
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -15,7 +15,10 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QUuid>
 
@@ -263,6 +266,7 @@ Args::Args(const QApplication &app)
 
     this->crashRecovery = parser.isSet(crashRecoveryOption);
     this->remoteRestart = parser.isSet(remoteRestartOption);
+
     if (parser.isSet(exceptionCodeOption))
     {
         this->exceptionCode =
@@ -320,14 +324,18 @@ Args::Args(const QApplication &app)
     }
 #endif
 
-    this->currentArguments_ = extractCommandLine(parser, {
-                                                             verboseOption,
-                                                             newInstanceOption,
-                                                             safeModeOption,
-                                                             loginOption,
-                                                             channelLayout,
-                                                             activateOption,
-                                                         });
+    this->currentArguments_ =
+        extractCommandLine(parser, {
+                                       verboseOption,
+                                       newInstanceOption,
+                                       safeModeOption,
+                                       loginOption,
+                                       channelLayout,
+                                       activateOption,
+                                       portableEnable,
+                                       portableDirectory,
+                                       useOldScalingOption,
+                                   });
 }
 
 QStringList Args::currentArguments() const

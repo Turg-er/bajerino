@@ -22,6 +22,7 @@
 #include <ctime>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace chatterino {
 
@@ -50,20 +51,13 @@ namespace linkparser {
 struct Parsed;
 }  // namespace linkparser
 
-struct SystemMessageTag {
-};
-struct TimeoutMessageTag {
-};
-struct LiveUpdatesUpdateEmoteMessageTag {
-};
-struct LiveUpdatesRemoveEmoteMessageTag {
-};
-struct LiveUpdatesAddEmoteMessageTag {
-};
-struct LiveUpdatesUpdateEmoteSetMessageTag {
-};
-struct ImageUploaderResultTag {
-};
+struct SystemMessageTag {};
+struct TimeoutMessageTag {};
+struct LiveUpdatesUpdateEmoteMessageTag {};
+struct LiveUpdatesRemoveEmoteMessageTag {};
+struct LiveUpdatesAddEmoteMessageTag {};
+struct LiveUpdatesUpdateEmoteSetMessageTag {};
+struct ImageUploaderResultTag {};
 
 // NOLINTBEGIN(readability-identifier-naming)
 const SystemMessageTag systemMessage{};
@@ -164,7 +158,8 @@ public:
                                             QString &toUpdate);
 
     void addWordFromUserMessage(QStringView string,
-                                ChannelChatters *chatters = nullptr);
+                                ChannelChatters *chatters = nullptr,
+                                bool allowYouTubeHandle = false);
 
     void appendEmote(const EmotePtr &emote);
 
@@ -290,6 +285,10 @@ private:
     Outcome tryAppendEmote(TwitchChannel *twitchChannel, const QString &userID,
                            EmoteNameView name);
 
+    void appendParsedEmote(const EmotePtr &emote, bool gigantified = false);
+    bool appendModifier(const EmotePtr &modifier);
+    void flushPendingModifiers();
+
     bool isEmpty() const;
     MessageElement &back();
     std::unique_ptr<MessageElement> releaseBack();
@@ -340,21 +339,25 @@ public:
 
 private:
     void appendChannelName(const Channel *channel);
+    void appendPronoun(Channel *channel, bool historical);
     void appendUsername(Communi::TagsRef tags, const MessageParseArgs &args);
 
     void addWords(QStringView text,
                   const std::vector<TwitchSpecialOccurrence> &twitchSpecials,
-                  TextState &state);
+                  TextState &state, qsizetype gigantifiedStart = -1);
 
     void appendTwitchBadges(Communi::TagsRef tags,
                             TwitchChannel *twitchChannel);
     void appendTomasBadge(const QString &userID);
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
+    void appendFfzApBadge(const QString &userID);
+    void appendBluzyrinoBadges(const QString &userID);
     void appendBttvBadges(const QString &userID);
     void appendSeventvBadges(const QString &userID);
-    void appendHomiesBadges(const QString &userID);
+    void appendHomiesBadges(const QString &userID, bool senderIsCurrentUser);
     void appendMoltorinoBadges(const QString &userID);
+    void applyVanityBadgeLayout(const QString &userID, size_t firstBadge);
 
     [[nodiscard]] static bool isIgnored(const QString &originalMessage,
                                         const QString &userID,
@@ -364,6 +367,7 @@ private:
     MessageColor textColor_ = MessageColor::Text;
 
     QColor usernameColor_ = {153, 153, 153};
+    std::vector<EmotePtr> pendingPrefixModifiers_;
 };
 
 }  // namespace chatterino

@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: MIT
 
-#include "providers/twitch/eventsub/MessageBuilder.hpp"
+#include "messages/MessageBuilder.hpp"
 
 #include "Application.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Image.hpp"
 #include "messages/Message.hpp"
-#include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
+#include "providers/twitch/eventsub/MessageBuilder.hpp"
 #include "singletons/Resources.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/StreamerMode.hpp"
@@ -19,6 +19,10 @@
 #include <QStringBuilder>
 
 using namespace Qt::StringLiterals;
+
+#include <algorithm>
+#include <limits>
+#include <set>
 
 namespace {
 
@@ -67,15 +71,19 @@ QString stringifyAutomodReason(const lib::automod::BlockedTermReason &reason,
         return u"blocked term usage"_s;
     }
 
-    // dedupe hit terms case-insensitively and remove any empty terms
     std::set<QString, QCompareCaseInsensitive> hitTerms;
     for (const auto &term : reason.termsFound)
     {
+        if (term.boundary.startPos < 0 ||
+            term.boundary.endPos < term.boundary.startPos ||
+            term.boundary.endPos == std::numeric_limits<int>::max())
+        {
+            continue;
+        }
         const auto hitTerm = codepointSlice(message, term.boundary.startPos,
                                             term.boundary.endPos + 1);
         if (hitTerm.isEmpty())
         {
-            // empty terms can be hit if the blocked term is an emote - this is a Twitch bug
             continue;
         }
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
@@ -168,6 +176,208 @@ QString localizedDisplayName(
             break;
     }
     return displayName;
+}
+
+QString localizedDisplayName(const automod::ReviewItem &item)
+{
+    QString displayName =
+        item.userName.isEmpty() ? item.userLogin : item.userName;
+    const bool hasLocalizedName =
+        displayName.compare(item.userLogin, Qt::CaseInsensitive) != 0;
+
+    switch (getSettings()->usernameDisplayMode.getValue())
+    {
+        case UsernameDisplayMode::Username:
+            return item.userLogin;
+        case UsernameDisplayMode::UsernameAndLocalizedName:
+            if (hasLocalizedName)
+            {
+                return item.userLogin % u'(' % displayName % u')';
+            }
+            break;
+        case UsernameDisplayMode::LocalizedName:
+        default:
+            break;
+    }
+    return displayName;
+}
+
+void appendHeldMessageText(EventSubMessageBuilder &builder,
+                           TwitchChannel *channel, const QString &message)
+{
+    for (const auto &word : message.split(u' '))
+    {
+        if (word.isEmpty())
+        {
+            continue;
+        }
+        builder.addWordFromUserMessage(word, channel);
+    }
+}
+
+qsizetype utf16OffsetForCodepoint(QStringView text, int codepointOffset)
+{
+    if (codepointOffset < 0)
+    {
+        return -1;
+    }
+    qsizetype utf16 = 0;
+    int codepoints = 0;
+    while (utf16 < text.size() && codepoints < codepointOffset)
+    {
+        const auto first = text.at(utf16);
+        if (first.isHighSurrogate() && utf16 + 1 < text.size() &&
+            text.at(utf16 + 1).isLowSurrogate())
+        {
+            utf16 += 2;
+        }
+        else
+        {
+            ++utf16;
+        }
+        ++codepoints;
+    }
+    return codepoints == codepointOffset ? utf16 : -1;
+}
+
+void appendTwitchMatch(automod::HoldData &data,
+                       const lib::automod::Boundary &boundary,
+                       const QString &ruleDetails)
+{
+    if (boundary.endPos == std::numeric_limits<int>::max())
+    {
+        return;
+    }
+    const auto start =
+        utf16OffsetForCodepoint(data.messageText, boundary.startPos);
+    const auto end =
+        utf16OffsetForCodepoint(data.messageText, boundary.endPos + 1);
+    if (start < 0 || end <= start)
+    {
+        return;
+    }
+    const auto fragment = data.messageText.mid(start, end - start);
+    if (!fragment.isEmpty() &&
+        !data.matchedFragments.contains(fragment, Qt::CaseInsensitive))
+    {
+        data.matchedFragments.push_back(fragment);
+    }
+    data.twitchMatches.push_back({
+        .start = start,
+        .length = end - start,
+        .color = defaultAutoModMatchColor(),
+        .ruleName = ruleDetails,
+        .pattern = fragment,
+        .source = HighlightMatchSource::AutoMod,
+        .style = HighlightMatchStyle::Fill,
+    });
+}
+
+void mergeAdjacentTwitchMatches(automod::HoldData &data)
+{
+    if (data.twitchMatches.size() < 2)
+    {
+        return;
+    }
+
+    std::ranges::sort(data.twitchMatches, {}, &HighlightMatch::start);
+    std::vector<HighlightMatch> merged;
+    merged.reserve(data.twitchMatches.size());
+    for (auto &match : data.twitchMatches)
+    {
+        if (!merged.empty())
+        {
+            auto &previous = merged.back();
+            const auto previousEnd = previous.start + previous.length;
+            const auto matchEnd = match.start + match.length;
+            const auto gapLength = match.start - previousEnd;
+            const bool whitespaceGap =
+                gapLength >= 0 && data.messageText.mid(previousEnd, gapLength)
+                                      .trimmed()
+                                      .isEmpty();
+            const bool sameAppearance = previous.color == match.color &&
+                                        previous.ruleName == match.ruleName &&
+                                        previous.source == match.source &&
+                                        previous.style == match.style &&
+                                        previous.paintID == match.paintID;
+            if (sameAppearance && (match.start <= previousEnd || whitespaceGap))
+            {
+                previous.length =
+                    std::max(previousEnd, matchEnd) - previous.start;
+                previous.pattern =
+                    data.messageText.mid(previous.start, previous.length);
+                continue;
+            }
+        }
+        merged.emplace_back(std::move(match));
+    }
+    data.twitchMatches = std::move(merged);
+}
+
+QString displayAutoModCategory(QString category)
+{
+    category.replace(u'_', u' ');
+    if (!category.isEmpty())
+    {
+        category[0] = category.at(0).toUpper();
+    }
+    return category;
+}
+
+void fillAutoModReason(automod::HoldData &data, const std::string &reason)
+{
+    data.reasonCategory =
+        displayAutoModCategory(QString::fromStdString(reason));
+    data.reasonSummary = data.reasonCategory;
+}
+
+void fillAutoModReason(automod::HoldData &data,
+                       const lib::automod::AutomodReason &reason)
+{
+    data.blockedTerm = false;
+    data.reasonCategory = displayAutoModCategory(reason.category.qt());
+    data.reasonLevel = reason.level;
+    data.reasonSummary =
+        data.reasonCategory % u" · Level " % QString::number(reason.level);
+    const auto details =
+        QStringLiteral("Twitch AutoMod\n") % data.reasonSummary;
+    for (const auto &boundary : reason.boundaries)
+    {
+        appendTwitchMatch(data, boundary, details);
+    }
+    mergeAdjacentTwitchMatches(data);
+}
+
+void fillAutoModReason(automod::HoldData &data,
+                       const lib::automod::BlockedTermReason &reason)
+{
+    data.blockedTerm = true;
+    data.reasonCategory = QStringLiteral("Blocked term");
+    for (const auto &found : reason.termsFound)
+    {
+        const auto owner =
+            QString::fromStdString(found.ownerBroadcasterUserLogin);
+        auto details = QStringLiteral("Twitch AutoMod\nBlocked term");
+        if (!owner.isEmpty() &&
+            owner.compare(data.broadcasterLogin, Qt::CaseInsensitive) != 0)
+        {
+            details += QStringLiteral("\nShared from #") % owner;
+        }
+        appendTwitchMatch(data, found.boundary, details);
+        if (data.termOwnerLogin.isEmpty() && !owner.isEmpty())
+        {
+            data.termOwnerLogin = owner;
+        }
+    }
+    mergeAdjacentTwitchMatches(data);
+    const auto count = data.matchedFragments.size();
+    data.reasonSummary =
+        count == 1 ? QStringLiteral("Matched 1 blocked term")
+                   : QStringLiteral("Matched %1 blocked terms").arg(count);
+    if (count == 0)
+    {
+        data.reasonSummary = QStringLiteral("Blocked term usage");
+    }
 }
 
 }  // namespace
@@ -351,20 +561,20 @@ void makeModerateMessage(
                        MessageFlag::ModerationAction);
 
     QString text;
-    bool isShared = event.isFromSharedChat();
+    const bool isShared = event.isFromSharedChat();
 
     builder.appendUser(event.moderatorUserName, event.moderatorUserLogin, text);
-    builder.emplaceSystemTextAndUpdate("deleted message from", text);
-    builder.appendUser(action.userName, action.userLogin, text);
+    builder.emplaceSystemTextAndUpdate("deleted a message from", text);
+    builder.appendUser(action.userName, action.userLogin, text, isShared);
 
     if (isShared)
     {
         builder.emplaceSystemTextAndUpdate("in", text);
         builder.appendUser(*event.sourceBroadcasterUserName,
-                           *event.sourceBroadcasterUserLogin, text);
+                           *event.sourceBroadcasterUserLogin, text, false);
     }
 
-    builder.emplaceSystemTextAndUpdate("saying:", text);
+    builder.emplaceSystemTextAndUpdate(":", text);
 
     auto limit = getSettings()->deletedMessageLengthLimit.getValue();
     if (limit > 0 && action.messageBody.view().length() > limit)
@@ -674,23 +884,24 @@ std::pair<MessagePtr, HighlightAlert> makeAutomodHoldMessage(
     builder.emplace<LinebreakElement>(MessageElementFlag::Text);
 
     builder
-        .emplace<TextElement>(u'#' + event.broadcasterUserLogin.qt(),
-                              MessageElementFlag::ChannelName,
-                              MessageColor::System)
+        .emplace<ChannelNameElement>(u'#' + event.broadcasterUserLogin.qt(),
+                                     channel->channelAvatar())
         ->setLink({Link::JumpToChannel, event.broadcasterUserLogin.qt()});
     builder.emplace<TimestampElement>(time.time());
-    builder.emplace<TwitchModerationElement>();
+    builder.emplace<TwitchModerationElement>(true, false, false,
+                                             channel->weakFromThis());
     builder->loginName = event.userLogin.qt();
 
     auto displayName = localizedDisplayName(event);
     // sender username
-    builder.emplace<MentionElement>(
-        displayName + ':', event.userLogin.qt(), MessageColor::Text,
-        channel->getUserColor(event.userLogin.qt()));
+    builder
+        .emplace<MentionElement>(displayName + ':', event.userLogin.qt(),
+                                 MessageColor::Text,
+                                 channel->getUserColor(event.userLogin.qt()))
+        ->addFlags(MessageElementFlag::Username);
+
     // sender's message caught by AutoMod
-    // XXX: add the structured message here
-    builder.emplace<TextElement>(event.message.text.qt(),
-                                 MessageElementFlag::Text, MessageColor::Text);
+    appendHeldMessageText(builder, channel, event.message.text.qt());
 
     builder.setMessageAndSearchText(
         u"AutoMod: Held a message for reason: " % reason %
@@ -703,6 +914,556 @@ std::pair<MessagePtr, HighlightAlert> makeAutomodHoldMessage(
         builder.parseHighlights(tags, event.message.text.qt(), {});
 
     return {builder.release(), highlights};
+}
+
+MessagePtr makeAutomodMessageUpdateHeader(
+    TwitchChannel *channel, const QDateTime &time,
+    const lib::payload::automod_message_update::v2::Event &event)
+{
+    EventSubMessageBuilder builder(channel);
+    builder->serverReceivedTime = time;
+    builder->id = u"automod_" % event.messageID.qt();
+    builder->loginName = u"automod"_s;
+    builder->channelName = event.broadcasterUserLogin.qt();
+    builder->flags.set(MessageFlag::Disabled, MessageFlag::PubSub,
+                       MessageFlag::ModerationAction, MessageFlag::AutoMod,
+                       MessageFlag::AutoModOffendingMessageHeader);
+    builder->flags.set(
+        MessageFlag::AutoModBlockedTerm,
+        std::holds_alternative<lib::automod::BlockedTermReason>(event.reason));
+
+    builder.emplace<BadgeElement>(makeAutoModBadge(),
+                                  MessageElementFlag::BadgeChannelAuthority);
+    builder.emplace<TextElement>("AutoMod:", MessageElementFlag::Text,
+                                 QColor(0, 0, 255), FontStyle::ChatMediumBold);
+
+    const auto reason = std::visit(
+        [&](const auto &r) {
+            return stringifyAutomodReason(r, event.message.text.qt());
+        },
+        event.reason);
+    QString text = u"AutoMod: Held a message for reason: " % reason % u". ";
+    builder.emplace<TextElement>(u"Held a message for reason: " % reason % u".",
+                                 MessageElementFlag::Text, MessageColor::Text);
+
+    const auto status = QString::fromStdString(event.status).toLower();
+    const auto moderatorLogin =
+        QString::fromStdString(event.moderatorUserLogin);
+    auto moderatorName = QString::fromStdString(event.moderatorUserName);
+    if (moderatorName.isEmpty())
+    {
+        moderatorName = moderatorLogin;
+    }
+
+    if (status == u"approved" || status == u"denied")
+    {
+        const auto verb = status == u"approved" ? QStringLiteral("Approved")
+                                                : QStringLiteral("Denied");
+        builder.emplace<TextElement>(verb % u" by", MessageElementFlag::Text,
+                                     MessageColor::System,
+                                     FontStyle::ChatMediumBold);
+        text += verb % u" by ";
+        if (!moderatorName.isEmpty())
+        {
+            builder.emplace<MentionElement>(
+                moderatorName, moderatorLogin, MessageColor::System,
+                channel->getUserColor(moderatorLogin));
+            text += moderatorName;
+        }
+        else
+        {
+            builder.emplace<TextElement>(QStringLiteral("a moderator"),
+                                         MessageElementFlag::Text,
+                                         MessageColor::System);
+            text += u"a moderator";
+        }
+        builder->elements.back()->setTrailingSpace(false);
+        builder.emplace<TextElement>(u"."_s, MessageElementFlag::Text,
+                                     MessageColor::System);
+        text += u'.';
+    }
+    else if (status == u"expired")
+    {
+        const auto resolution =
+            QStringLiteral("Expired before a moderator acted.");
+        builder.emplace<TextElement>(resolution, MessageElementFlag::Text,
+                                     MessageColor::System,
+                                     FontStyle::ChatMediumBold);
+        text += resolution;
+    }
+    else
+    {
+        const auto resolution = u"Resolved with status: " %
+                                QString::fromStdString(event.status) % u'.';
+        builder.emplace<TextElement>(resolution, MessageElementFlag::Text,
+                                     MessageColor::System,
+                                     FontStyle::ChatMediumBold);
+        text += resolution;
+    }
+
+    builder.setMessageAndSearchText(text);
+    return builder.release();
+}
+
+automod::HoldData makeAutoModReviewHoldData(
+    QString notificationID, const QDateTime &time,
+    const lib::payload::automod_message_hold::v2::Event &event)
+{
+    automod::HoldData data;
+    data.notificationID = std::move(notificationID);
+    data.broadcasterID = event.broadcasterUserID.qt();
+    data.broadcasterLogin = event.broadcasterUserLogin.qt();
+    data.broadcasterName = event.broadcasterUserName.qt();
+    data.userID = event.userID.qt();
+    data.userLogin = event.userLogin.qt();
+    data.userName = event.userName.qt();
+    data.messageID = event.messageID.qt();
+    data.messageText = event.message.text.qt();
+    data.receivedAt = time;
+    std::visit(
+        [&](const auto &reason) {
+            fillAutoModReason(data, reason);
+        },
+        event.reason);
+    return data;
+}
+
+automod::UpdateData makeAutoModReviewUpdateData(
+    QString notificationID, const QDateTime &time,
+    const lib::payload::automod_message_update::v2::Event &event)
+{
+    automod::UpdateData data;
+    data.notificationID = std::move(notificationID);
+    data.broadcasterID = event.broadcasterUserID.qt();
+    data.broadcasterLogin = event.broadcasterUserLogin.qt();
+    data.broadcasterName = event.broadcasterUserName.qt();
+    data.userID = QString::fromStdString(event.userID);
+    data.userLogin = QString::fromStdString(event.userLogin);
+    data.userName = QString::fromStdString(event.userName);
+    data.messageID = event.messageID.qt();
+    data.messageText = event.message.text.qt();
+    data.receivedAt = time;
+    data.status = QString::fromStdString(event.status);
+    data.moderatorID = QString::fromStdString(event.moderatorUserID);
+    data.moderatorLogin = QString::fromStdString(event.moderatorUserLogin);
+    data.moderatorName = QString::fromStdString(event.moderatorUserName);
+    std::visit(
+        [&](const auto &reason) {
+            fillAutoModReason(data, reason);
+        },
+        event.reason);
+    return data;
+}
+
+MessagePtr makeAutoModReviewMessage(TwitchChannel *channel,
+                                    const automod::ReviewItem &item,
+                                    AutoModReviewPresentation presentation)
+{
+    EventSubMessageBuilder builder(channel);
+    builder->serverReceivedTime = item.receivedAt;
+    builder->id = u"automod_" % item.messageID;
+    builder->loginName = item.userLogin;
+    builder->displayName = item.userName;
+    builder->userID = item.userID;
+    builder->channelName = item.broadcasterLogin;
+    builder->flags.set(MessageFlag::PubSub, MessageFlag::EventSub,
+                       MessageFlag::ModerationAction, MessageFlag::AutoMod,
+                       MessageFlag::AutoModOffendingMessageHeader,
+                       MessageFlag::AutoModOffendingMessage,
+                       MessageFlag::InvalidReplyTarget);
+    builder->flags.set(MessageFlag::AutoModBlockedTerm, item.blockedTerm);
+    builder->autoModReview = std::make_shared<const automod::ReviewItem>(item);
+    builder->highlightMatches = item.highlightMatches;
+    const MessageElementFlags metadataTextFlags{
+        MessageElementFlag::Text, MessageElementFlag::IgnoreExactMatch};
+
+    if (presentation == AutoModReviewPresentation::ChatLegacy)
+    {
+        if (channel != nullptr)
+        {
+            builder
+                .emplace<ChannelNameElement>(u'#' + item.broadcasterLogin,
+                                             channel->channelAvatar())
+                ->setLink({Link::JumpToChannel, item.broadcasterLogin});
+        }
+        else
+        {
+            builder
+                .emplace<TextElement>(
+                    u'#' + item.broadcasterLogin,
+                    MessageElementFlags{MessageElementFlag::ChannelName,
+                                        MessageElementFlag::IgnoreExactMatch},
+                    MessageColor::Link)
+                ->setLink({Link::JumpToChannel, item.broadcasterLogin});
+        }
+        builder.emplace<TimestampElement>(item.receivedAt.time());
+        builder.emplace<BadgeElement>(
+            makeAutoModBadge(), MessageElementFlag::BadgeChannelAuthority);
+        builder
+            .emplace<TextElement>(QStringLiteral("AutoMod:"), metadataTextFlags,
+                                  QColor(0, 0, 255), FontStyle::ChatMediumBold)
+            ->addFlags(MessageElementFlag::Username);
+        builder.emplace<TextElement>(
+            QStringLiteral("Held a message for ") % item.reasonSummary % u'.',
+            metadataTextFlags, MessageColor::Text);
+
+        const bool pending = item.state == automod::ReviewState::Approving ||
+                             item.state == automod::ReviewState::Denying ||
+                             item.secondaryInProgress;
+        const bool showActionRow =
+            item.actionsAllowed && item.state == automod::ReviewState::Open;
+        if (showActionRow)
+        {
+            builder
+                .emplace<TextElement>(
+                    QStringLiteral("Allow"), metadataTextFlags,
+                    MessageColor(QColor(0, 255, 0)), FontStyle::ChatMediumBold)
+                ->setLink({Link::AutoModReviewApprove, item.key})
+                ->setTooltip(QStringLiteral("Allow this message (A)"));
+            builder
+                .emplace<TextElement>(QStringLiteral("Deny"), metadataTextFlags,
+                                      MessageColor(QColor(255, 0, 0)),
+                                      FontStyle::ChatMediumBold)
+                ->setLink({Link::AutoModReviewDeny, item.key})
+                ->setTooltip(QStringLiteral("Deny this message (D)"));
+        }
+        else if (pending)
+        {
+            builder.emplace<TextElement>(
+                automod::reviewStateLabel(item), metadataTextFlags,
+                MessageColor::System, FontStyle::ChatMediumBold);
+        }
+        else if (item.state == automod::ReviewState::Open &&
+                 !item.actionsAllowed)
+        {
+            builder.emplace<TextElement>(
+                QStringLiteral("Read only"), metadataTextFlags,
+                MessageColor::System, FontStyle::ChatMedium);
+        }
+        else if (item.actionsAllowed &&
+                 (item.failedAction != automod::ReviewAction::None ||
+                  item.secondaryFailed))
+        {
+            const auto failedAction =
+                item.secondaryFailed ? item.secondaryAction : item.failedAction;
+            auto failureLabel = automod::reviewActionLabel(failedAction);
+            if (!failureLabel.isEmpty())
+            {
+                failureLabel[0] = failureLabel[0].toUpper();
+            }
+            failureLabel += QStringLiteral(" failed");
+            auto failureText = failureLabel;
+            if (!item.statusDetail.isEmpty())
+            {
+                failureText += QStringLiteral(" · ") % item.statusDetail;
+            }
+            builder
+                .emplace<TextElement>(failureText, metadataTextFlags,
+                                      MessageColor::System,
+                                      FontStyle::ChatMedium)
+                ->setTooltip(item.statusDetail);
+        }
+        else if (item.state == automod::ReviewState::Approved ||
+                 item.state == automod::ReviewState::Denied)
+        {
+            QString resolution = item.state == automod::ReviewState::Approved
+                                     ? QStringLiteral("Approved")
+                                     : QStringLiteral("Denied");
+            const auto moderator = item.moderatorName.isEmpty()
+                                       ? item.moderatorLogin
+                                       : item.moderatorName;
+            if (!moderator.isEmpty())
+            {
+                resolution += u" by " % moderator;
+            }
+            builder.emplace<TextElement>(resolution, metadataTextFlags,
+                                         MessageColor::System,
+                                         FontStyle::ChatMedium);
+        }
+        else
+        {
+            const auto status = item.statusDetail.isEmpty()
+                                    ? automod::reviewStateLabel(item)
+                                    : item.statusDetail;
+            builder.emplace<TextElement>(status, metadataTextFlags,
+                                         MessageColor::System,
+                                         FontStyle::ChatMedium);
+        }
+
+        builder.emplace<LinebreakElement>(metadataTextFlags);
+        if (channel != nullptr)
+        {
+            builder.emplace<TwitchModerationElement>(true, false, false,
+                                                     channel->weakFromThis());
+        }
+        else
+        {
+            builder.emplace<TwitchModerationElement>(true, false, false);
+        }
+        const auto displayName = localizedDisplayName(item);
+        builder
+            .emplace<MentionElement>(
+                displayName + ':', item.userLogin, MessageColor::Text,
+                channel != nullptr ? channel->getUserColor(item.userLogin)
+                                   : QColor{})
+            ->addFlags({MessageElementFlag::Username,
+                        MessageElementFlag::IgnoreExactMatch});
+        appendHeldMessageText(builder, channel, item.messageText);
+
+        builder->messageText = item.messageText;
+        builder->searchText = item.broadcasterLogin % u' ' % item.userLogin %
+                              u' ' % item.messageText % u' ' %
+                              item.reasonSummary % u' ' %
+                              automod::reviewStateLabel(item);
+        return builder.release();
+    }
+
+    const bool isReviewQueue =
+        presentation == AutoModReviewPresentation::ReviewQueue;
+
+    const auto reviewReason = [&item] {
+        if (!item.reasonCategory.isEmpty())
+        {
+            auto reason = item.reasonCategory;
+            if (item.reasonLevel > 0)
+            {
+                reason += QStringLiteral(" \u00b7 Level ") %
+                          QString::number(item.reasonLevel);
+            }
+            return reason;
+        }
+
+        return QString{};
+    }();
+    if (isReviewQueue)
+    {
+        builder
+            .emplace<TextElement>(
+                u'#' + item.broadcasterLogin,
+                MessageElementFlags{MessageElementFlag::ChannelName,
+                                    MessageElementFlag::IgnoreExactMatch},
+                MessageColor::Link, FontStyle::ChatSmall)
+            ->setLink({Link::JumpToChannel, item.broadcasterLogin});
+        if (getSettings()->autoModReviewShowReason && !reviewReason.isEmpty())
+        {
+            builder.emplace<TextElement>(
+                QStringLiteral("\u00b7"), metadataTextFlags,
+                MessageColor::System, FontStyle::ChatSmall);
+            builder.emplace<TextElement>(reviewReason, metadataTextFlags,
+                                         MessageColor::System,
+                                         FontStyle::ChatSmall);
+        }
+        builder.emplace<LinebreakElement>(metadataTextFlags);
+        builder.emplace<TimestampElement>(item.receivedAt.time());
+    }
+    else
+    {
+        if (getSettings()->autoModReviewShowReason && !reviewReason.isEmpty())
+        {
+            builder.emplace<TextElement>(reviewReason, metadataTextFlags,
+                                         MessageColor::System,
+                                         FontStyle::ChatSmall);
+            builder.emplace<LinebreakElement>(metadataTextFlags);
+        }
+
+        builder.emplace<TimestampElement>(item.receivedAt.time());
+    }
+    const auto displayName = localizedDisplayName(item);
+    builder
+        .emplace<MentionElement>(
+            displayName + ':', item.userLogin, MessageColor::Text,
+            channel != nullptr ? channel->getUserColor(item.userLogin)
+                               : QColor{})
+        ->addFlags({MessageElementFlag::Username,
+                    MessageElementFlag::IgnoreExactMatch});
+    appendHeldMessageText(builder, channel, item.messageText);
+
+    const MessageElementFlags expandedFlags{
+        MessageElementFlag::Text, MessageElementFlag::AutoModReviewExpanded,
+        MessageElementFlag::IgnoreExactMatch};
+
+    if (getSettings()->autoModReviewShowContext && !item.context.isEmpty())
+    {
+        builder.emplace<LinebreakElement>(expandedFlags);
+        builder.emplace<TextElement>(
+            isReviewQueue ? QStringLiteral("Earlier messages")
+                          : QStringLiteral("Recent local context"),
+            expandedFlags, MessageColor::System,
+            isReviewQueue ? FontStyle::ChatSmall : FontStyle::ChatMediumBold);
+        const auto addContext = [&builder, &expandedFlags, isReviewQueue](
+                                    const automod::ContextMessage &context) {
+            builder.emplace<LinebreakElement>(expandedFlags);
+            if (!isReviewQueue)
+            {
+                builder.emplace<TextElement>(
+                    context.receivedAt.isValid()
+                        ? context.receivedAt.time().toString(
+                              QStringLiteral("HH:mm"))
+                        : QStringLiteral("Earlier"),
+                    expandedFlags, MessageColor::System);
+            }
+            builder.emplace<TextElement>(
+                context.displayName + ':', expandedFlags,
+                isReviewQueue ? MessageColor::Link : MessageColor::System,
+                isReviewQueue ? FontStyle::ChatSmall
+                              : FontStyle::ChatMediumBold);
+            builder.emplace<TextElement>(
+                context.text, expandedFlags, MessageColor::Text,
+                isReviewQueue ? FontStyle::ChatSmall : FontStyle::ChatMedium);
+        };
+        if (getSettings()->autoModReviewContextOrder != 1)
+        {
+            for (auto it = item.context.crbegin(); it != item.context.crend();
+                 ++it)
+            {
+                addContext(*it);
+            }
+        }
+        else
+        {
+            for (const auto &context : item.context)
+            {
+                addContext(context);
+            }
+        }
+    }
+    builder.emplace<LinebreakElement>(metadataTextFlags);
+    const bool showActionRow =
+        item.actionsAllowed && item.state == automod::ReviewState::Open;
+    const bool pending = item.state == automod::ReviewState::Approving ||
+                         item.state == automod::ReviewState::Denying ||
+                         item.secondaryInProgress;
+    if (showActionRow)
+    {
+        const auto timeoutValue = [&item](int seconds) {
+            return item.key % u'\n' % QString::number(seconds);
+        };
+        builder
+            .emplace<TextElement>(QStringLiteral("Approve"), metadataTextFlags,
+                                  MessageColor(QColor(0, 255, 0)),
+                                  FontStyle::ChatMediumBold)
+            ->setLink({Link::AutoModReviewApprove, item.key})
+            ->setTooltip(QStringLiteral("Approve this message (A)"));
+        builder
+            .emplace<TextElement>(QStringLiteral("Deny"), metadataTextFlags,
+                                  MessageColor(QColor(255, 0, 0)),
+                                  FontStyle::ChatMediumBold)
+            ->setLink({Link::AutoModReviewDeny, item.key})
+            ->setTooltip(QStringLiteral("Deny this message (D)"));
+        builder.emplace<TextElement>(QStringLiteral("·"), metadataTextFlags,
+                                     MessageColor::System,
+                                     FontStyle::ChatSmall);
+        const auto addTimeout = [&](int seconds, QString tooltip) {
+            builder
+                .emplace<AutoModActionElement>(AutoModActionKind::Timeout,
+                                               seconds)
+                ->setLink({Link::AutoModReviewTimeout, timeoutValue(seconds)})
+                ->setTooltip(std::move(tooltip));
+        };
+        addTimeout(30, QStringLiteral("Deny and timeout for 30 seconds"));
+        addTimeout(60, QStringLiteral("Deny and timeout for 1 minute"));
+        addTimeout(5 * 60, QStringLiteral("Deny and timeout for 5 minutes"));
+        addTimeout(10 * 60, QStringLiteral("Deny and timeout for 10 minutes"));
+        addTimeout(60 * 60, QStringLiteral("Deny and timeout for 1 hour"));
+        addTimeout(24 * 60 * 60, QStringLiteral("Deny and timeout for 1 day"));
+        builder.emplace<AutoModActionElement>(AutoModActionKind::Ban)
+            ->setLink({Link::AutoModReviewBan, item.key})
+            ->setTooltip(
+                QStringLiteral("Deny and permanently ban this user (B)"));
+    }
+    else if (pending)
+    {
+        builder.emplace<TextElement>(automod::reviewStateLabel(item),
+                                     metadataTextFlags, MessageColor::System,
+                                     FontStyle::ChatSmall);
+    }
+    else if (item.state == automod::ReviewState::Open && !item.actionsAllowed)
+    {
+        builder.emplace<TextElement>(QStringLiteral("Read only"),
+                                     metadataTextFlags, MessageColor::System,
+                                     FontStyle::ChatSmall);
+    }
+    else if (item.actionsAllowed &&
+             (item.failedAction != automod::ReviewAction::None ||
+              item.secondaryFailed))
+    {
+        const auto failedAction =
+            item.secondaryFailed ? item.secondaryAction : item.failedAction;
+        auto failureLabel = automod::reviewActionLabel(failedAction);
+        if (!failureLabel.isEmpty())
+        {
+            failureLabel[0] = failureLabel[0].toUpper();
+        }
+        failureLabel += QStringLiteral(" failed");
+        auto failureText = failureLabel;
+        if (!item.statusDetail.isEmpty())
+        {
+            failureText += QStringLiteral(" · ") % item.statusDetail;
+        }
+        builder
+            .emplace<TextElement>(failureText, metadataTextFlags,
+                                  MessageColor::System, FontStyle::ChatSmall)
+            ->setTooltip(item.statusDetail);
+    }
+    else if (item.state == automod::ReviewState::Approved ||
+             item.state == automod::ReviewState::Denied)
+    {
+        QString resolution = item.state == automod::ReviewState::Approved
+                                 ? QStringLiteral("Approved")
+                                 : QStringLiteral("Denied");
+        const auto moderator = item.moderatorName.isEmpty()
+                                   ? item.moderatorLogin
+                                   : item.moderatorName;
+        if (!moderator.isEmpty())
+        {
+            resolution += u" by " % moderator;
+        }
+        builder.emplace<TextElement>(resolution, metadataTextFlags,
+                                     MessageColor::System,
+                                     FontStyle::ChatSmall);
+    }
+    else if (!item.statusDetail.isEmpty())
+    {
+        builder.emplace<TextElement>(item.statusDetail, metadataTextFlags,
+                                     MessageColor::System,
+                                     FontStyle::ChatSmall);
+    }
+
+    if (isReviewQueue &&
+        getSettings()->autoModReviewShowShortcutHints.getValue())
+    {
+        builder.emplace<LinebreakElement>(expandedFlags);
+        const auto addHint = [&builder, &expandedFlags](
+                                 QString key, QString action, bool separator) {
+            builder.emplace<TextElement>(std::move(key), expandedFlags,
+                                         MessageColor::Link,
+                                         FontStyle::ChatSmall);
+            builder.emplace<TextElement>(std::move(action), expandedFlags,
+                                         MessageColor::System,
+                                         FontStyle::ChatSmall);
+            if (separator)
+            {
+                builder.emplace<TextElement>(QStringLiteral("·"), expandedFlags,
+                                             MessageColor::System,
+                                             FontStyle::ChatSmall);
+            }
+        };
+        addHint(QStringLiteral("↑/↓"), QStringLiteral("Select"), true);
+        if (showActionRow)
+        {
+            addHint(QStringLiteral("A"), QStringLiteral("Approve"), true);
+            addHint(QStringLiteral("D"), QStringLiteral("Deny"), true);
+            addHint(QStringLiteral("T"), QStringLiteral("Timeout"), true);
+            addHint(QStringLiteral("B"), QStringLiteral("Ban"), true);
+        }
+        addHint(QStringLiteral("Enter"), QStringLiteral("Usercard"), false);
+    }
+
+    builder->messageText = item.messageText;
+    builder->searchText = item.broadcasterLogin % u' ' % item.userLogin % u' ' %
+                          item.messageText % u' ' % item.reasonSummary % u' ' %
+                          automod::reviewStateLabel(item);
+    return builder.release();
 }
 
 MessagePtr makeSuspiciousUserMessageHeader(
@@ -790,19 +1551,21 @@ MessagePtr makeSuspiciousUserMessageBody(
     }
 
     builder
-        .emplace<TextElement>(u'#' + event.broadcasterUserLogin.qt(),
-                              MessageElementFlag::ChannelName,
-                              MessageColor::System)
+        .emplace<ChannelNameElement>(u'#' + event.broadcasterUserLogin.qt(),
+                                     channel->channelAvatar())
         ->setLink({Link::JumpToChannel, event.broadcasterUserLogin.qt()});
     builder.emplace<TimestampElement>(time.time());
-    builder.emplace<TwitchModerationElement>();
+    builder.emplace<TwitchModerationElement>(true, false, false,
+                                             channel->weakFromThis());
     builder->loginName = event.userLogin.qt();
     builder->flags.set(MessageFlag::PubSub, MessageFlag::LowTrustUsers);
 
     // sender username
-    builder.emplace<MentionElement>(
-        event.userName.qt() + ":", event.userLogin.qt(), MessageColor::Text,
-        channel->getUserColor(event.userLogin.qt()));
+    builder
+        .emplace<MentionElement>(event.userName.qt() + ":",
+                                 event.userLogin.qt(), MessageColor::Text,
+                                 channel->getUserColor(event.userLogin.qt()))
+        ->addFlags(MessageElementFlag::Username);
 
     // sender's message caught by AutoMod
     // XXX: add the structured message here

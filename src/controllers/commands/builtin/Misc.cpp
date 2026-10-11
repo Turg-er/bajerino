@@ -10,15 +10,16 @@
 #include "common/network/NetworkResult.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/commands/CommandContext.hpp"
+#include "controllers/ignores/HiddenUserController.hpp"
 #include "controllers/userdata/UserDataController.hpp"
-#include "messages/layouts/MessageLayoutContainer.hpp"
-#include "messages/layouts/MessageLayoutElement.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "providers/IvrApi.hpp"
+#include "providers/kick/KickAccount.hpp"
 #include "providers/kick/KickChannel.hpp"
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoFeatureFlags.hpp"
 #include "providers/translation/Translator.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
@@ -28,14 +29,24 @@
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "providers/twitch/TwitchNameHistory.hpp"
+#include "providers/youtube/YouTubeAccount.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Clipboard.hpp"
 #include "util/Crypto.hpp"
 #include "util/FormatTime.hpp"
 #include "util/IncognitoBrowser.hpp"
+#include "util/MultiChannel.hpp"
 #include "util/StreamLink.hpp"
 #include "util/Twitch.hpp"
+#include "widgets/dialogs/ChatAutomationDialog.hpp"
+#include "widgets/dialogs/CrossBanDialog.hpp"
+#include "widgets/dialogs/ModerationReportDialog.hpp"
+#include "widgets/dialogs/UnbanRequestsDialog.hpp"
+#include "widgets/dialogs/VanityDialog.hpp"
+#if MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
+#    include "widgets/dialogs/RewardRequestQueueDialog.hpp"
+#endif
 #include "widgets/dialogs/UserInfoPopup.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/Notebook.hpp"
@@ -47,16 +58,11 @@
 #include <QCursor>
 #include <QDateTime>
 #include <QDesktopServices>
-#include <QHash>
 #include <QJsonObject>
-#include <QLocale>
-#include <QPainter>
 #include <QPoint>
 #include <QRegularExpression>
-#include <QSet>
 #include <QString>
 #include <QStringList>
-#include <QTextOption>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -81,6 +87,176 @@ QString followAction(bool unfollow)
 QString followActionNoun(bool unfollow)
 {
     return unfollow ? "unfollowing users" : "following users";
+}
+
+QString normalizedHiddenCommandTarget(QString target)
+{
+    target = target.trimmed();
+    while (target.startsWith(u'@'))
+    {
+        target.remove(0, 1);
+    }
+    return target;
+}
+
+std::optional<HiddenUserPlatform> hiddenUserPlatformForChannel(
+    const ChannelPtr &channel)
+{
+    if (!channel)
+    {
+        return std::nullopt;
+    }
+
+    const Channel *effectiveChannel = channel.get();
+    if (const auto *multi =
+            dynamic_cast<const MultiChannel *>(effectiveChannel))
+    {
+        const auto *active = multi->activeChannel();
+        if (active == nullptr)
+        {
+            return std::nullopt;
+        }
+        effectiveChannel = active->channel.get();
+    }
+
+    if (effectiveChannel->isYouTubeChannel())
+    {
+        return HiddenUserPlatform::YouTube;
+    }
+    if (effectiveChannel->isKickChannel())
+    {
+        return HiddenUserPlatform::Kick;
+    }
+    if (effectiveChannel->isTikTokChannel())
+    {
+        return HiddenUserPlatform::TikTok;
+    }
+    if (effectiveChannel->isTwitchChannel())
+    {
+        return HiddenUserPlatform::Twitch;
+    }
+    return std::nullopt;
+}
+
+bool splitContainsChannel(const Split *split, const ChannelPtr &channel)
+{
+    if (split == nullptr || channel == nullptr)
+    {
+        return false;
+    }
+
+    const auto displayed = split->getChannel();
+    if (displayed == channel)
+    {
+        return true;
+    }
+    const auto *multi = dynamic_cast<const MultiChannel *>(displayed.get());
+    return multi != nullptr &&
+           std::ranges::any_of(multi->channels(),
+                               [&channel](const auto &child) {
+                                   return child.channel == channel;
+                               });
+}
+
+bool hiddenCommandTargetsCurrentAccount(HiddenUserPlatform platform,
+                                        const QString &target)
+{
+    const auto matches = [&target](const QString &candidate) {
+        return !candidate.trimmed().isEmpty() &&
+               normalizedHiddenCommandTarget(candidate).compare(
+                   target, Qt::CaseInsensitive) == 0;
+    };
+
+    switch (platform)
+    {
+        case HiddenUserPlatform::Twitch: {
+            const auto account = getApp()->getAccounts()->twitch.getCurrent();
+            return account && !account->isAnon() &&
+                   matches(account->getUserName());
+        }
+        case HiddenUserPlatform::Kick: {
+            const auto account = getApp()->getAccounts()->kick.current();
+            return account && !account->isAnonymous() &&
+                   matches(account->username());
+        }
+        case HiddenUserPlatform::YouTube: {
+            const auto account = getApp()->getAccounts()->youtube.current();
+            return account && !account->isAnonymous() &&
+                   (matches(account->handle()) ||
+                    matches(account->displayName()) ||
+                    matches(account->channelID()));
+        }
+        case HiddenUserPlatform::TikTok: {
+            const auto account = getApp()->getAccounts()->tiktok.current();
+            return account && !account->isAnonymous() &&
+                   (matches(account->handle()) || matches(account->userID()));
+        }
+    }
+    return false;
+}
+
+QString runHiddenUserCommand(const CommandContext &ctx, bool hidden)
+{
+    if (!ctx.channel)
+    {
+        return {};
+    }
+
+    const auto command = ctx.words.value(0);
+    const auto target = normalizedHiddenCommandTarget(ctx.words.value(1));
+    if (target.isEmpty() || ctx.words.size() != 2)
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("Usage: %1 <username>").arg(command));
+        return {};
+    }
+
+    const auto platform = hiddenUserPlatformForChannel(ctx.channel);
+    if (!platform)
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral(
+                "Use %1 in a Twitch, Kick, YouTube, or TikTok channel.")
+                .arg(command));
+        return {};
+    }
+
+    if (hidden && hiddenCommandTargetsCurrentAccount(*platform, target))
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("You cannot hide your active %1 account.")
+                .arg(hiddenUserPlatformName(*platform)));
+        return {};
+    }
+
+    auto *controller = getApp()->getHiddenUsers();
+    if (controller == nullptr)
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("Unable to update hidden users."));
+        return {};
+    }
+
+    const bool changed =
+        controller->setHidden(*platform, {}, target, {}, hidden);
+    const auto name = u'@' + target;
+    const auto platformName = hiddenUserPlatformName(*platform);
+    if (hidden)
+    {
+        ctx.channel->addSystemMessage(
+            changed ? QStringLiteral("Hidden %1 on %2.").arg(name, platformName)
+                    : QStringLiteral("%1 is already hidden on %2.")
+                          .arg(name, platformName));
+    }
+    else
+    {
+        ctx.channel->addSystemMessage(
+            changed
+                ? QStringLiteral("Unhidden %1 on %2.").arg(name, platformName)
+                : QStringLiteral("%1 is not hidden on %2.")
+                      .arg(name, platformName));
+    }
+    return {};
 }
 
 bool selectedTwitchUserMatches(const QString &userId, const QString &login)
@@ -127,17 +303,6 @@ QString formatNameHistoryRow(const TwitchNameHistoryEntry &entry)
     return u"%1: %2 - %3"_s.arg(entry.login, entry.leftText, entry.rightText);
 }
 
-QString modLogNumber(int value)
-{
-    return QLocale().toString(value);
-}
-
-QString modLogCountPhrase(int value, const QString &singular,
-                          const QString &plural)
-{
-    return u"%1 %2"_s.arg(modLogNumber(value), value == 1 ? singular : plural);
-}
-
 struct ModLogRange {
     int days = 7;
     QString text = u"last 7 days"_s;
@@ -152,159 +317,6 @@ enum class ModLogRangeParseState {
 struct ModLogRangeParseResult {
     ModLogRangeParseState state = ModLogRangeParseState::NotRange;
     ModLogRange range;
-};
-
-constexpr int MAX_MOD_LOG_CHAT_ROWS = 10;
-
-class ModLogSummaryRowLayoutElement final : public MessageLayoutElement
-{
-public:
-    ModLogSummaryRowLayoutElement(MessageElement &creator, QString left,
-                                  QString right, QSizeF size, QColor color,
-                                  FontStyle style, float scale)
-        : MessageLayoutElement(creator, size)
-        , left_(std::move(left))
-        , right_(std::move(right))
-        , color_(color)
-        , style_(style)
-        , scale_(scale)
-    {
-        this->setText(this->left_ + u" "_s + this->right_);
-    }
-
-    void addCopyTextToString(QString &str, uint32_t from = 0,
-                             uint32_t to = UINT32_MAX) const override
-    {
-        const auto text = this->getText();
-        const auto start = std::min<int>(static_cast<int>(from),
-                                         static_cast<int>(text.size()));
-        const auto end =
-            std::min<int>(static_cast<int>(to), static_cast<int>(text.size()));
-        if (end > start)
-        {
-            str += text.mid(start, end - start);
-        }
-    }
-
-    size_t getSelectionIndexCount() const override
-    {
-        return this->getText().size();
-    }
-
-    void paint(QPainter &painter,
-               const MessageColors & /*messageColors*/) override
-    {
-        const auto font =
-            getApp()->getFonts()->getFont(this->style_, this->scale_);
-        const QFontMetricsF metrics(font);
-        const auto rect = this->getRect();
-        const auto gap = 12 * this->scale_;
-        const auto rightWidth = metrics.horizontalAdvance(this->right_);
-
-        auto leftRect = rect;
-        leftRect.setRight(
-            std::max(leftRect.left(), rect.right() - rightWidth - gap));
-
-        QTextOption leftOption(Qt::AlignLeft | Qt::AlignVCenter);
-        leftOption.setWrapMode(QTextOption::NoWrap);
-        QTextOption rightOption(Qt::AlignRight | Qt::AlignVCenter);
-        rightOption.setWrapMode(QTextOption::NoWrap);
-
-        painter.setPen(this->color_);
-        painter.setFont(font);
-        painter.drawText(
-            leftRect,
-            metrics.elidedText(this->left_, Qt::ElideRight, leftRect.width()),
-            leftOption);
-        painter.drawText(rect, this->right_, rightOption);
-    }
-
-    bool paintAnimated(QPainter & /*painter*/, qreal /*yOffset*/) override
-    {
-        return false;
-    }
-
-    int getMouseOverIndex(QPointF abs) const override
-    {
-        return abs.x() < this->getRect().center().x()
-                   ? 0
-                   : static_cast<int>(this->getSelectionIndexCount());
-    }
-
-    qreal getXFromIndex(size_t index) override
-    {
-        return index == 0 ? this->getRect().left() : this->getRect().right();
-    }
-
-private:
-    QString left_;
-    QString right_;
-    QColor color_;
-    FontStyle style_;
-    float scale_;
-};
-
-class ModLogSummaryRowElement final : public MessageElement
-{
-public:
-    static constexpr std::string_view TYPE = "moltorino-modlog-row";
-
-    ModLogSummaryRowElement(QString left, QString right,
-                            MessageElementFlags flags,
-                            const MessageColor &color = MessageColor::System,
-                            FontStyle style = FontStyle::ChatMedium)
-        : MessageElement(flags)
-        , left_(std::move(left))
-        , right_(std::move(right))
-        , color_(color)
-        , style_(style)
-    {
-        this->setTrailingSpace(false);
-    }
-
-    void addToContainer(MessageLayoutContainer &container,
-                        const MessageLayoutContext &ctx) override
-    {
-        if (!ctx.flags.hasAny(this->getFlags()))
-        {
-            return;
-        }
-
-        if (!container.atStartOfLine())
-        {
-            container.breakLine();
-        }
-
-        const auto metrics = getApp()->getFonts()->getFontMetrics(
-            this->style_, container.getScale());
-        auto color = this->color_.getColor(ctx.messageColors);
-        const auto width = std::max<qreal>(container.remainingWidth(), 1);
-        auto *element = new ModLogSummaryRowLayoutElement(
-            *this, this->left_, this->right_, QSizeF(width, metrics.height()),
-            color, this->style_, container.getScale());
-        element->setTrailingSpace(false);
-        container.addElementNoLineBreak(element);
-    }
-
-    std::unique_ptr<MessageElement> clone() const override
-    {
-        auto element = std::make_unique<ModLogSummaryRowElement>(
-            this->left_, this->right_, this->getFlags(), this->color_,
-            this->style_);
-        element->cloneFrom(*this);
-        return element;
-    }
-
-    std::string_view type() const override
-    {
-        return TYPE;
-    }
-
-private:
-    QString left_;
-    QString right_;
-    MessageColor color_;
-    FontStyle style_;
 };
 
 QString modLogRangeText(int amount, QChar unit)
@@ -355,334 +367,37 @@ ModLogRangeParseResult parseModLogRange(QString value)
         return {.state = ModLogRangeParseState::Invalid, .range = {}};
     }
 
-    int days = amount;
+    qint64 days = amount;
     if (unit == 'w')
     {
-        days = amount * 7;
+        days = qint64(amount) * 7;
     }
     else if (unit == 'm')
     {
-        days = amount * 30;
+        days = qint64(amount) * 30;
     }
     else if (unit != 'd')
     {
         return {.state = ModLogRangeParseState::Invalid, .range = {}};
+    }
+    if (days > 3650)
+    {
+        return {ModLogRangeParseState::Invalid, {}};
     }
 
     return {
         .state = ModLogRangeParseState::Valid,
         .range =
             {
-                .days = days,
+                .days = static_cast<int>(days),
                 .text = modLogRangeText(amount, unit),
             },
     };
 }
 
-QString modLogCompactCountText(const ModerationActionLogCounts &counts)
-{
-    return u"%1 | %2 | %3"_s.arg(modLogNumber(counts.bans),
-                                 modLogNumber(counts.timeouts),
-                                 modLogNumber(counts.countedTotal()));
-}
-
-QString modLogRawNumber(int value)
-{
-    return QString::number(value);
-}
-
-QString modLogKey(const QString &value)
-{
-    return value.trimmed().toLower();
-}
-
-QString modLogDisplayName(const ModerationActionLogModeratorSummary &mod)
-{
-    auto login = mod.login.trimmed();
-    if (!login.isEmpty())
-    {
-        return login;
-    }
-
-    const auto displayName = mod.displayName.trimmed();
-    return displayName.isEmpty() ? u"Unknown"_s : displayName;
-}
-
-void addModLogCounts(ModerationActionLogCounts &target,
-                     const ModerationActionLogCounts &source)
-{
-    target.bans += source.bans;
-    target.timeouts += source.timeouts;
-}
-
-QString modLogPaddedCell(const QString &value, int width, bool rightAligned)
-{
-    return rightAligned ? value.rightJustified(width, QLatin1Char(' '))
-                        : value.leftJustified(width, QLatin1Char(' '));
-}
-
-ModerationActionLogScanSnapshot filterModLogsToCurrentModerators(
-    const ModerationActionLogScanSnapshot &snapshot,
-    const std::vector<HelixModerator> &moderators, const QString &channelLogin)
-{
-    QSet<QString> moderatorIds;
-    QHash<QString, QString> moderatorLogins;
-    QHash<QString, QString> moderatorLoginsById;
-
-    auto addAllowedModerator = [&](QString id, QString login) {
-        id = id.trimmed();
-        login = login.trimmed();
-
-        if (!id.isEmpty())
-        {
-            moderatorIds.insert(id);
-        }
-
-        if (!login.isEmpty())
-        {
-            moderatorLogins.insert(modLogKey(login), login);
-            if (!id.isEmpty())
-            {
-                moderatorLoginsById.insert(id, login);
-            }
-        }
-    };
-
-    addAllowedModerator({}, channelLogin);
-    for (const auto &moderator : moderators)
-    {
-        addAllowedModerator(moderator.userId, moderator.userLogin);
-    }
-
-    auto filtered = snapshot;
-    filtered.moderators.clear();
-    filtered.totals = {};
-
-    for (auto mod : snapshot.moderators)
-    {
-        const auto idKey = mod.id.trimmed();
-        const auto loginKey = modLogKey(mod.login);
-        const auto displayKey = modLogKey(mod.displayName);
-
-        QString canonicalLogin;
-        if (!idKey.isEmpty() && moderatorLoginsById.contains(idKey))
-        {
-            canonicalLogin = moderatorLoginsById.value(idKey);
-        }
-        else if (!loginKey.isEmpty() && moderatorLogins.contains(loginKey))
-        {
-            canonicalLogin = moderatorLogins.value(loginKey);
-        }
-        else if (!displayKey.isEmpty() && moderatorLogins.contains(displayKey))
-        {
-            canonicalLogin = moderatorLogins.value(displayKey);
-        }
-
-        if ((idKey.isEmpty() || !moderatorIds.contains(idKey)) &&
-            canonicalLogin.isEmpty())
-        {
-            continue;
-        }
-
-        if (!canonicalLogin.isEmpty())
-        {
-            mod.login = canonicalLogin;
-            mod.displayName = canonicalLogin;
-        }
-        else
-        {
-            mod.displayName = modLogDisplayName(mod);
-        }
-
-        filtered.moderators.push_back(mod);
-        addModLogCounts(filtered.totals, mod.counts);
-    }
-
-    return filtered;
-}
-
-QString buildModLogsFullListText(
-    const QString &channelLogin, const QString &rangeText,
-    const ModerationActionLogScanSnapshot &snapshot)
-{
-    QStringList lines;
-    lines.reserve(snapshot.moderators.size() + 14);
-    const auto generatedAt =
-        QLocale().toString(QDateTime::currentDateTime(), QLocale::ShortFormat);
-
-    int rankWidth = std::max<int>(
-        static_cast<int>(u"RANK"_s.size()),
-        static_cast<int>(
-            modLogRawNumber(static_cast<int>(snapshot.moderators.size()))
-                .size()));
-    int moderatorWidth = static_cast<int>(u"MODERATOR"_s.size());
-    int bansWidth = static_cast<int>(u"BANS"_s.size());
-    int timeoutsWidth = static_cast<int>(u"TIMEOUTS"_s.size());
-    int totalWidth = static_cast<int>(u"TOTAL"_s.size());
-
-    auto updateWidths = [&](const QString &moderator,
-                            const ModerationActionLogCounts &counts) {
-        moderatorWidth =
-            std::max<int>(moderatorWidth, static_cast<int>(moderator.size()));
-        bansWidth = std::max<int>(
-            bansWidth, static_cast<int>(modLogRawNumber(counts.bans).size()));
-        timeoutsWidth = std::max<int>(
-            timeoutsWidth,
-            static_cast<int>(modLogRawNumber(counts.timeouts).size()));
-        totalWidth = std::max<int>(
-            totalWidth,
-            static_cast<int>(modLogRawNumber(counts.countedTotal()).size()));
-    };
-
-    updateWidths(u"All mods"_s, snapshot.totals);
-    for (const auto &mod : snapshot.moderators)
-    {
-        updateWidths(modLogDisplayName(mod), mod.counts);
-    }
-
-    auto row = [&](const QString &rank, const QString &moderator,
-                   const QString &bans, const QString &timeouts,
-                   const QString &total) {
-        return u"%1 | %2 | %3 | %4 | %5"_s.arg(
-            modLogPaddedCell(rank, rankWidth, true),
-            modLogPaddedCell(moderator, moderatorWidth, false),
-            modLogPaddedCell(bans, bansWidth, true),
-            modLogPaddedCell(timeouts, timeoutsWidth, true),
-            modLogPaddedCell(total, totalWidth, true));
-    };
-
-    const auto header =
-        row(u"RANK"_s, u"MODERATOR"_s, u"BANS"_s, u"TIMEOUTS"_s, u"TOTAL"_s);
-    const auto separator = QString(header.size(), QLatin1Char('-'));
-
-    lines.append(u"Mod actions in %1, %2"_s.arg(channelLogin, rangeText));
-    lines.append(u"Generated: %1"_s.arg(generatedAt));
-    if (snapshot.truncated)
-    {
-        lines.append(u"Status: partial, page limit reached"_s);
-    }
-    lines.append(QString());
-    lines.append(u"Total Mods: %1"_s.arg(
-        modLogRawNumber(static_cast<int>(snapshot.moderators.size()))));
-    lines.append(u"Total Actions: %1"_s.arg(
-        modLogRawNumber(snapshot.totals.countedTotal())));
-    lines.append(u"  - Bans: %1"_s.arg(modLogRawNumber(snapshot.totals.bans)));
-    lines.append(
-        u"  - Timeouts: %1"_s.arg(modLogRawNumber(snapshot.totals.timeouts)));
-    lines.append(QString());
-    lines.append(separator);
-    lines.append(header);
-    lines.append(separator);
-
-    int rank = 1;
-    for (const auto &mod : snapshot.moderators)
-    {
-        lines.append(row(modLogRawNumber(rank++), modLogDisplayName(mod),
-                         modLogRawNumber(mod.counts.bans),
-                         modLogRawNumber(mod.counts.timeouts),
-                         modLogRawNumber(mod.counts.countedTotal())));
-    }
-    lines.append(separator);
-
-    return lines.join(QLatin1Char('\n'));
-}
-
-void uploadModLogsFullList(
-    const QString &content,
-    std::function<void(const QString &)> completionCallback)
-{
-    auto callback = std::make_shared<std::function<void(const QString &)>>(
-        std::move(completionCallback));
-    QJsonObject payload{
-        {u"source"_s, u"client"_s},
-        {u"content"_s, content},
-    };
-
-    NetworkRequest(QUrl(u"https://h.moltorino.com/api/paste"_s),
-                   NetworkRequestType::Post)
-        .timeout(10000)
-        .hideRequestBody()
-        .json(payload)
-        .onSuccess([callback](const NetworkResult &result) {
-            const auto root = result.parseJson();
-            auto rawUrl = root.value(u"rawUrl"_s).toString().trimmed();
-            if (rawUrl.isEmpty())
-            {
-                const auto url = root.value(u"url"_s).toString().trimmed();
-                if (!url.isEmpty())
-                {
-                    rawUrl = url + u"/raw"_s;
-                }
-            }
-            if (!rawUrl.startsWith(u"https://"_s) &&
-                !rawUrl.startsWith(u"http://"_s))
-            {
-                rawUrl.clear();
-            }
-            (*callback)(rawUrl);
-        })
-        .onError([callback](const NetworkResult &) {
-            (*callback)(QString());
-        })
-        .execute();
-}
-
-void addModLogTextLine(MessageBuilder &builder, QString &searchText,
-                       const QString &line)
-{
-    if (!searchText.isEmpty())
-    {
-        searchText += '\n';
-        builder.emplace<LinebreakElement>(MessageElementFlag::Text);
-    }
-
-    searchText += line;
-    builder.emplace<TextElement>(line, MessageElementFlag::Text,
-                                 MessageColor::System);
-}
-
-void addModLogSummaryRow(MessageBuilder &builder, QString &searchText,
-                         const QString &left, const QString &right)
-{
-    if (!searchText.isEmpty())
-    {
-        searchText += '\n';
-        builder.emplace<LinebreakElement>(MessageElementFlag::Text);
-    }
-
-    const auto rowText = u"%1 %2"_s.arg(left, right);
-    searchText += rowText;
-    builder.emplace<ModLogSummaryRowElement>(left, right,
-                                             MessageElementFlag::Text);
-}
-
-void addModLogLinkLine(MessageBuilder &builder, QString &searchText,
-                       const QString &prefix, const QString &url)
-{
-    if (!searchText.isEmpty())
-    {
-        searchText += '\n';
-        builder.emplace<LinebreakElement>(MessageElementFlag::Text);
-    }
-
-    auto displayUrl = url;
-    displayUrl.remove(QRegularExpression(u"^https?://"_s));
-
-    searchText += prefix + QLatin1Char(' ') + displayUrl;
-    builder.emplace<TextElement>(prefix, MessageElementFlag::Text,
-                                 MessageColor::System);
-    builder.emplace<LinkElement>(
-        LinkElement::Parsed{.lowercase = displayUrl.toLower(),
-                            .original = displayUrl},
-        url, MessageElementFlag::Text, MessageColor(MessageColor::Link));
-}
-
-void addModLogsResultMessage(const ChannelPtr &channel,
-                             const QString &channelLogin,
-                             const QString &rangeText,
-                             const QString &moderatorLogin,
-                             const ModerationActionLogScanSnapshot &snapshot,
-                             const QString &fullListRawUrl = QString())
+void addModLogsReadyMessage(const ChannelPtr &channel,
+                            const QString &channelLogin,
+                            const QString &rangeText, const QString &reportId)
 {
     if (channel == nullptr)
     {
@@ -690,99 +405,23 @@ void addModLogsResultMessage(const ChannelPtr &channel,
     }
 
     MessageBuilder builder;
-    QString searchText;
-
-    if (moderatorLogin.isEmpty())
-    {
-        addModLogTextLine(
-            builder, searchText,
-            u"Mod actions in %1, %2"_s.arg(channelLogin, rangeText));
-        if (snapshot.moderators.isEmpty())
-        {
-            addModLogTextLine(builder, searchText, QString());
-            addModLogTextLine(builder, searchText,
-                              "No matching moderation actions found.");
-        }
-        else
-        {
-            addModLogTextLine(
-                builder, searchText,
-                u"%1 across %2"_s.arg(
-                    modLogCountPhrase(snapshot.totals.countedTotal(),
-                                      u"counted action"_s,
-                                      u"counted actions"_s),
-                    modLogCountPhrase(
-                        static_cast<int>(snapshot.moderators.size()),
-                        u"moderator"_s, u"moderators"_s)));
-            addModLogTextLine(builder, searchText, QString());
-            addModLogSummaryRow(builder, searchText, u""_s,
-                                u"bans | timeouts | total"_s);
-            addModLogSummaryRow(builder, searchText, u"All mods:"_s,
-                                modLogCompactCountText(snapshot.totals));
-            for (int i = 0;
-                 i < snapshot.moderators.size() && i < MAX_MOD_LOG_CHAT_ROWS;
-                 ++i)
-            {
-                const auto &mod = snapshot.moderators.at(i);
-                addModLogSummaryRow(builder, searchText,
-                                    modLogDisplayName(mod) + u":"_s,
-                                    modLogCompactCountText(mod.counts));
-            }
-            if (snapshot.moderators.size() > MAX_MOD_LOG_CHAT_ROWS)
-            {
-                addModLogTextLine(builder, searchText,
-                                  u"Showing top %1 of %2 moderators."_s
-                                      .arg(MAX_MOD_LOG_CHAT_ROWS)
-                                      .arg(snapshot.moderators.size()));
-                if (!fullListRawUrl.isEmpty())
-                {
-                    addModLogTextLine(builder, searchText, QString());
-                    addModLogLinkLine(builder, searchText, u"Full list:"_s,
-                                      fullListRawUrl);
-                }
-            }
-        }
-        if (snapshot.truncated)
-        {
-            addModLogTextLine(builder, searchText,
-                              "Result may be incomplete; page limit was "
-                              "reached before the full range.");
-        }
-    }
-    else
-    {
-        addModLogTextLine(builder, searchText,
-                          u"Mod actions by %1"_s.arg(moderatorLogin));
-        addModLogTextLine(builder, searchText,
-                          u"in %1, %2"_s.arg(channelLogin, rangeText));
-        if (snapshot.totals.rawTotal() == 0)
-        {
-            addModLogTextLine(builder, searchText, QString());
-            addModLogTextLine(builder, searchText,
-                              "No matching moderation actions found.");
-        }
-        else
-        {
-            addModLogTextLine(builder, searchText, QString());
-            addModLogSummaryRow(builder, searchText, u"Bans:"_s,
-                                modLogNumber(snapshot.totals.bans));
-            addModLogSummaryRow(builder, searchText, u"Timeouts:"_s,
-                                modLogNumber(snapshot.totals.timeouts));
-            addModLogSummaryRow(builder, searchText, u"Total:"_s,
-                                modLogNumber(snapshot.totals.countedTotal()));
-        }
-        if (snapshot.truncated)
-        {
-            addModLogTextLine(builder, searchText,
-                              "Result may be incomplete; page limit was "
-                              "reached before the full range.");
-        }
-    }
+    const auto prefix =
+        QStringLiteral("Moderation report for #%1, %2 is ready. ")
+            .arg(channelLogin, rangeText);
+    const auto linkText = QStringLiteral("Open report");
+    const auto fullText = prefix + linkText;
 
     builder->flags.set(MessageFlag::System);
     builder->flags.set(MessageFlag::DoNotTriggerNotification);
-    builder->messageText = searchText;
-    builder->searchText = searchText;
+    builder->messageText = fullText;
+    builder->searchText = fullText;
+    builder.emplace<TimestampElement>();
+    builder.emplace<TextElement>(prefix, MessageElementFlag::Text,
+                                 MessageColor::System);
+    builder
+        .emplace<TextElement>(QStringList{linkText}, MessageElementFlag::Text,
+                              MessageColor::Link, FontStyle::ChatMediumBold)
+        ->setLink({Link::OpenModerationReport, reportId});
     channel->addMessage(builder.release(), MessageContext::Original);
 }
 
@@ -824,32 +463,30 @@ void addNameHistorySystemMessage(const ChannelPtr &channel,
     channel->addMessage(builder.release(), MessageContext::Original);
 }
 
-void publishModLogsSnapshot(const ChannelPtr &channel,
-                            const QString &channelLogin,
-                            const ModLogRange &range,
-                            const QString &moderatorLabel,
-                            const ModerationActionLogScanSnapshot &snapshot,
-                            ModerationActionLogScanner *scanner)
+void publishModLogsReport(const ChannelPtr &channel, const QString &channelId,
+                          const QString &channelLogin, const ModLogRange &range,
+                          const QDateTime &cutoffUtc,
+                          const ModerationActionLogScanSnapshot &snapshot,
+                          std::vector<HelixModerator> currentModerators,
+                          bool currentRosterAvailable,
+                          ModerationActionLogScanner *scanner)
 {
-    const auto shouldUploadFullList =
-        moderatorLabel.isEmpty() &&
-        snapshot.moderators.size() > MAX_MOD_LOG_CHAT_ROWS;
-    if (!shouldUploadFullList)
-    {
-        addModLogsResultMessage(channel, channelLogin, range.text,
-                                moderatorLabel, snapshot);
-        scanner->deleteLater();
-        return;
-    }
-
-    uploadModLogsFullList(
-        buildModLogsFullListText(channelLogin, range.text, snapshot),
-        [channel, channelLogin, range, moderatorLabel, snapshot,
-         scanner](const QString &fullListRawUrl) {
-            addModLogsResultMessage(channel, channelLogin, range.text,
-                                    moderatorLabel, snapshot, fullListRawUrl);
-            scanner->deleteLater();
-        });
+    ModerationReportContext context{
+        .channelId = channelId,
+        .channelLogin = channelLogin,
+        .rangeText = range.text,
+        .cutoffUtc = cutoffUtc,
+        .generatedAtUtc = QDateTime::currentDateTimeUtc(),
+        .snapshot = snapshot,
+        .currentModerators = std::move(currentModerators),
+        .outputChannel = channel,
+        .currentRosterAvailable = currentRosterAvailable,
+    };
+    const auto reportId = rememberModerationReport(std::move(context));
+    addModLogsReadyMessage(channel, channelLogin, range.text, reportId);
+    openRememberedModerationReport(reportId,
+                                   &getApp()->getWindows()->getMainWindow());
+    scanner->deleteLater();
 }
 
 QString commandWordsAfter(const CommandContext &ctx, int wordCount)
@@ -912,8 +549,8 @@ QString runTranslatePreviewCommand(const CommandContext &ctx,
             addTranslationSystemMessage(channel, result, targetLanguage);
         },
         [channel = ctx.channel](const QString &) {
-            channel->addSystemMessage(
-                u"Translation failed. Try again later."_s);
+            channel->addSystemMessage(QStringLiteral(
+                "Translation failed. Try switching providers in Settings."));
         });
 
     return "";
@@ -941,8 +578,9 @@ QString runTranslateSendCommand(const CommandContext &ctx,
             translatedText.replace('\n', ' ');
             if (translatedText.isEmpty())
             {
-                channel->addSystemMessage(
-                    u"Translation failed, so nothing was sent."_s);
+                channel->addSystemMessage(QStringLiteral(
+                    "Translation failed, so nothing was sent. Try switching "
+                    "providers in Settings."));
                 return;
             }
             if (translatedText.size() > TWITCH_MESSAGE_LIMIT)
@@ -955,8 +593,9 @@ QString runTranslateSendCommand(const CommandContext &ctx,
             channel->sendMessage(translatedText);
         },
         [channel = ctx.channel](const QString &) {
-            channel->addSystemMessage(
-                u"Translation failed, so nothing was sent."_s);
+            channel->addSystemMessage(QStringLiteral(
+                "Translation failed, so nothing was sent. Try switching "
+                "providers in Settings."));
         });
 
     return "";
@@ -1003,6 +642,7 @@ void runFollowMutation(const ChannelPtr &channel,
     const auto requestLogin = auth.login;
     auto successCallback = [channel, requestUserId, requestLogin, targetId,
                             targetLogin, targetName, unfollow] {
+        detail::rememberFollowingStatus(requestUserId, targetId, !unfollow);
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get());
             twitchChannel != nullptr &&
             selectedTwitchUserMatches(requestUserId, requestLogin) &&
@@ -1130,6 +770,16 @@ QString unfollow(const CommandContext &ctx)
     return runFollowCommand(ctx, true);
 }
 
+QString hideUser(const CommandContext &ctx)
+{
+    return runHiddenUserCommand(ctx, true);
+}
+
+QString unhideUser(const CommandContext &ctx)
+{
+    return runHiddenUserCommand(ctx, false);
+}
+
 QString nameHistory(const CommandContext &ctx)
 {
     if (ctx.channel == nullptr)
@@ -1248,7 +898,7 @@ QString modLogs(const CommandContext &ctx)
         return "";
     }
 
-    const auto usage = u"Usage: /modlogs [all|moderator] [range] [channel]"_s;
+    const auto usage = QStringLiteral("Usage: /modlogs [range] [channel]");
     auto normalizedCommandArgument = [](QString value) {
         value = value.trimmed();
         stripUserName(value);
@@ -1257,43 +907,36 @@ QString modLogs(const CommandContext &ctx)
     };
 
     const auto args = ctx.words.mid(1);
-    QString moderatorLogin;
     ModLogRange range;
-    int argIndex = 0;
+    QString channelLogin;
+    QString channelId;
 
-    const auto first = normalizedCommandArgument(args.value(argIndex));
-    const auto firstLower = first.toLower();
-    if (!first.isEmpty())
+    if (args.isEmpty())
     {
-        if (firstLower == "all" || firstLower == "channel")
+        const auto defaultChannel = ctx.twitchChannel != nullptr
+                                        ? ctx.twitchChannel->getName()
+                                        : QString();
+        const auto request = requestModerationReport(
+            &getApp()->getWindows()->getMainWindow(), defaultChannel);
+        if (!request)
         {
-            argIndex++;
+            return "";
         }
-        else
+        range.days = request->days;
+        range.text = request->rangeText;
+        channelLogin = request->channelLogin;
+        if (ctx.twitchChannel != nullptr &&
+            channelLogin.compare(ctx.twitchChannel->getName(),
+                                 Qt::CaseInsensitive) == 0)
         {
-            const auto parsedRange = parseModLogRange(first);
-            if (parsedRange.state == ModLogRangeParseState::Valid)
-            {
-                range = parsedRange.range;
-                argIndex++;
-            }
-            else if (parsedRange.state == ModLogRangeParseState::Invalid)
-            {
-                ctx.channel->addSystemMessage(usage);
-                return "";
-            }
-            else
-            {
-                moderatorLogin = first;
-                argIndex++;
-            }
+            channelId = ctx.twitchChannel->roomId();
         }
     }
-
-    if (argIndex < args.size())
+    else
     {
-        const auto maybeRange = normalizedCommandArgument(args.value(argIndex));
-        const auto parsedRange = parseModLogRange(maybeRange);
+        int argIndex = 0;
+        const auto first = normalizedCommandArgument(args.value(argIndex));
+        const auto parsedRange = parseModLogRange(first);
         if (parsedRange.state == ModLogRangeParseState::Valid)
         {
             range = parsedRange.range;
@@ -1304,20 +947,26 @@ QString modLogs(const CommandContext &ctx)
             ctx.channel->addSystemMessage(usage);
             return "";
         }
-    }
+        else
+        {
+            channelLogin = first;
+            argIndex++;
+        }
 
-    QString channelLogin;
-    QString channelId;
-    if (argIndex < args.size())
-    {
-        channelLogin = normalizedCommandArgument(args.value(argIndex));
-        argIndex++;
-    }
-
-    if (argIndex < args.size())
-    {
-        ctx.channel->addSystemMessage(usage);
-        return "";
+        if (argIndex < args.size())
+        {
+            if (!channelLogin.isEmpty())
+            {
+                ctx.channel->addSystemMessage(usage);
+                return "";
+            }
+            channelLogin = normalizedCommandArgument(args.value(argIndex++));
+        }
+        if (argIndex < args.size())
+        {
+            ctx.channel->addSystemMessage(usage);
+            return "";
+        }
     }
 
     if (channelLogin.isEmpty() && ctx.twitchChannel != nullptr)
@@ -1332,8 +981,8 @@ QString modLogs(const CommandContext &ctx)
         return "";
     }
 
-    const auto startScan = [channel = ctx.channel, channelLogin, range,
-                            moderatorLogin](const QString &resolvedChannelId) {
+    const auto startScan = [channel = ctx.channel, channelLogin,
+                            range](const QString &resolvedChannelId) {
         QString authError;
         const auto auth = MoltorinoAuth::resolveModerationToken(
             resolvedChannelId, channelLogin, &authError);
@@ -1343,60 +992,51 @@ QString modLogs(const CommandContext &ctx)
             return;
         }
 
-        const auto beginScanner = [channel, channelLogin, range](
-                                      ModerationActionLogScanRequest request,
-                                      const QString &moderatorLabel) {
-            channel->addSystemMessage("Fetching moderation action logs...");
+        const auto beginScanner = [channel, channelLogin, range,
+                                   resolvedChannelId](
+                                      ModerationActionLogScanRequest request) {
+            channel->addSystemMessage(
+                QStringLiteral("Building moderation report for #%1...")
+                    .arg(channelLogin));
+            const auto cutoffUtc = request.cutoffUtc;
             auto *scanner = new ModerationActionLogScanner(std::move(request));
             scanner->onDone =
-                [channel, channelLogin, range, moderatorLabel,
+                [channel, channelLogin, range, resolvedChannelId, cutoffUtc,
                  scanner](const ModerationActionLogScanSnapshot &snapshot) {
-                    if (!moderatorLabel.isEmpty())
-                    {
-                        publishModLogsSnapshot(channel, channelLogin, range,
-                                               moderatorLabel, snapshot,
-                                               scanner);
-                        return;
-                    }
-
                     auto *ivr = getIvr();
                     if (ivr == nullptr)
                     {
-                        channel->addSystemMessage(
-                            "Could not verify current channel moderators; "
-                            "showing unfiltered moderation action logs.");
-                        publishModLogsSnapshot(channel, channelLogin, range,
-                                               moderatorLabel, snapshot,
-                                               scanner);
+                        publishModLogsReport(channel, resolvedChannelId,
+                                             channelLogin, range, cutoffUtc,
+                                             snapshot, {}, false, scanner);
                         return;
                     }
 
                     ivr->getModVip(
                         channelLogin,
-                        [channel, channelLogin, range, moderatorLabel, scanner,
-                         snapshot](
-                            const std::vector<HelixModerator> &moderators,
-                            const std::vector<HelixVip> &) mutable {
-                            auto filtered = filterModLogsToCurrentModerators(
-                                snapshot, moderators, channelLogin);
-                            publishModLogsSnapshot(channel, channelLogin, range,
-                                                   moderatorLabel, filtered,
-                                                   scanner);
+                        [channel, channelLogin, range, resolvedChannelId,
+                         cutoffUtc, scanner,
+                         snapshot](std::vector<HelixModerator> moderators,
+                                   std::vector<HelixVip>) mutable {
+                            publishModLogsReport(
+                                channel, resolvedChannelId, channelLogin, range,
+                                cutoffUtc, snapshot, std::move(moderators),
+                                true, scanner);
                         },
-                        [channel, channelLogin, range, moderatorLabel, scanner,
-                         snapshot] {
-                            channel->addSystemMessage(
-                                "Could not verify current channel "
-                                "moderators; showing unfiltered "
-                                "moderation action logs.");
-                            publishModLogsSnapshot(channel, channelLogin, range,
-                                                   moderatorLabel, snapshot,
-                                                   scanner);
+                        [channel, channelLogin, range, resolvedChannelId,
+                         cutoffUtc, scanner, snapshot] {
+                            publishModLogsReport(channel, resolvedChannelId,
+                                                 channelLogin, range, cutoffUtc,
+                                                 snapshot, {}, false, scanner);
                         });
                 };
             scanner->onError = [channel, scanner](const QString &error) {
+                const auto normalized = MoltorinoAuth::normalizeAuthError(
+                    "building a moderation report", error);
                 channel->addSystemMessage(
-                    u"Failed to fetch moderation action logs: %1"_s.arg(error));
+                    QStringLiteral("Could not build the moderation report: "
+                                   "%1")
+                        .arg(normalized));
                 scanner->deleteLater();
             };
             scanner->start();
@@ -1408,32 +1048,7 @@ QString modLogs(const CommandContext &ctx)
         request.oauthToken = auth.token;
         request.cutoffUtc =
             QDateTime::currentDateTimeUtc().addDays(-range.days);
-
-        if (moderatorLogin.isEmpty())
-        {
-            beginScanner(std::move(request), QString());
-            return;
-        }
-
-        TwitchGql::getUserByLogin(
-            moderatorLogin, auth.token,
-            [channel, request = std::move(request), beginScanner,
-             moderatorLogin](std::optional<GqlUser> user) mutable {
-                if (!user)
-                {
-                    channel->addSystemMessage(
-                        u"Could not find Twitch user %1."_s.arg(
-                            moderatorLogin));
-                    return;
-                }
-                request.moderatorId = user->id;
-                request.moderatorLogin = user->login;
-                beginScanner(std::move(request), user->login);
-            },
-            [channel, moderatorLogin](const QString &error) {
-                channel->addSystemMessage(
-                    u"Failed to look up %1: %2"_s.arg(moderatorLogin, error));
-            });
+        beginScanner(std::move(request));
     };
 
     if (!channelId.isEmpty())
@@ -1463,8 +1078,10 @@ QString modLogs(const CommandContext &ctx)
             startScan(user->id);
         },
         [channel = ctx.channel, channelLogin](const QString &error) {
+            const auto normalized = MoltorinoAuth::normalizeAuthError(
+                "looking up a moderation report channel", error);
             channel->addSystemMessage(
-                u"Failed to look up %1: %2"_s.arg(channelLogin, error));
+                u"Failed to look up %1: %2"_s.arg(channelLogin, normalized));
         });
 
     return "";
@@ -1582,7 +1199,67 @@ QString user(const CommandContext &ctx)
     return "";
 }
 
-QString requests(const CommandContext &ctx)
+QString vanity(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr || ctx.twitchChannel == nullptr ||
+        ctx.channel->getType() != Channel::Type::Twitch)
+    {
+        if (ctx.channel != nullptr)
+        {
+            ctx.channel->addSystemMessage(
+                "Open a Twitch channel before using /vanity.");
+        }
+        return {};
+    }
+
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (account->isAnon())
+    {
+        ctx.channel->addSystemMessage(
+            "Log in to Twitch before opening the vanity editor.");
+        return {};
+    }
+
+    VanityDialog::showDialog(ctx.twitchChannel->sharedFromThis(),
+                             &getApp()->getWindows()->getMainWindow());
+    return {};
+}
+
+QString selfbot(const CommandContext &ctx)
+{
+    QString initialChannel;
+    if (ctx.twitchChannel != nullptr)
+    {
+        initialChannel = ctx.twitchChannel->getName();
+    }
+    else if (const auto *multi =
+                 dynamic_cast<const MultiChannel *>(ctx.channel.get()))
+    {
+        if (const auto *active = multi->activeChannel();
+            active != nullptr &&
+            active->platform == MultiChannel::Platform::Twitch)
+        {
+            initialChannel = active->channel->getName();
+        }
+        else
+        {
+            for (const auto &child : multi->channels())
+            {
+                if (child.platform == MultiChannel::Platform::Twitch)
+                {
+                    initialChannel = child.channel->getName();
+                    break;
+                }
+            }
+        }
+    }
+
+    ChatAutomationDialog::showDialog(std::move(initialChannel),
+                                     &getApp()->getWindows()->getMainWindow());
+    return {};
+}
+
+QString rewardRequests(const CommandContext &ctx)
 {
     if (ctx.channel == nullptr)
     {
@@ -1600,20 +1277,319 @@ QString requests(const CommandContext &ctx)
         }
         else
         {
-            ctx.channel->addSystemMessage(
-                "Usage: /requests [channel]. You can also use the command "
-                "without arguments in any Twitch channel to open its "
-                "channel points requests queue. Only the broadcaster and "
-                "moderators have permission to view the queue.");
+            ctx.channel->addSystemMessage("Usage: /rewardrequests [channel]");
             return "";
         }
     }
 
     stripChannelName(target);
+    target = target.trimmed().toLower();
+    if (target.isEmpty())
+    {
+        ctx.channel->addSystemMessage("Usage: /rewardrequests [channel]");
+        return "";
+    }
+#if !MOLTORINO_ENABLE_CHANNEL_POINT_REWARDS
     QDesktopServices::openUrl(QUrl(
         QString("https://www.twitch.tv/popout/%1/reward-queue").arg(target)));
+    return "";
+#else
+    QString channelId;
+    if (ctx.twitchChannel != nullptr &&
+        target.compare(ctx.twitchChannel->getName(), Qt::CaseInsensitive) == 0)
+    {
+        channelId = ctx.twitchChannel->roomId();
+    }
+
+    const auto openQueue = [channel = ctx.channel,
+                            target](const QString &resolvedChannelId) {
+        QString error;
+        const auto auth = MoltorinoAuth::resolveModerationToken(
+            resolvedChannelId, target, &error);
+        if (!auth.hasToken())
+        {
+            channel->addSystemMessage(
+                error.isEmpty()
+                    ? MoltorinoAuth::authRequiredMessage("reward requests")
+                    : error);
+            return;
+        }
+        RewardRequestQueueDialog::showDialog(
+            resolvedChannelId, target, channel,
+            &getApp()->getWindows()->getMainWindow());
+    };
+
+    if (!channelId.isEmpty())
+    {
+        openQueue(channelId);
+        return "";
+    }
+
+    QString readError;
+    const auto readAuth = MoltorinoAuth::resolveReadToken(&readError);
+    if (!readAuth.hasToken())
+    {
+        ctx.channel->addSystemMessage(readError);
+        return "";
+    }
+    TwitchGql::getUserByLogin(
+        target, readAuth.token,
+        [channel = ctx.channel, target,
+         openQueue](std::optional<GqlUser> user) {
+            if (!user)
+            {
+                channel->addSystemMessage(
+                    u"Could not find Twitch channel %1."_s.arg(target));
+                return;
+            }
+            openQueue(user->id);
+        },
+        [channel = ctx.channel, target](const QString &error) {
+            const auto normalized = MoltorinoAuth::normalizeAuthError(
+                "opening reward requests", error);
+            channel->addSystemMessage(
+                QStringLiteral("Could not open reward requests for #%1: %2")
+                    .arg(target, normalized));
+        });
 
     return "";
+#endif
+}
+
+QString unbanRequests(const CommandContext &ctx)
+{
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+
+    QString target(ctx.words.value(1));
+    if (target.isEmpty())
+    {
+        if (ctx.channel->getType() == Channel::Type::Twitch &&
+            ctx.twitchChannel != nullptr && !ctx.twitchChannel->isEmpty())
+        {
+            target = ctx.twitchChannel->getName();
+        }
+        else
+        {
+            ctx.channel->addSystemMessage("Usage: /unbanrequests [channel]");
+            return "";
+        }
+    }
+
+    stripChannelName(target);
+    target = target.trimmed().toLower();
+    if (target.isEmpty())
+    {
+        ctx.channel->addSystemMessage("Usage: /unbanrequests [channel]");
+        return "";
+    }
+    QString channelId;
+    if (ctx.twitchChannel != nullptr &&
+        target.compare(ctx.twitchChannel->getName(), Qt::CaseInsensitive) == 0)
+    {
+        channelId = ctx.twitchChannel->roomId();
+    }
+
+    const auto openQueue = [channel = ctx.channel,
+                            target](const QString &resolvedChannelId) {
+        QString error;
+        const auto auth = MoltorinoAuth::resolveModerationToken(
+            resolvedChannelId, target, &error);
+        if (!auth.hasToken())
+        {
+            channel->addSystemMessage(
+                error.isEmpty()
+                    ? MoltorinoAuth::authRequiredMessage("unban requests")
+                    : error);
+            return;
+        }
+        UnbanRequestsDialog::showDialog(
+            resolvedChannelId, target, channel,
+            &getApp()->getWindows()->getMainWindow());
+    };
+
+    if (!channelId.isEmpty())
+    {
+        openQueue(channelId);
+        return "";
+    }
+
+    QString readError;
+    const auto readAuth = MoltorinoAuth::resolveReadToken(&readError);
+    if (!readAuth.hasToken())
+    {
+        ctx.channel->addSystemMessage(readError);
+        return "";
+    }
+    TwitchGql::getUserByLogin(
+        target, readAuth.token,
+        [channel = ctx.channel, target,
+         openQueue](std::optional<GqlUser> user) {
+            if (!user)
+            {
+                channel->addSystemMessage(
+                    u"Could not find Twitch channel %1."_s.arg(target));
+                return;
+            }
+            openQueue(user->id);
+        },
+        [channel = ctx.channel, target](const QString &error) {
+            const auto normalized = MoltorinoAuth::normalizeAuthError(
+                "opening unban requests", error);
+            channel->addSystemMessage(
+                QStringLiteral("Could not open unban requests for #%1: %2")
+                    .arg(target, normalized));
+        });
+
+    return "";
+}
+
+static QString crossChannelAction(const CommandContext &ctx,
+                                  CrossChannelAction action)
+{
+    const bool ban = action == CrossChannelAction::Ban;
+    const auto command =
+        ban ? QStringLiteral("/crossban") : QStringLiteral("/crossunban");
+    const auto feature =
+        ban ? QStringLiteral("Cross ban") : QStringLiteral("Cross unban");
+    if (ctx.channel == nullptr)
+    {
+        return "";
+    }
+    if (ctx.twitchChannel == nullptr || ctx.twitchChannel->isEmpty())
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("The %1 command only works in Twitch channels.")
+                .arg(command));
+        return "";
+    }
+    if (ctx.words.size() != 2)
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("Usage: %1 <username>").arg(command));
+        return "";
+    }
+
+    QString target = ctx.words.at(1);
+    stripUserName(target);
+    target = target.trimmed().toLower();
+    static const QRegularExpression validLogin(
+        QStringLiteral("^[a-z0-9_]{1,25}$"));
+    if (!validLogin.match(target).hasMatch())
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("Invalid Twitch username: %1").arg(target));
+        return "";
+    }
+
+    const auto channelId = ctx.twitchChannel->roomId();
+    const auto channelLogin = ctx.twitchChannel->getName();
+    if (channelId.isEmpty())
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral("%1 is still waiting for this channel's Twitch "
+                           "ID. Try again in a moment.")
+                .arg(feature));
+        return "";
+    }
+
+    QString authError;
+    auto auth = MoltorinoAuth::resolveModerationToken(channelId, channelLogin,
+                                                      &authError);
+    const bool canModerateCurrentChannel = auth.hasToken() && !auth.legacy;
+    if (!auth.hasToken() &&
+        getSettings()->showCrossActionsInUnmoderatedChannels)
+    {
+        auth = MoltorinoAuth::resolveCurrentUserToken(&authError);
+    }
+    if (!auth.hasToken() || auth.legacy)
+    {
+        ctx.channel->addSystemMessage(
+            !authError.isEmpty()
+                ? authError
+                : QStringLiteral("%1 needs a saved Twitch account in "
+                                 "Moltorino Authentication.")
+                      .arg(feature));
+        return "";
+    }
+    if (ban && target.compare(auth.login, Qt::CaseInsensitive) == 0)
+    {
+        ctx.channel->addSystemMessage("You cannot cross ban your own account.");
+        return "";
+    }
+
+    const auto savedAccounts = MoltorinoAuth::accounts();
+    const auto accountIt = std::ranges::find_if(
+        savedAccounts, [&auth](const MoltorinoAuthAccount &account) {
+            return account.enabled && account.valid &&
+                   account.userId == auth.userId &&
+                   account.token.trimmed() == auth.token.trimmed();
+        });
+    if (accountIt == savedAccounts.end())
+    {
+        ctx.channel->addSystemMessage(
+            QStringLiteral(
+                "%1 could not find the saved account for this action. "
+                "Refresh accounts in Moltorino Authentication.")
+                .arg(feature));
+        return "";
+    }
+
+    QVector<MoltorinoAuthChannel> channels = accountIt->moderatedChannels;
+    const auto addChannel = [&channels](MoltorinoAuthChannel channel) {
+        if (channel.id.trimmed().isEmpty() || channel.login.trimmed().isEmpty())
+        {
+            return;
+        }
+        if (std::ranges::none_of(channels, [&channel](const auto &existing) {
+                return existing.id == channel.id;
+            }))
+        {
+            channels.push_back(std::move(channel));
+        }
+    };
+    addChannel({accountIt->userId, accountIt->login, accountIt->displayName});
+    if (canModerateCurrentChannel)
+    {
+        addChannel({channelId, channelLogin, ctx.channel->getLocalizedName()});
+    }
+
+    TwitchGql::getUserByLogin(
+        target, auth.token,
+        [channel = ctx.channel, target, action, auth, channelId,
+         channels = std::move(channels)](std::optional<GqlUser> user) {
+            if (!user)
+            {
+                channel->addSystemMessage(
+                    u"Could not find Twitch user %1."_s.arg(target));
+                return;
+            }
+            CrossBanDialog::showDialog(
+                action, user->id, user->login, user->displayName, auth.login,
+                auth.token, channels, channelId, channel,
+                &getApp()->getWindows()->getMainWindow());
+        },
+        [channel = ctx.channel, target, feature](const QString &error) {
+            const auto normalized = MoltorinoAuth::normalizeAuthError(
+                QStringLiteral("opening %1").arg(feature.toLower()), error);
+            channel->addSystemMessage(
+                QStringLiteral("Could not open %1 for %2: %3")
+                    .arg(feature.toLower(), target, normalized));
+        });
+
+    return "";
+}
+
+QString crossBan(const CommandContext &ctx)
+{
+    return crossChannelAction(ctx, CrossChannelAction::Ban);
+}
+
+QString crossUnban(const CommandContext &ctx)
+{
+    return crossChannelAction(ctx, CrossChannelAction::Unban);
 }
 
 QString lowtrust(const CommandContext &ctx)
@@ -1813,9 +1789,9 @@ QString streamlink(const CommandContext &ctx)
         else
         {
             ctx.channel->addSystemMessage(
-                "/streamlink [channel/URL]. Open specified Twitch channel or "
-                "URL in streamlink. If no argument is specified, open the "
-                "current Twitch channel instead.");
+                "/streamlink [channel or URL]. Open a Twitch channel or "
+                "supported stream URL in Streamlink. Without an argument, "
+                "the current Twitch or Kick channel is used.");
             return "";
         }
     }
@@ -1922,7 +1898,7 @@ QString clearmessages(const CommandContext &ctx)
                             ->getNotebook()
                             .getSelectedPage();
 
-    if (auto *split = currentPage->getSelectedSplit())
+    if (auto *split = currentPage ? currentPage->getSelectedSplit() : nullptr)
     {
         split->getChannelView().clearMessages();
     }
@@ -2164,14 +2140,39 @@ QString openUsercard(const CommandContext &ctx)
         return "";
     }
 
+    QString userName;
     if (ctx.words.size() < 2)
     {
-        channel->addSystemMessage("Usage: /usercard <username> [channel] or "
-                                  "/usercard id:<id> [channel]");
-        return "";
+        if (ctx.kickChannel != nullptr)
+        {
+            const auto currentUser = getApp()->getAccounts()->kick.current();
+            if (!currentUser || currentUser->isAnonymous())
+            {
+                channel->addSystemMessage(
+                    "Log in to a Kick account to open your own usercard, or "
+                    "use /usercard <username>.");
+                return "";
+            }
+            userName = currentUser->username();
+        }
+        else
+        {
+            const auto currentUser =
+                getApp()->getAccounts()->twitch.getCurrent();
+            if (!currentUser || currentUser->isAnon())
+            {
+                channel->addSystemMessage(
+                    "Log in to a Twitch account to open your own usercard, "
+                    "or use /usercard <username>.");
+                return "";
+            }
+            userName = currentUser->getUserName();
+        }
     }
-
-    QString userName = ctx.words[1];
+    else
+    {
+        userName = ctx.words[1];
+    }
     stripUserName(userName);
 
     if (ctx.words.size() > 2)
@@ -2187,7 +2188,7 @@ QString openUsercard(const CommandContext &ctx)
             return getApp()->getTwitch()->getChannelOrEmpty(channelName);
         }();
 
-        if (channelTemp->isEmpty())
+        if (channelTemp == nullptr || channelTemp->isEmpty())
         {
             channel->addSystemMessage(
                 "A usercard can only be displayed for a channel that is "
@@ -2211,9 +2212,10 @@ QString openUsercard(const CommandContext &ctx)
     }
 
     auto differentChannel =
-        currentSplit != nullptr && currentSplit->getChannel() != channel;
+        currentSplit != nullptr && !splitContainsChannel(currentSplit, channel);
     if (differentChannel || currentSplit == nullptr)
     {
+        currentSplit = nullptr;
         // not possible to use current split, try searching for one
         const auto &notebook =
             getApp()->getWindows()->getMainWindow().getNotebook();
@@ -2225,7 +2227,7 @@ QString openUsercard(const CommandContext &ctx)
             assert(container != nullptr);
             for (auto *split : container->getSplits())
             {
-                if (split->getChannel() == channel)
+                if (splitContainsChannel(split, channel))
                 {
                     currentSplit = split;
                     break;

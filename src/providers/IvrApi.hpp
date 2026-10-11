@@ -24,13 +24,36 @@ struct IvrSubage {
     const bool isSubbed;
     const QString subTier;
     const int totalSubMonths;
+    const bool isGifted;
+    const bool giftIsAnonymous;
+    const QString giftSource;
 
     IvrSubage(const QJsonObject &root)
         : isSubHidden(root.value("statusHidden").toBool())
-        , isSubbed(!root.value("meta").isNull())
+        , isSubbed(root.value("meta").isObject())
         , subTier(root.value("meta").toObject().value("tier").toString())
         , totalSubMonths(
               root.value("cumulative").toObject().value("months").toInt())
+        , isGifted(
+              root.value("meta").toObject().value("type").toString().compare(
+                  "gift", Qt::CaseInsensitive) == 0)
+        , giftIsAnonymous(this->isGifted && !root.value("meta")
+                                                 .toObject()
+                                                 .value("giftMeta")
+                                                 .toObject()
+                                                 .value("gifter")
+                                                 .isObject())
+        , giftSource([&root] {
+            const auto gifter = root.value("meta")
+                                    .toObject()
+                                    .value("giftMeta")
+                                    .toObject()
+                                    .value("gifter")
+                                    .toObject();
+            const auto displayName = gifter.value("displayName").toString();
+            return displayName.isEmpty() ? gifter.value("login").toString()
+                                         : displayName;
+        }())
     {
     }
 };
@@ -42,6 +65,7 @@ struct IvrUserProfile {
     bool isAffiliate = false;
     bool isPartner = false;
     bool isStaff = false;
+    bool isVerifiedBot = false;
     QString lastBroadcastStartedAt;
     QString lastBroadcastTitle;
 
@@ -60,6 +84,7 @@ struct IvrUserProfile {
         this->isAffiliate = roles.value("isAffiliate").toBool();
         this->isPartner = roles.value("isPartner").toBool();
         this->isStaff = roles.value("isStaff").toBool();
+        this->isVerifiedBot = root.value("verifiedBot").toBool();
 
         const auto lastBroadcast = root.value("lastBroadcast").toObject();
         this->lastBroadcastStartedAt =

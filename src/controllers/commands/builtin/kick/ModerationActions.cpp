@@ -1,11 +1,17 @@
 #include "controllers/commands/builtin/kick/ModerationActions.hpp"
 
+#include "Application.hpp"
+#include "controllers/accounts/AccountController.hpp"
 #include "controllers/commands/CommandContext.hpp"
 #include "providers/kick/KickApi.hpp"
 #include "providers/kick/KickChannel.hpp"
 #include "util/Helpers.hpp"
 
+#include <pajlada/signals/scoped-connection.hpp>
 #include <QString>
+
+#include <memory>
+#include <utility>
 
 namespace {
 
@@ -29,28 +35,51 @@ void withUser(KickChannel *channel, const QString &userSpec,
 
     if (userSpec.startsWith(u"id:"))
     {
-        auto userID = QStringView(userSpec).sliced(3).toULongLong();
+        bool valid = false;
+        auto userID = QStringView(userSpec).sliced(3).toULongLong(&valid);
+        if (!valid || userID == 0)
+        {
+            channel->addSystemMessage(QStringLiteral("Invalid Kick user ID."));
+            return;
+        }
         (getKickApi()->*fn)(channel->userID(), userID,
                             std::forward<decltype(args)>(args)...,
                             std::move(onAction));
         return;
     }
 
-    // otherwise resolve the user
+    auto accountChanged = std::make_shared<bool>(false);
+    auto connection = std::make_shared<pajlada::Signals::ScopedConnection>(
+        getApp()->getAccounts()->kick.currentUserChanged.connect(
+            [accountChanged] {
+                *accountChanged = true;
+            }));
     KickApi::privateChannelInfo(
-        userSpec,
-        [weakChan = channel->weakFromThis(), onAction = std::move(onAction),
-         userSpec, fn, ... args = std::forward<decltype(args)>(args)](
-            const ExpectedStr<KickPrivateChannelInfo> &res) mutable {
+        userSpec, [weakChan = channel->weakFromThis(),
+                   onAction = std::move(onAction), accountChanged, connection,
+                   userSpec, fn, ... args = std::forward<decltype(args)>(args)](
+                      const auto &res) mutable {
             auto chan = weakChan.lock();
             if (!chan)
             {
+                return;
+            }
+            if (*accountChanged)
+            {
+                chan->addSystemMessage(
+                    QStringLiteral("The Kick account changed while looking up "
+                                   "the user. Try again."));
                 return;
             }
             if (!res)
             {
                 chan->addSystemMessage(u"Failed to find user " % userSpec %
                                        u": " % res.error());
+                return;
+            }
+            if (res->user.userID == 0)
+            {
+                chan->addSystemMessage(u"Failed to find user " % userSpec);
                 return;
             }
             (getKickApi()->*fn)(chan->userID(), res->user.userID,

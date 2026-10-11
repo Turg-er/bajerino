@@ -15,12 +15,18 @@
 
 #include <memory>
 #include <optional>
+#include <stop_token>
 
 class QNetworkReply;
+class QVersionNumber;
 
 namespace chatterino {
 
 class NetworkResult;
+
+namespace network::detail {
+bool needsTwitchCdnHttp1(const QUrl &url, const QVersionNumber &qtVersion);
+}
 
 class NetworkRequester : public QObject
 {
@@ -44,8 +50,10 @@ public:
     bool hasCaller{};
     QPointer<QObject> caller;
     bool cache{};
+    std::function<bool(const QByteArray &)> cacheValidator;
     bool executeConcurrently{};
     bool useProxy{};
+    std::stop_token cancellation;
     /// Hide the request body in logs
     bool hideRequestBody = false;
 
@@ -61,6 +69,7 @@ public:
     /// By default, there's no explicit timeout for the request.
     /// To set a timeout, use NetworkRequest's timeout method
     std::optional<std::chrono::milliseconds> timeout{};
+    std::optional<qsizetype> maximumResponseSize{};
 #ifndef NDEBUG
     bool ignoreSslErrors = false;  // for local eventsub
 #endif

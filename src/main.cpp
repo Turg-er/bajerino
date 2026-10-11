@@ -19,6 +19,7 @@
 #include "singletons/Updates.hpp"
 #include "util/AttachToConsole.hpp"
 #include "util/IpcQueue.hpp"
+#include "util/SettingsTransfer.hpp"
 
 #ifdef Q_OS_MACOS
 #    include "util/MacOsHelpers.h"
@@ -27,6 +28,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QMessageBox>
+#include <QProcess>
 #include <QSslSocket>
 #include <QStringList>
 #include <QtCore/QtPlugin>
@@ -144,6 +146,20 @@ int main(int argc, char **argv)
         qCInfo(chatterinoApp) << "Bajerino Qt SSL active backend protocols:"
                               << QSslSocket::supportedProtocols();
 
+        QString pendingRestoreError;
+        if (!settingsbackup::applyPendingRestore(paths->settingsDirectory,
+                                                 &pendingRestoreError))
+        {
+            qCCritical(chatterinoSettings)
+                << "Could not apply pending settings restore:"
+                << pendingRestoreError;
+            QMessageBox::warning(
+                nullptr, QStringLiteral("Settings restore failed"),
+                QStringLiteral("Bajerino could not finish the pending "
+                               "restore safely.\n\n%1")
+                    .arg(pendingRestoreError));
+        }
+
         Settings settings(modes, args, paths->settingsDirectory);
 #ifndef Q_OS_MACOS
         if (!args.newInstance && !args.remoteRestart &&
@@ -162,6 +178,21 @@ int main(int argc, char **argv)
         Helix::initialize();
 
         runGui(a, modes, *paths, settings, args, updates);
+        if (a.property("bajerino.restartAfterExit").toBool())
+        {
+            auto arguments = args.currentArguments();
+            arguments.append(QStringLiteral("--remote-restart"));
+            if (!QProcess::startDetached(
+                    QCoreApplication::applicationFilePath(), arguments))
+            {
+                QMessageBox::warning(
+                    nullptr, QStringLiteral("Restart required"),
+                    QStringLiteral(
+                        "Your settings import is ready, but Bajerino "
+                        "couldn't restart. Reopen Bajerino to finish "
+                        "applying it."));
+            }
+        }
     }
     return 0;
 }

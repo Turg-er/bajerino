@@ -8,6 +8,8 @@
 #include "util/PostToThread.hpp"
 #include "util/Twitch.hpp"
 
+#include <QDateTime>
+
 #include <functional>
 #include <optional>
 #include <utility>
@@ -273,9 +275,11 @@ QString usageForAction(ModVipAction action)
     switch (action)
     {
         case ModVipAction::AddLeadModerator:
-            return u"Usage: \"/leadmod <username>\" - Grant lead moderator status."_s;
+            return QStringLiteral("Usage: \"/leadmod <username>\" - Grant lead "
+                                  "moderator status.");
         case ModVipAction::RemoveLeadModerator:
-            return u"Usage: \"/unleadmod <username>\" - Revoke lead moderator status."_s;
+            return QStringLiteral("Usage: \"/unleadmod <username>\" - Revoke "
+                                  "lead moderator status.");
         case ModVipAction::AddEditor:
             return u"Usage: \"/editor <username>\" - Add a channel editor."_s;
         case ModVipAction::RemoveEditor:
@@ -505,7 +509,20 @@ bool tryRunModVipActionWithLeadModGql(const CommandContext &ctx,
     }
 
     runGqlRoleMutation(
-        action, ctx.twitchChannel->roomId(), target, auth.token, [] {},
+        action, ctx.twitchChannel->roomId(), target, auth.token,
+        [channel{ctx.channel}, twitchChannel{ctx.twitchChannel}, action,
+         target] {
+            if (action != ModVipAction::AddModerator &&
+                action != ModVipAction::RemoveModerator)
+            {
+                return;
+            }
+            runInGuiThread([channel, twitchChannel, action, target] {
+                twitchChannel->setKnownModeratorStatus(
+                    target, action == ModVipAction::AddModerator,
+                    QDateTime::currentDateTimeUtc());
+            });
+        },
         [channel{ctx.channel}, action, target,
          prefix = info.failurePrefix](const QString &error) {
             runInGuiThread([channel, action, target, prefix, error] {

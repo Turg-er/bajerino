@@ -14,7 +14,9 @@ struct Serialize<QStringView> {
     static rapidjson::Value get(QStringView value,
                                 rapidjson::Document::AllocatorType &a)
     {
-        return {value.toUtf8().constData(), a};
+        const auto utf8 = value.toUtf8();
+        return {utf8.constData(), static_cast<rapidjson::SizeType>(utf8.size()),
+                a};
     }
 };
 

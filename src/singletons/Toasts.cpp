@@ -43,6 +43,24 @@ namespace {
 using namespace chatterino;
 using namespace literals;
 
+void activateHighlightNotification(const QString &channelName,
+                                   const QString &messageId)
+{
+    const QUrl url(channelName);
+    if (url.scheme() == u"https" && url.host() == u"www.youtube.com")
+    {
+        if (static_cast<ToastReaction>(
+                getSettings()->openFromToast.getValue()) !=
+            ToastReaction::DontOpen)
+        {
+            QDesktopServices::openUrl(url);
+        }
+        return;
+    }
+    getApp()->getWindows()->openChannelOrMessageFromTray(channelName,
+                                                         messageId);
+}
+
 QString avatarFilePath(const QString &channelName)
 {
     // TODO: cleanup channel (to be used as a file) and use combinePath
@@ -182,8 +200,7 @@ void onHighlightAction(NotifyNotification *notif, const char * /*unused*/,
         const auto channelName = data->channelName;
         const auto messageId = data->messageId;
         runInGuiThread([channelName, messageId] {
-            getApp()->getWindows()->openChannelOrMessageFromTray(channelName,
-                                                                 messageId);
+            activateHighlightNotification(channelName, messageId);
         });
     }
 
@@ -263,8 +280,17 @@ QString Toasts::findStringFromReaction(
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Toasts::sendChannelNotification(const QString &channelName,
-                                     const QString &channelTitle)
+                                     const QString &channelTitle,
+                                     const QUrl &url,
+                                     const QString &displayName)
 {
+    if (!url.isEmpty())
+    {
+        this->sendHighlightNotification(url.toString(),
+                                        QString("%1 is live").arg(displayName),
+                                        channelTitle, {});
+        return;
+    }
 #ifdef Q_OS_WIN
     auto sendChannelNotification = [this, channelName, channelTitle] {
         this->sendWindowsNotification(channelName, channelTitle);
@@ -347,10 +373,12 @@ public:
     }
     void toastActivated() const override
     {
-        auto toastReaction =
-            static_cast<ToastReaction>(getSettings()->openFromToast.getValue());
-
-        performReaction(toastReaction, channelName_);
+        const auto channelName = this->channelName_;
+        runInGuiThread([channelName] {
+            auto toastReaction = static_cast<ToastReaction>(
+                getSettings()->openFromToast.getValue());
+            performReaction(toastReaction, channelName);
+        });
     }
 
     void toastActivated(int actionIndex) const override
@@ -389,8 +417,7 @@ public:
         const auto messageId = this->messageId_;
 
         runInGuiThread([channelName, messageId] {
-            getApp()->getWindows()->openChannelOrMessageFromTray(channelName,
-                                                                 messageId);
+            activateHighlightNotification(channelName, messageId);
         });
     }
 
@@ -498,7 +525,8 @@ void Toasts::sendWindowsNotification(const QString &channelName,
     QString avatarPath;
     avatarPath = avatarFilePath(channelName);
     templ.setImagePath(avatarPath.toStdWString());
-    if (getSettings()->notificationPlaySound)
+    if (getSettings()->notificationPlaySound ||
+        getSettings()->notificationOnAnyChannel)
     {
         templ.setAudioOption(WinToastTemplate::AudioOption::Silent);
     }

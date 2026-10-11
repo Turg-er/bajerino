@@ -127,25 +127,25 @@
                     ]
                 },
                 {
-                    "flags": "TwitchGif",
-                    "link": {
-                        "type": "None",
-                        "value": ""
+                    "emote": {
+                        "homePage": "https://i.giphy.com/joSNxeswxuc74Juo8X.webp",
+                        "id": "joSNxeswxuc74Juo8X",
+                        "images": {
+                            "1x": "https://media.giphy.com/media/joSNxeswxuc74Juo8X/200w.webp",
+                            "2x": "https://media.giphy.com/media/joSNxeswxuc74Juo8X/giphy.webp"
+                        },
+                        "name": "[Y A Y Yes GIF by Djemilah Birnie]",
+                        "tooltip": "[Y A Y Yes GIF by Djemilah Birnie]<br>Twitch GIF"
                     },
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "LinebreakElement"
-                },
-                {
-                    "flags": "TwitchGif",
-                    "image": "https://media4.giphy.com/media/joSNxeswxuc74Juo8X/100.webp",
+                    "flags": "EmoteImage|EmoteText|TwitchGif",
                     "link": {
                         "type": "Url",
                         "value": "https://i.giphy.com/joSNxeswxuc74Juo8X.webp"
                     },
-                    "tooltip": "[Y A Y Yes GIF by Djemilah Birnie]",
+                    "tooltip": "[Y A Y Yes GIF by Djemilah Birnie]<br>Twitch GIF",
                     "trailingSpace": true,
-                    "type": "ScalingImageElement"
+                    "twitchGif": true,
+                    "type": "EmoteElement"
                 },
                 {
                     "color": "Text",
@@ -176,8 +176,9 @@
                     "url": ""
                 }
             ],
-            "externalBadges": [],
-            "flags": "Collapsed",
+            "externalBadges": [
+            ],
+            "flags": "Collapsed|TwitchGif",
             "frozen": false,
             "id": "401abf17-7e99-45d6-9bdf-43934e839327",
             "localizedName": "",

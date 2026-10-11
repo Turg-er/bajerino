@@ -13,38 +13,32 @@ using namespace std::chrono_literals;
 
 namespace chatterino {
 
-namespace {
-
-const auto payload = "chatterino/" + CHATTERINO_VERSION;
-
-}  // namespace
-
 IrcConnection::IrcConnection(QObject *parent)
     : Communi::IrcConnection(parent)
 {
-    // Log connection errors for ease-of-debugging
+    static const auto payload = "chatterino/" + Version::instance().version();
+
     QObject::connect(this, &Communi::IrcConnection::socketError, this,
                      [](QAbstractSocket::SocketError error) {
                          qCDebug(chatterinoIrc) << "Connection error:" << error;
                      });
 
-    QObject::connect(
-        this, &Communi::IrcConnection::socketStateChanged, this,
-        [this](QAbstractSocket::SocketState state) {
-            if (state == QAbstractSocket::UnconnectedState)
-            {
-                this->pingTimer_.stop();
+    QObject::connect(this, &Communi::IrcConnection::socketStateChanged, this,
+                     [this](QAbstractSocket::SocketState state) {
+                         if (state == QAbstractSocket::UnconnectedState)
+                         {
+                             this->pingTimer_.stop();
 
-                // The socket will enter unconnected state both in case of
-                // socket error (including failures to connect) and regular
-                // disconnects. We signal that the connection was lost if this
-                // was not the result of us calling `close`.
-                if (!this->expectConnectionLoss_.load())
-                {
-                    this->connectionLost.invoke(false);
-                }
-            }
-        });
+                             // The socket will enter unconnected state both in case of
+                             // socket error (including failures to connect) and regular
+                             // disconnects. We signal that the connection was lost if this
+                             // was not the result of us calling `close`.
+                             if (!this->expectConnectionLoss_.load())
+                             {
+                                 this->connectionLost.invoke(false);
+                             }
+                         }
+                     });
 
     this->reconnectTimer_.setSingleShot(true);
     QObject::connect(&this->reconnectTimer_, &QTimer::timeout, [this] {

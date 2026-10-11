@@ -52,14 +52,15 @@
                     "flags": "RepliedMessage",
                     "link": {
                         "type": "UserInfo",
-                        "value": "xgspidermonkey\\s"
+                        "value": "xgspidermonkey"
                     },
                     "style": "ChatMediumSmall",
                     "tooltip": "",
                     "trailingSpace": true,
                     "type": "TextElement",
                     "words": [
-                        "@xgspidermonkey\\s:"
+                        "@xgspidermonkey",
+                        ":"
                     ]
                 },
                 {

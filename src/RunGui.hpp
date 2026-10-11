@@ -9,6 +9,7 @@ class QApplication;
 namespace chatterino {
 
 class Args;
+class Modes;
 class Paths;
 class Settings;
 class Updates;

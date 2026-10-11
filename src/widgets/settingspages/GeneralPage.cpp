@@ -32,6 +32,7 @@
 #include <QFontDialog>
 #include <QFormLayout>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPalette>
 #include <QSignalBlocker>
@@ -42,7 +43,8 @@ using namespace chatterino;
 using namespace chatterino::literals;
 
 const QString CHROME_EXTENSION_LINK =
-    u"https://chrome.google.com/webstore/detail/chatterino-native-host/glknmaideaikkmemifbfkhnomoknepka"_s;
+    QStringLiteral("https://chrome.google.com/webstore/detail/"
+                   "chatterino-native-host/glknmaideaikkmemifbfkhnomoknepka");
 const QString FIREFOX_EXTENSION_LINK =
     u"https://addons.mozilla.org/en-US/firefox/addon/chatterino-native-host/"_s;
 
@@ -111,8 +113,6 @@ GeneralPage::GeneralPage()
     this->setLayout(y);
 
     this->initLayout(*view);
-
-    this->initExtra();
 }
 
 bool GeneralPage::filterElements(const QString &query)
@@ -152,7 +152,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->addKeywords({"bajerino", "big 3", "noticing"})
         ->addTo(layout);
     layout.addDescription(
-        u"To know who rules over you, simply find out who you are not allowed to criticise."_s);
+        QStringLiteral("To know who rules over you, simply find out who you "
+                       "are not allowed to criticise."));
 
     SettingWidget::dropdown("Default Twitch channel mode",
                             s.twitchDefaultChannelMode)
@@ -191,28 +192,54 @@ void GeneralPage::initLayout(GeneralPageView &layout)
 
     {
         auto *themes = getApp()->getThemes();
+
+        themes->reloadAvailableThemes();
         auto available = themes->availableThemes();
-        available.emplace_back("System", "System");
+        available.emplace_back("Follow desktop theme", "System");
 
-        SettingWidget::dropdown("Theme", themes->themeName, available)
-            ->addTo(layout);
+        auto *themeDropdown =
+            SettingWidget::dropdown("Theme", themes->themeName, available);
+        themeDropdown->addTo(layout);
 
-        SettingWidget::dropdown("Dark system theme",
-                                themes->darkSystemThemeName,
-                                themes->availableThemes())
-            ->setTooltip("This theme is selected if your system is in a dark "
-                         "theme and you enabled the adaptive 'System' theme.")
-            ->conditionallyEnabledBy(themes->themeName, "System")
-            ->addTo(layout);
+        auto *darkSystemTheme =
+            SettingWidget::dropdown("Dark system theme",
+                                    themes->darkSystemThemeName,
+                                    themes->availableThemes())
+                ->setTooltip("Used while your system is in dark mode.")
+                ->conditionallyEnabledBy(themes->themeName, "System");
+        auto *lightSystemTheme =
+            SettingWidget::dropdown("Light system theme",
+                                    themes->lightSystemThemeName,
+                                    themes->availableThemes())
+                ->setTooltip("Used while your system is in light mode.")
+                ->conditionallyEnabledBy(themes->themeName, "System");
+        darkSystemTheme->addTo(layout);
+        lightSystemTheme->addTo(layout);
+        this->managedConnections_.managedConnect(
+            themes->availableThemesChanged,
+            [themes, themeDropdown, darkSystemTheme, lightSystemTheme] {
+                auto themesWithSystem = themes->availableThemes();
+                themesWithSystem.emplace_back("Follow desktop theme", "System");
+                themeDropdown->setDropdownItems(themesWithSystem,
+                                                themes->themeName.getValue());
 
-        SettingWidget::dropdown("Light system theme",
-                                themes->lightSystemThemeName,
-                                themes->availableThemes())
-            ->setTooltip("This theme is selected if your system is in a light "
-                         "theme and you enabled the adaptive 'System' theme.")
-            ->conditionallyEnabledBy(themes->themeName, "System")
-            ->addTo(layout);
+                const auto availableThemes = themes->availableThemes();
+                darkSystemTheme->setDropdownItems(
+                    availableThemes, themes->darkSystemThemeName.getValue());
+                lightSystemTheme->setDropdownItems(
+                    availableThemes, themes->lightSystemThemeName.getValue());
+            });
     }
+
+#ifdef Q_OS_LINUX
+    SettingWidget::checkbox("Use Linux desktop controls (requires restart)",
+                            s.useQtSystemStyle)
+        ->setTooltip(
+            "Use your desktop's Qt style for buttons, menus, checkboxes, and "
+            "scrollbars. Restart Moltorino after changing this. Your chat "
+            "theme stays unchanged.")
+        ->addTo(layout);
+#endif
 
     layout.addDropdown<float>(
         "Zoom", ZOOM_LEVELS, s.uiScale,
@@ -330,6 +357,30 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "still be closed by right-clicking or pressing " +
             removeTabShortcut + ".")
         ->addTo(layout);
+
+    SettingWidget::checkbox("Hide tab close button when layout is locked",
+                            s.hideTabCloseButtonWhenLocked)
+        ->setTooltip("Hide the close button while Lock Tab Layout is enabled.")
+        ->conditionallyEnabledBy(s.showTabCloseButton)
+        ->addTo(layout);
+
+    auto *keepLockedTabWidth =
+        SettingWidget::checkbox("Keep tab width when close button is hidden",
+                                s.keepTabWidthWhenLocked)
+            ->setTooltip(
+                "Keep tab widths and label positions the same when Lock "
+                "Tab Layout hides the close button. Disable to make locked "
+                "tabs narrower.")
+            ->addKeywords({"tab close", "locked tabs"});
+    keepLockedTabWidth->addTo(layout);
+    const auto updateLockedTabWidthSetting = [keepLockedTabWidth, &s] {
+        keepLockedTabWidth->setEnabled(s.showTabCloseButton &&
+                                       s.hideTabCloseButtonWhenLocked);
+    };
+    s.showTabCloseButton.connect(updateLockedTabWidthSetting,
+                                 this->managedConnections_);
+    s.hideTabCloseButtonWhenLocked.connect(updateLockedTabWidthSetting,
+                                           this->managedConnections_);
 
     SettingWidget::checkbox("Always on top", s.windowTopMost)
         ->setTooltip("Always keep Bajerino as the top window.")
@@ -471,6 +522,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "Reply",
             "Mention",
             "Ignore",
+            "Context menu",
         },
         s.usernameRightClickBehavior,
         [](auto index) {
@@ -488,6 +540,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "Reply",
             "Mention",
             "Ignore",
+            "Context menu",
         },
         s.usernameRightClickModifierBehavior,
         [](auto index) {
@@ -575,6 +628,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::checkbox("Hide deleted messages", s.hideModerated)
         ->setTooltip(
             "When enabled, messages deleted by moderators will be hidden.")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Extended client nonce parsing",
+                            s.extendedClientNonceParsing)
+        ->setTooltip("Display messages with oversized Twitch client nonces.")
         ->addTo(layout);
 
     SettingWidget::checkbox("Hide message timestamps when channel is live",
@@ -735,7 +793,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                     }
                 });
         },
-        false);
+        this->managedConnections_, false);
 
     SettingWidget::dropdown("Show emote & badge thumbnail on hover",
                             s.emotesTooltipPreview)
@@ -1113,16 +1171,18 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "reduce bandwidth usage and to speed up loading.");
 
     auto *cachePathLabel = layout.addDescription("placeholder :D");
-    getSettings()->cachePath.connect([cachePathLabel](const auto &,
-                                                      auto) mutable {
-        QString newPath = getApp()->getPaths().cacheDirectory();
+    getSettings()->cachePath.connect(
+        [cachePathLabel](const auto &, auto) mutable {
+            QString newPath = getApp()->getPaths().cacheDirectory();
 
-        QString pathShortened = "Cache saved at <a href=\"file:///" + newPath +
-                                R"("><span style="color: white;">)" +
-                                shortenString(newPath, 50) + "</span></a>";
-        cachePathLabel->setText(pathShortened);
-        cachePathLabel->setToolTip(newPath);
-    });
+            QString pathShortened = "Cache saved at <a href=\"file:///" +
+                                    newPath +
+                                    R"("><span style="color: white;">)" +
+                                    shortenString(newPath, 50) + "</span></a>";
+            cachePathLabel->setText(pathShortened);
+            cachePathLabel->setToolTip(newPath);
+        },
+        this->managedConnections_);
 
     // Choose and reset buttons
     {
@@ -1222,7 +1282,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         []() {
             getApp()->getWindows()->forceLayoutChannelViews();
         },
-        false);
+        this->managedConnections_, false);
     layout.addDropdown<float>(
         "Similarity threshold", {"0.5", "0.75", "0.9"}, s.similarityPercentage,
         [](auto val) {
@@ -1261,6 +1321,21 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         "compared to only if they are new enough.");
 
     layout.addSubtitle("Visible badges");
+    layout.addDropdown<float>(
+        "Badge size", {"0.5x", "0.75x", "Default", "1.25x", "1.5x", "2x"},
+        s.badgeScale,
+        [](auto val) {
+            if (val == 1)
+            {
+                return QString("Default");
+            }
+            return QString::number(val) + "x";
+        },
+        [](auto args) {
+            return fuzzyToFloat(args.value, 1.f);
+        },
+        true, "Changes the size of badges shown next to usernames.");
+
     SettingWidget::checkbox("Authority", s.showBadgesGlobalAuthority)
         ->setTooltip("e.g. staff, admin")
         ->addTo(layout);
@@ -1287,6 +1362,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->addKeywords({"ffz"})
         ->setTooltip("e.g. Bot, FrankerFaceZ supporter, FrankerFaceZ developer")
         ->addTo(layout);
+    SettingWidget::checkbox("FFZ:AP", s.showBadgesFfzAp)
+        ->addKeywords({"ffzap", "ffz ap"})
+        ->setTooltip("Supporter and helper badges from FFZ:AP")
+        ->addTo(layout);
     SettingWidget::checkbox("7TV", s.showBadgesSevenTV)
         ->addKeywords({"seventv"})
         ->setTooltip("Badges for 7TV admins, developers, and supporters")
@@ -1308,6 +1387,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "Badges for Moltorino supporters, top donors, and developers")
         ->addTo(layout);
     layout.addSeparator();
+    SettingWidget::checkbox("Show custom badge layouts",
+                            s.useCustomBadgeLayouts)
+        ->setTooltip(
+            "Use each Moltorino user's chosen badge order and visibility")
+        ->addTo(layout);
     SettingWidget::checkbox("Use custom FrankerFaceZ moderator badges",
                             s.useCustomFfzModeratorBadges)
         ->addKeywords({"ffz"})
@@ -1428,9 +1512,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         palette.setColor(QPalette::PlaceholderText,
                          QColor(255, 255, 255));  // white
         presetCombo->setPalette(palette);
-        s.searchEnabled.connect([presetCombo](bool value) {
-            presetCombo->setEnabled(value);
-        });
+        s.searchEnabled.connect(
+            [presetCombo](bool value) {
+                presetCombo->setEnabled(value);
+            },
+            this->managedConnections_);
 
         // Connect preset dropdown to update URL and name settings
         QObject::connect(
@@ -1573,9 +1659,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         auto cb = [] {
             getApp()->getWindows()->invalidateChannelViewBuffers();
         };
-        s.displaySevenTVPaints.connect(cb, false);
-        s.displaySevenTVPaintShadows.connect(cb, false);
-        s.largeSevenTVPaintShadows.connect(cb, false);
+        s.displaySevenTVPaints.connect(cb, this->managedConnections_, false);
+        s.displaySevenTVPaintShadows.connect(cb, this->managedConnections_,
+                                             false);
+        s.largeSevenTVPaintShadows.connect(cb, this->managedConnections_,
+                                           false);
     }
 
     SettingWidget::checkbox("Lowercase domains (anti-phishing)",
@@ -1587,6 +1675,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::checkbox("Show user's pronouns in user card", s.showPronouns)
         ->setDescription(
             R"(Pronouns are retrieved from <a href="https://pr.alejo.io">pr.alejo.io</a> when a user card is opened.)")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Show pronouns beside Twitch chat usernames",
+                            s.showPronounsInChat)
+        ->setDescription(
+            R"(Pronouns are retrieved from <a href="https://pr.alejo.io">pr.alejo.io</a> for new live chatters and cached locally for the current session.)")
         ->addTo(layout);
 
     SettingWidget::checkbox("Show stream title in live message",
@@ -1628,8 +1722,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         layout.addDropdown<std::underlying_type_t<UsernameDisplayMode>>(
             "Username style", usernameDisplayModes, s.usernameDisplayMode,
             [usernameDisplayModes](auto val) {
-                return usernameDisplayModes.at(val - 1);
-                // UsernameDisplayMode enum indexes from 1
+                return usernameDisplayModes.value(val - 1,
+                                                  usernameDisplayModes.first());
             },
             [](auto args) {
                 return args.index + 1;
@@ -1643,7 +1737,7 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "Localized name: 테스트계정420");
     nameDropdown->setMinimumWidth(nameDropdown->minimumSizeHint().width());
 
-    layout.addDropdown<float>(
+    auto *usernameWeight = layout.addDropdown<float>(
         "Username font weight", {"50", "Default", "75", "100"}, s.boldScale,
         [](auto val) {
             if (val == 63)
@@ -1657,6 +1751,25 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         },
         [](auto args) {
             return fuzzyToFloat(args.value, 63.f);
+        });
+    usernameWeight->setObjectName("UsernameFontWeight");
+    usernameWeight->setToolTip(
+        "Default is semibold (63). Theme fonts can override this preference.");
+    QObject::connect(
+        usernameWeight->lineEdit(), &QLineEdit::editingFinished, usernameWeight,
+        [usernameWeight, &s] {
+            const auto text = usernameWeight->currentText().trimmed();
+            bool valid = false;
+            const auto value = text.compare("Default", Qt::CaseInsensitive) == 0
+                                   ? 63.F
+                                   : text.toFloat(&valid);
+            if ((valid && value >= 0 && value <= 100) || value == 63.F)
+            {
+                s.boldScale = value;
+            }
+            const auto saved = s.boldScale.getValue();
+            usernameWeight->setEditText(saved == 63.F ? QString("Default")
+                                                      : QString::number(saved));
         });
 
     SettingWidget::checkbox(
@@ -1734,8 +1847,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::intInput("Split message scrollback limit (requires restart)",
                             s.scrollbackSplitLimit,
                             {
-                                .min = 100,
-                                .max = 100000,
+                                .min = MIN_SCROLLBACK_LIMIT,
+                                .max = MAX_SCROLLBACK_LIMIT,
                                 .singleStep = 100,
                             })
         ->addTo(layout);
@@ -1743,8 +1856,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::intInput("Usercard scrollback limit (requires restart)",
                             s.scrollbackUsercardLimit,
                             {
-                                .min = 100,
-                                .max = 100000,
+                                .min = MIN_SCROLLBACK_LIMIT,
+                                .max = MAX_SCROLLBACK_LIMIT,
                                 .singleStep = 100,
                             })
         ->addTo(layout);
@@ -1837,23 +1950,9 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     layout.addWidget(inv);
 }
 
-void GeneralPage::initExtra()
+void GeneralPage::onShow()
 {
-    /// update cache path
-    if (this->cachePath_)
-    {
-        getSettings()->cachePath.connect(
-            [cachePath = this->cachePath_](const auto &, auto) mutable {
-                QString newPath = getApp()->getPaths().cacheDirectory();
-
-                QString pathShortened = "Current location: <a href=\"file:///" +
-                                        newPath + "\">" +
-                                        shortenString(newPath, 50) + "</a>";
-
-                cachePath->setText(pathShortened);
-                cachePath->setToolTip(newPath);
-            });
-    }
+    getTheme()->reloadAvailableThemes();
 }
 
 }  // namespace chatterino

@@ -103,6 +103,7 @@ public:
 private:
     UniqueAccess<std::unordered_map<EmoteId, std::weak_ptr<Emote>>>
         twitchEmotesCache_;
+    size_t twitchEmoteCacheInsertions_ = 0;
 };
 
 }  // namespace chatterino

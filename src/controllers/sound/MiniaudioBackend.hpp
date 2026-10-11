@@ -59,6 +59,8 @@ private:
     std::unique_ptr<ma_context> context;
     // The engine is a high-level API for playing sounds from paths in a simple & efficient-enough manner
     std::unique_ptr<ma_engine> engine;
+    bool contextInitialized = false;
+    bool engineInitialized = false;
 
     // Stores the data of our default ping sounds
     QByteArray defaultPingData;

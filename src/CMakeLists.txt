@@ -1,3 +1,8 @@
+configure_file(
+    providers/youtube/YouTubeCredentials.hpp.in
+    "${CMAKE_BINARY_DIR}/autogen/providers/youtube/YouTubeCredentials.hpp"
+)
+
 set(LIBRARY_PROJECT "${PROJECT_NAME}-lib")
 set(VERSION_PROJECT "${LIBRARY_PROJECT}-version")
 set(EXECUTABLE_PROJECT "${PROJECT_NAME}")
@@ -16,6 +21,8 @@ set(SOURCE_FILES
         RunGui.cpp
         RunGui.hpp
 
+        common/AccountCredentials.cpp
+        common/AccountCredentials.hpp
         common/Args.cpp
         common/Args.hpp
         common/ChannelChatters.cpp
@@ -26,6 +33,7 @@ set(SOURCE_FILES
         common/ChatterinoSetting.hpp
         common/ChatterSet.cpp
         common/ChatterSet.hpp
+        common/DiagnosticPrivacy.hpp
         common/Env.cpp
         common/Env.hpp
         common/LastMessageLineStyle.hpp
@@ -36,6 +44,7 @@ set(SOURCE_FILES
         common/Modes.hpp
         common/QLogging.cpp
         common/QLogging.hpp
+        common/SecureCredentials.hpp
         common/ThumbnailPreviewMode.hpp
         common/TimeoutStackStyle.hpp
         common/WindowDescriptors.cpp
@@ -77,6 +86,10 @@ set(SOURCE_FILES
         controllers/accounts/AccountModel.cpp
         controllers/accounts/AccountModel.hpp
 
+        controllers/automod/AutoModReviewController.cpp
+        controllers/automod/AutoModReviewController.hpp
+        controllers/chat/ChatAutomationController.cpp
+        controllers/chat/ChatAutomationController.hpp
         controllers/commands/builtin/chatterino/Debugging.cpp
         controllers/commands/builtin/chatterino/Debugging.hpp
         controllers/commands/builtin/Misc.cpp
@@ -111,6 +124,8 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/GetFounders.hpp
         controllers/commands/builtin/twitch/GetVIPs.cpp
         controllers/commands/builtin/twitch/GetVIPs.hpp
+        controllers/commands/builtin/twitch/InvisibleMessage.cpp
+        controllers/commands/builtin/twitch/InvisibleMessage.hpp
         controllers/commands/builtin/twitch/LowTrust.cpp
         controllers/commands/builtin/twitch/LowTrust.hpp
         controllers/commands/builtin/twitch/ModVipActions.cpp
@@ -147,6 +162,8 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/UpdateColor.hpp
         controllers/commands/builtin/twitch/Warn.cpp
         controllers/commands/builtin/twitch/Warn.hpp
+        controllers/commands/builtin/youtube/ModerationActions.cpp
+        controllers/commands/builtin/youtube/ModerationActions.hpp
         controllers/commands/common/ChannelAction.cpp
         controllers/commands/common/ChannelAction.hpp
         controllers/commands/CommandContext.hpp
@@ -157,6 +174,8 @@ set(SOURCE_FILES
         controllers/commands/CommandModel.cpp
         controllers/commands/CommandModel.hpp
 
+        controllers/completion/CommandUsage.cpp
+        controllers/completion/CommandUsage.hpp
         controllers/completion/CompletionModel.cpp
         controllers/completion/CompletionModel.hpp
         controllers/completion/sources/Source.hpp
@@ -215,10 +234,14 @@ set(SOURCE_FILES
 
         controllers/highlights/BadgeHighlightModel.cpp
         controllers/highlights/BadgeHighlightModel.hpp
+        controllers/highlights/ChattyHighlightImport.cpp
+        controllers/highlights/ChattyHighlightImport.hpp
         controllers/highlights/HighlightBadge.cpp
         controllers/highlights/HighlightBadge.hpp
         controllers/highlights/HighlightBlacklistModel.cpp
         controllers/highlights/HighlightBlacklistModel.hpp
+        controllers/highlights/HighlightChannelScope.cpp
+        controllers/highlights/HighlightChannelScope.hpp
         controllers/highlights/HighlightCheck.hpp
         controllers/highlights/HighlightController.cpp
         controllers/highlights/HighlightController.hpp
@@ -228,6 +251,8 @@ set(SOURCE_FILES
         controllers/highlights/HighlightPhrase.hpp
         controllers/highlights/HighlightResult.cpp
         controllers/highlights/HighlightResult.hpp
+        controllers/highlights/HighlightWordList.cpp
+        controllers/highlights/HighlightWordList.hpp
         controllers/highlights/UserHighlightModel.cpp
         controllers/highlights/UserHighlightModel.hpp
 
@@ -242,6 +267,10 @@ set(SOURCE_FILES
         controllers/hotkeys/HotkeyModel.cpp
         controllers/hotkeys/HotkeyModel.hpp
 
+        controllers/ignores/HiddenUser.cpp
+        controllers/ignores/HiddenUser.hpp
+        controllers/ignores/HiddenUserController.cpp
+        controllers/ignores/HiddenUserController.hpp
         controllers/ignores/IgnoreController.cpp
         controllers/ignores/IgnoreController.hpp
         controllers/ignores/IgnoreModel.cpp
@@ -271,6 +300,12 @@ set(SOURCE_FILES
         controllers/pings/MutedChannelModel.cpp
         controllers/pings/MutedChannelModel.hpp
 
+        controllers/recording/ChatRecordingController.cpp
+        controllers/recording/ChatRecordingController.hpp
+        controllers/recording/ChatRecordingMessage.cpp
+        controllers/recording/ChatRecordingMessage.hpp
+        controllers/recording/ChatRecordingWriter.cpp
+        controllers/recording/ChatRecordingWriter.hpp
         controllers/tray/TrayController.cpp
         controllers/tray/TrayController.hpp
 
@@ -294,6 +329,8 @@ set(SOURCE_FILES
         controllers/plugins/api/Images.hpp
         controllers/plugins/api/IOWrapper.cpp
         controllers/plugins/api/IOWrapper.hpp
+        controllers/plugins/api/Images.cpp
+        controllers/plugins/api/Images.hpp
         controllers/plugins/api/JSON.cpp
         controllers/plugins/api/JSON.hpp
         controllers/plugins/api/JSONParse.cpp
@@ -371,6 +408,10 @@ set(SOURCE_FILES
         messages/MessageSink.hpp
         messages/MessageThread.cpp
         messages/MessageThread.hpp
+        messages/StreamingGif.cpp
+        messages/StreamingGif.hpp
+        messages/StreamingImageDecoder.cpp
+        messages/StreamingImageDecoder.hpp
 
         messages/layouts/MessageLayout.cpp
         messages/layouts/MessageLayout.hpp
@@ -402,6 +443,8 @@ set(SOURCE_FILES
         providers/NetworkConfigurationProvider.cpp
         providers/NetworkConfigurationProvider.hpp
 
+        providers/bluzyrino/BluzyrinoBadges.cpp
+        providers/bluzyrino/BluzyrinoBadges.hpp
         providers/bttv/BttvBadges.cpp
         providers/bttv/BttvBadges.hpp
         providers/bttv/BttvEmotes.cpp
@@ -433,6 +476,8 @@ set(SOURCE_FILES
         providers/ffz/FfzUtil.cpp
         providers/ffz/FfzUtil.hpp
 
+        providers/ffzap/FfzApBadges.cpp
+        providers/ffzap/FfzApBadges.hpp
         providers/irc/IrcConnection2.cpp
         providers/irc/IrcConnection2.hpp
 
@@ -458,20 +503,31 @@ set(SOURCE_FILES
         providers/kick/KickMessageBuilder.hpp
 
         providers/kick/ws/KickCentrifugoManager.cpp
+        providers/kick/ws/KickCentrifugoManager.hpp
         providers/kick/ws/KickPusherManager.cpp
+        providers/kick/ws/KickPusherManager.hpp
         providers/kick/ws/KickWebSocketCommon.cpp
-
+        providers/kick/ws/KickWebSocketCommon.hpp
+        providers/kick/ws/KickWebSocketManager.hpp
         providers/links/LinkInfo.cpp
         providers/links/LinkInfo.hpp
         providers/links/LinkResolver.cpp
         providers/links/LinkResolver.hpp
+        providers/links/TikTokLinkResolver.cpp
+        providers/links/TikTokLinkResolver.hpp
 
         providers/moltorino/MoltorinoAuth.cpp
         providers/moltorino/MoltorinoAuth.hpp
+        providers/moltorino/MoltorinoAuthPagination.cpp
+        providers/moltorino/MoltorinoAuthPagination.hpp
+        providers/moltorino/MoltorinoDailyMessage.cpp
+        providers/moltorino/MoltorinoDailyMessage.hpp
         providers/moltorino/MoltorinoFeatureFlags.hpp
         providers/moltorino/MoltorinoSupporterBadges.cpp
         providers/moltorino/MoltorinoSupporterBadges.hpp
 
+        providers/potat/PotatCommands.cpp
+        providers/potat/PotatCommands.hpp
         providers/repetitions/RepeatedMessageDetector.cpp
         providers/repetitions/RepeatedMessageDetector.hpp
 
@@ -495,6 +551,41 @@ set(SOURCE_FILES
         providers/recentmessages/Impl.cpp
         providers/recentmessages/Impl.hpp
 
+        providers/tiktok/TikTokAccount.cpp
+        providers/tiktok/TikTokAccount.hpp
+        providers/tiktok/TikTokAccountManager.cpp
+        providers/tiktok/TikTokAccountManager.hpp
+        providers/tiktok/TikTokApi.cpp
+        providers/tiktok/TikTokApi.hpp
+        providers/tiktok/TikTokBadge.cpp
+        providers/tiktok/TikTokBadge.hpp
+        providers/tiktok/TikTokChannel.cpp
+        providers/tiktok/TikTokChannel.hpp
+        providers/tiktok/TikTokChatServer.cpp
+        providers/tiktok/TikTokChatServer.hpp
+        providers/tiktok/TikTokEmotes.cpp
+        providers/tiktok/TikTokEmotes.hpp
+        providers/tiktok/TikTokMessageBuilder.cpp
+        providers/tiktok/TikTokMessageBuilder.hpp
+        providers/tiktok/TikTokProtocol.cpp
+        providers/tiktok/TikTokProtocol.hpp
+        providers/tiktok/TikTokRequestSigning.cpp
+        providers/tiktok/TikTokRequestSigning.hpp
+        providers/tiktok/TikTokSession.cpp
+        providers/tiktok/TikTokSession.hpp
+        providers/tiktok/TikTokSigning.cpp
+        providers/tiktok/TikTokSigning.hpp
+        providers/tiktok/TikTokSigningState.cpp
+        providers/tiktok/TikTokSigningState.hpp
+        providers/tiktok/TikTokText.cpp
+        providers/tiktok/TikTokText.hpp
+        providers/tiktok/TikTokTicketGuard.cpp
+        providers/tiktok/TikTokTicketGuard.hpp
+        providers/tiktok/TikTokTypes.cpp
+        providers/tiktok/TikTokTypes.hpp
+        providers/translation/TranslationCredentials.cpp
+        providers/translation/TranslationRequest.cpp
+        providers/translation/TranslationRequest.hpp
         providers/translation/Translator.cpp
         providers/translation/Translator.hpp
 
@@ -532,6 +623,8 @@ set(SOURCE_FILES
         providers/seventv/eventapi/Subscription.cpp
         providers/seventv/eventapi/Subscription.hpp
 
+        providers/twitch/ChannelManagement.cpp
+        providers/twitch/ChannelManagement.hpp
         providers/twitch/ChannelPointReward.cpp
         providers/twitch/ChannelPointReward.hpp
         providers/twitch/ChannelPointsFarm.cpp
@@ -555,6 +648,9 @@ set(SOURCE_FILES
         providers/twitch/TwitchBadge.hpp
         providers/twitch/TwitchBadges.cpp
         providers/twitch/TwitchBadges.hpp
+        providers/twitch/api/HelixEnums.hpp
+        providers/twitch/api/TwitchGifs.cpp
+        providers/twitch/api/TwitchGifs.hpp
         providers/twitch/api/TwitchGql.cpp
         providers/twitch/TwitchChannel.cpp
         providers/twitch/TwitchChannel.hpp
@@ -572,8 +668,13 @@ set(SOURCE_FILES
         providers/twitch/TwitchNameHistory.hpp
         providers/twitch/TwitchReadConnectionPool.cpp
         providers/twitch/TwitchReadConnectionPool.hpp
+        providers/twitch/TwitchNameHistoryCache.hpp
+        providers/twitch/TwitchRoles.cpp
+        providers/twitch/TwitchRoles.hpp
         providers/twitch/TwitchUser.cpp
         providers/twitch/TwitchUser.hpp
+        providers/twitch/TwitchUserLogs.cpp
+        providers/twitch/TwitchUserLogs.hpp
         providers/twitch/TwitchUsers.cpp
         providers/twitch/TwitchUsers.hpp
         providers/twitch/UserColor.cpp
@@ -611,6 +712,33 @@ set(SOURCE_FILES
         providers/twitch/api/Helix.cpp
         providers/twitch/api/Helix.hpp
 
+        providers/youtube/YouTubeAccount.cpp
+        providers/youtube/YouTubeAccount.hpp
+        providers/youtube/YouTubeAccountManager.cpp
+        providers/youtube/YouTubeAccountManager.hpp
+        providers/youtube/YouTubeApi.cpp
+        providers/youtube/YouTubeApi.hpp
+        providers/youtube/YouTubeChannel.cpp
+        providers/youtube/YouTubeChannel.hpp
+        providers/youtube/YouTubeChatServer.cpp
+        providers/youtube/YouTubeChatServer.hpp
+        providers/youtube/YouTubeCredentialStore.cpp
+        providers/youtube/YouTubeCredentialStore.hpp
+        providers/youtube/YouTubeEmotes.cpp
+        providers/youtube/YouTubeEmotes.hpp
+        providers/youtube/YouTubeInnertubeParser.cpp
+        providers/youtube/YouTubeInnertubeParser.hpp
+        providers/youtube/YouTubeInnertubeSession.cpp
+        providers/youtube/YouTubeInnertubeSession.hpp
+        providers/youtube/YouTubeLiveChatSession.cpp
+        providers/youtube/YouTubeLiveChatSession.hpp
+        providers/youtube/YouTubeMessageBuilder.cpp
+        providers/youtube/YouTubeMessageBuilder.hpp
+        providers/youtube/YouTubeMessagePacing.hpp
+        providers/youtube/YouTubeOAuth.cpp
+        providers/youtube/YouTubeOAuth.hpp
+        providers/youtube/YouTubeTypes.cpp
+        providers/youtube/YouTubeTypes.hpp
         singletons/CrashHandler.cpp
         singletons/CrashHandler.hpp
         singletons/FileLogger.cpp
@@ -633,6 +761,16 @@ set(SOURCE_FILES
         singletons/StreamerMode.hpp
         singletons/Theme.cpp
         singletons/Theme.hpp
+        singletons/ThemeCustomization.cpp
+        singletons/ThemeCustomization.hpp
+        singletons/ThemeVideo.cpp
+        singletons/ThemeVideo.hpp
+        singletons/ThemeVideoDecoder.cpp
+        singletons/ThemeVideoDecoder.hpp
+        singletons/ThemeVideoImport.cpp
+        singletons/ThemeVideoImport.hpp
+        singletons/ThemeWallpaper.cpp
+        singletons/ThemeWallpaper.hpp
         singletons/Toasts.cpp
         singletons/Toasts.hpp
         singletons/Updates.cpp
@@ -658,6 +796,8 @@ set(SOURCE_FILES
         util/BoostJsonWrap.hpp
         util/CancellationToken.hpp
         util/ChannelHelpers.hpp
+        util/ChannelPointAmount.cpp
+        util/ChannelPointAmount.hpp
         util/Clipboard.cpp
         util/Clipboard.hpp
         util/Crypto.cpp
@@ -692,10 +832,13 @@ set(SOURCE_FILES
         util/LayoutHelper.hpp
         util/LoadPixmap.cpp
         util/LoadPixmap.hpp
+        util/MemoryReclaimer.cpp
+        util/MemoryReclaimer.hpp
         util/MultiChannel.cpp
         util/MultiChannel.hpp
         util/OnceFlag.cpp
         util/OnceFlag.hpp
+        util/RapidJsonSerializeQStringView.hpp
         util/RapidjsonHelpers.cpp
         util/RapidjsonHelpers.hpp
         util/RapidJsonSerializeQSize.hpp
@@ -709,6 +852,8 @@ set(SOURCE_FILES
         util/SampleData.hpp
         util/SelfCheck.cpp
         util/SelfCheck.hpp
+        util/SettingsTransfer.cpp
+        util/SettingsTransfer.hpp
         util/SharedPtrElementLess.hpp
         util/SignalListener.hpp
         util/StreamLink.cpp
@@ -736,6 +881,7 @@ set(SOURCE_FILES
         util/XDGHelper.hpp
 
         util/serialize/Container.hpp
+        util/serialize/List.hpp
 
         widgets/AccountSwitchPopup.cpp
         widgets/AccountSwitchPopup.hpp
@@ -799,10 +945,18 @@ set(SOURCE_FILES
         widgets/dialogs/BadgePickerDialog.hpp
         widgets/dialogs/ChannelFilterEditorDialog.cpp
         widgets/dialogs/ChannelFilterEditorDialog.hpp
+        widgets/dialogs/ChannelManagementDialog.cpp
+        widgets/dialogs/ChannelManagementDialog.hpp
         widgets/dialogs/ChannelPointsDialog.cpp
         widgets/dialogs/ChannelPointsDialog.hpp
+        widgets/dialogs/ChatAutomationDialog.cpp
+        widgets/dialogs/ChatAutomationDialog.hpp
         widgets/dialogs/ColorPickerDialog.cpp
         widgets/dialogs/ColorPickerDialog.hpp
+        widgets/dialogs/CrossBanDialog.cpp
+        widgets/dialogs/CrossBanDialog.hpp
+        widgets/dialogs/DialogLinkText.cpp
+        widgets/dialogs/DialogLinkText.hpp
         widgets/dialogs/EditHotkeyDialog.cpp
         widgets/dialogs/EditHotkeyDialog.hpp
         widgets/dialogs/EditUserNotesDialog.cpp
@@ -825,12 +979,20 @@ set(SOURCE_FILES
         widgets/dialogs/font/PreviewWidget.cpp
         widgets/dialogs/font/PreviewWidget.hpp
 
+        widgets/dialogs/GifPickerDialog.cpp
+        widgets/dialogs/GifPickerDialog.hpp
         widgets/dialogs/KickLoginPage.cpp
         widgets/dialogs/KickLoginPage.hpp
         widgets/dialogs/LastRunCrashDialog.cpp
         widgets/dialogs/LastRunCrashDialog.hpp
         widgets/dialogs/LoginDialog.cpp
         widgets/dialogs/LoginDialog.hpp
+        widgets/dialogs/ModerationReportDialog.cpp
+        widgets/dialogs/ModerationReportDialog.hpp
+        widgets/dialogs/ModeratorCommentsView.cpp
+        widgets/dialogs/ModeratorCommentsView.hpp
+        widgets/dialogs/MoltorinoDialogTheme.hpp
+        widgets/dialogs/PopupControlMetrics.hpp
         widgets/dialogs/QualityPopup.cpp
         widgets/dialogs/QualityPopup.hpp
         widgets/dialogs/PredictionDialog.cpp
@@ -841,18 +1003,36 @@ set(SOURCE_FILES
         widgets/dialogs/ReplyThreadPopup.hpp
         widgets/dialogs/RestoreBackupsDialog.cpp
         widgets/dialogs/RestoreBackupsDialog.hpp
+        widgets/dialogs/RewardRequestQueueDialog.cpp
+        widgets/dialogs/RewardRequestQueueDialog.hpp
         widgets/dialogs/SelectChannelDialog.cpp
         widgets/dialogs/SelectChannelDialog.hpp
         widgets/dialogs/SelectChannelFiltersDialog.cpp
         widgets/dialogs/SelectChannelFiltersDialog.hpp
         widgets/dialogs/SettingsDialog.cpp
         widgets/dialogs/SettingsDialog.hpp
+        widgets/dialogs/TabGroupDialog.cpp
+        widgets/dialogs/TabGroupDialog.hpp
+        widgets/dialogs/TikTokLoginPage.cpp
+        widgets/dialogs/TikTokLoginPage.hpp
+        widgets/dialogs/TranslationProviderDialog.cpp
+        widgets/dialogs/TranslationProviderDialog.hpp
+        widgets/dialogs/UnbanRequestsDialog.cpp
+        widgets/dialogs/UnbanRequestsDialog.hpp
         widgets/dialogs/UpdateDialog.cpp
         widgets/dialogs/UpdateDialog.hpp
         widgets/dialogs/UserInfoPopup.cpp
         widgets/dialogs/UserInfoPopup.hpp
+        widgets/dialogs/UserLogsView.cpp
+        widgets/dialogs/UserLogsView.hpp
+        widgets/dialogs/UserRolesView.cpp
+        widgets/dialogs/UserRolesView.hpp
+        widgets/dialogs/VanityDialog.cpp
+        widgets/dialogs/VanityDialog.hpp
         widgets/dialogs/WelcomeDialog.cpp
         widgets/dialogs/WelcomeDialog.hpp
+        widgets/dialogs/YouTubeLoginPage.cpp
+        widgets/dialogs/YouTubeLoginPage.hpp
         widgets/dialogs/switcher/NewPopupItem.cpp
         widgets/dialogs/switcher/NewPopupItem.hpp
         widgets/dialogs/switcher/NewTabItem.cpp
@@ -879,6 +1059,10 @@ set(SOURCE_FILES
         widgets/helper/color/SBCanvas.cpp
         widgets/helper/color/SBCanvas.hpp
 
+        widgets/helper/AutoModReviewBar.cpp
+        widgets/helper/AutoModReviewBar.hpp
+        widgets/helper/ChannelCategoryPicker.cpp
+        widgets/helper/ChannelCategoryPicker.hpp
         widgets/helper/ChannelView.cpp
         widgets/helper/ChannelView.hpp
         widgets/helper/CmdDeleteKeyFilter.cpp
@@ -925,10 +1109,17 @@ set(SOURCE_FILES
         widgets/helper/SettingsDialogTab.hpp
         widgets/helper/SvgWidget.cpp
         widgets/helper/SvgWidget.hpp
+        widgets/helper/LiveIndicator.cpp
+        widgets/helper/LiveIndicator.hpp
+        widgets/helper/SettingsTheme.hpp
         widgets/helper/TableStyles.cpp
         widgets/helper/TableStyles.hpp
+        widgets/helper/TikTokAccountSwitchWidget.cpp
+        widgets/helper/TikTokAccountSwitchWidget.hpp
         widgets/helper/TrimRegExpValidator.cpp
         widgets/helper/TrimRegExpValidator.hpp
+        widgets/helper/YouTubeAccountSwitchWidget.cpp
+        widgets/helper/YouTubeAccountSwitchWidget.hpp
 
         widgets/layout/FlowLayout.cpp
         widgets/layout/FlowLayout.hpp
@@ -946,9 +1137,13 @@ set(SOURCE_FILES
         widgets/settingspages/AboutPage.hpp
         widgets/settingspages/AccountsPage.cpp
         widgets/settingspages/AccountsPage.hpp
+        widgets/settingspages/BackupSharingPage.cpp
+        widgets/settingspages/BackupSharingPage.hpp
         widgets/settingspages/CommandPage.cpp
         widgets/settingspages/CommandPage.hpp
         widgets/settingspages/CustomWidgets.hpp
+        widgets/settingspages/CustomizationPage.cpp
+        widgets/settingspages/CustomizationPage.hpp
         widgets/settingspages/ExternalToolsPage.cpp
         widgets/settingspages/ExternalToolsPage.hpp
         widgets/settingspages/FiltersPage.cpp
@@ -977,6 +1172,8 @@ set(SOURCE_FILES
         widgets/settingspages/SettingsPage.hpp
         widgets/settingspages/SettingWidget.cpp
         widgets/settingspages/SettingWidget.hpp
+        widgets/settingspages/UsercardModerationSettings.cpp
+        widgets/settingspages/UsercardModerationSettings.hpp
 
         widgets/splits/ClosedSplits.cpp
         widgets/splits/ClosedSplits.hpp
@@ -1011,13 +1208,98 @@ if (APPLE)
   list(APPEND SOURCE_FILES util/MacOsHelpers.mm)
 endif ()
 
+if(MOLTORINO_YOUTUBE_ACCOUNTS OR MOLTORINO_TIKTOK_ACCOUNTS)
+    list(APPEND SOURCE_FILES common/SecureCredentials.cpp)
+else()
+    list(APPEND SOURCE_FILES common/SecureCredentialsUnavailable.cpp)
+endif()
+
 # Generate source groups for use in IDEs
 source_group(TREE ${CMAKE_SOURCE_DIR} FILES ${SOURCE_FILES})
 
 # Add autogenerated files
 list(APPEND SOURCE_FILES ${RES_AUTOGEN_FILES})
 
+
 add_library(${LIBRARY_PROJECT} OBJECT ${SOURCE_FILES})
+add_library(moltorino-tiktok-login STATIC
+    ../lib/quirc/quirc.c
+    ../lib/quirc/decode.c
+    ../lib/quirc/identify.c
+    ../lib/quirc/version_db.c
+    ../lib/qrcodegen/qrcodegen.cpp
+    widgets/dialogs/TikTokLoginQrCode.cpp
+    widgets/dialogs/TikTokLoginQrCode.hpp
+    widgets/dialogs/tiktok_login.qrc
+    widgets/dialogs/TikTokLoginView.cpp
+    widgets/dialogs/TikTokLoginView.hpp
+    widgets/dialogs/TikTokLoginBrowser.cpp
+    widgets/dialogs/TikTokLoginBrowser.hpp
+)
+target_include_directories(moltorino-tiktok-login PRIVATE
+    .
+    ../lib/expected-lite/include
+    ../lib/quirc
+    ../lib/qrcodegen
+)
+set_target_properties(moltorino-tiktok-login PROPERTIES AUTORCC ON)
+configure_file(../lib/quirc/LICENSE "${BAJERINO_LICENSES_DIR}/quirc.txt" COPYONLY)
+configure_file(../lib/qrcodegen/LICENSE "${BAJERINO_LICENSES_DIR}/qrcodegen.txt" COPYONLY)
+target_link_libraries(moltorino-tiktok-login PRIVATE
+    Pajlada::Signals
+    Qt${MAJOR_QT_VERSION}::Core
+    Qt${MAJOR_QT_VERSION}::Widgets
+    Qt${MAJOR_QT_VERSION}::Network
+    Qt${MAJOR_QT_VERSION}::Svg
+)
+if(TARGET MoltorinoWebView2)
+    target_sources(moltorino-tiktok-login PRIVATE
+        widgets/dialogs/TikTokLoginBrowserWindows.cpp)
+    target_compile_definitions(moltorino-tiktok-login PRIVATE
+        MOLTORINO_TIKTOK_WEBVIEW2=1)
+    target_link_libraries(moltorino-tiktok-login PRIVATE MoltorinoWebView2)
+    configure_file("${MOLTORINO_WEBVIEW2_LICENSE}"
+        "${BAJERINO_LICENSES_DIR}/WebView2.txt" COPYONLY)
+elseif(APPLE AND MOLTORINO_TIKTOK_ACCOUNTS)
+    target_sources(moltorino-tiktok-login PRIVATE
+        widgets/dialogs/TikTokLoginBrowserMac.mm)
+    set_source_files_properties(widgets/dialogs/TikTokLoginBrowserMac.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    set_target_properties(moltorino-tiktok-login PROPERTIES
+        OBJCXX_STANDARD ${CMAKE_CXX_STANDARD}
+        OBJCXX_STANDARD_REQUIRED ON
+    )
+    target_compile_definitions(moltorino-tiktok-login PRIVATE
+        MOLTORINO_TIKTOK_WEBKIT=1)
+    target_link_libraries(moltorino-tiktok-login PRIVATE
+        "-framework Cocoa"
+        "-framework WebKit"
+    )
+elseif(UNIX AND MOLTORINO_TIKTOK_ACCOUNTS)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(TIKTOK_WEBKIT REQUIRED IMPORTED_TARGET webkit2gtk-4.1>=2.42)
+    pkg_check_modules(TIKTOK_JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0)
+    add_executable(bajerino-tiktok-browser
+        widgets/dialogs/TikTokLoginBrowserLinux.cpp
+        widgets/dialogs/TikTokLoginBrowserLinuxMain.cpp
+        widgets/dialogs/TikTokLoginBrowserLinux.hpp)
+    target_link_libraries(bajerino-tiktok-browser PRIVATE
+        PkgConfig::TIKTOK_WEBKIT
+        PkgConfig::TIKTOK_JSON_GLIB
+    )
+    set_target_properties(bajerino-tiktok-browser PROPERTIES
+        AUTOMOC OFF
+        CXX_VISIBILITY_PRESET hidden
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+    target_compile_definitions(moltorino-tiktok-login PRIVATE
+        MOLTORINO_TIKTOK_WEBKITGTK=1)
+    add_dependencies(moltorino-tiktok-login bajerino-tiktok-browser)
+    install(TARGETS bajerino-tiktok-browser RUNTIME DESTINATION libexec/bajerino)
+endif()
+
+target_link_libraries(${LIBRARY_PROJECT} PRIVATE moltorino-tiktok-login)
+
 
 if (APPLE)
     target_link_libraries(${LIBRARY_PROJECT} PRIVATE
@@ -1086,6 +1368,8 @@ target_link_libraries(${LIBRARY_PROJECT}
         Qt${MAJOR_QT_VERSION}::Network
         Qt${MAJOR_QT_VERSION}::NetworkPrivate # for DELETE with a body (Kick)
         Qt${MAJOR_QT_VERSION}::Svg
+        Qt${MAJOR_QT_VERSION}::SvgWidgets
+        Qt${MAJOR_QT_VERSION}::Sql
         Qt${MAJOR_QT_VERSION}::Concurrent
 
         LibCommuni::LibCommuni
@@ -1099,6 +1383,25 @@ target_link_libraries(${LIBRARY_PROJECT}
         twitch-eventsub-ws
         BoostCertify
         )
+target_link_libraries(${LIBRARY_PROJECT} PRIVATE ${CHATTERINO_WEBP_TARGETS} libvpx::libvpx webm::webm libyuv::libyuv)
+
+if(MOLTORINO_YOUTUBE_ACCOUNTS OR MOLTORINO_TIKTOK_ACCOUNTS)
+    target_link_libraries(${LIBRARY_PROJECT} PUBLIC keychain::keychain)
+endif()
+
+target_compile_definitions(${LIBRARY_PROJECT} PUBLIC
+    MOLTORINO_HAVE_YOUTUBE_ACCOUNTS=$<BOOL:${MOLTORINO_YOUTUBE_ACCOUNTS}>)
+if(MOLTORINO_TIKTOK_ACCOUNTS)
+    if(OPENSSL_VERSION VERSION_LESS 3.0)
+        message(FATAL_ERROR "TikTok accounts require OpenSSL 3.0 or newer")
+    endif()
+    set_source_files_properties(providers/tiktok/TikTokRequestSigning.cpp
+        PROPERTIES COMPILE_DEFINITIONS MOLTORINO_HAVE_TIKTOK_ACCOUNTS=1)
+endif()
+configure_file(providers/tiktok/TikTokSigning.LICENSE.txt
+    "${BAJERINO_LICENSES_DIR}/TikTokSigning.txt" COPYONLY)
+install(DIRECTORY "${BAJERINO_LICENSES_DIR}/" DESTINATION share/bajerino/licenses)
+
 if (CHATTERINO_PLUGINS)
   target_link_libraries(${LIBRARY_PROJECT} PUBLIC lua sol2::sol2)
 endif()
@@ -1158,6 +1461,34 @@ if (BUILD_APP)
   target_link_libraries(${EXECUTABLE_PROJECT} PUBLIC ${LIBRARY_PROJECT})
 
   set_target_directory_hierarchy(${EXECUTABLE_PROJECT})
+  add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${BAJERINO_LICENSES_DIR}"
+          "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/licenses" VERBATIM)
+
+
+    set(BAJERINO_MEDIA_TOOLS_DIR "" CACHE PATH "Optional ffmpeg/ffprobe bundle with licenses")
+    if(BAJERINO_MEDIA_TOOLS_DIR)
+        foreach(program ffmpeg ffprobe)
+            if(NOT EXISTS "${BAJERINO_MEDIA_TOOLS_DIR}/${program}${CMAKE_EXECUTABLE_SUFFIX}")
+                message(FATAL_ERROR "Missing ${program} in BAJERINO_MEDIA_TOOLS_DIR")
+            endif()
+        endforeach()
+        if(NOT EXISTS "${BAJERINO_MEDIA_TOOLS_DIR}/licenses")
+            message(FATAL_ERROR "The background converter license directory is missing")
+        endif()
+        add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${BAJERINO_MEDIA_TOOLS_DIR}"
+                "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/support/media" VERBATIM)
+        if(WIN32)
+            set(media_install_dir support/media)
+        elseif(APPLE)
+            set(media_install_dir "bin/${EXECUTABLE_PROJECT}.app/Contents/MacOS/support/media")
+        else()
+            set(media_install_dir bin/support/media)
+        endif()
+        install(DIRECTORY "${BAJERINO_MEDIA_TOOLS_DIR}/" DESTINATION "${media_install_dir}" USE_SOURCE_PERMISSIONS)
+    endif()
+
 
   if (WIN32)
     if (WINDEPLOYQT_PATH)

@@ -1,6 +1,6 @@
 # Linux
 
-For all dependencies below we use Qt 6. Our minimum supported version is Qt 5.15.2, but you are on your own.
+Use Qt 6, including the Core, Widgets, Network, SVG, SVG Widgets, SQL, and Concurrent modules.
 
 ## Install dependencies
 
@@ -17,13 +17,13 @@ The built binary should be exportable from the final image & able to run on your
 ### Debian 13 (trixie) or later
 
 ```sh
-sudo apt install qt6-base-dev qt6-svg-dev qt6-image-formats-plugins libboost-dev libnotify-dev libssl-dev pkg-config cmake g++ git hunspell
+sudo apt install qt6-base-dev qt6-svg-dev qt6-image-formats-plugins libboost-dev libnotify-dev libssl-dev pkg-config cmake g++ git hunspell libwebp-dev libvpx-dev libyuv-dev libsecret-1-dev libwebkit2gtk-4.1-dev libjson-glib-dev ffmpeg
 ```
 
 ### Arch Linux
 
 ```sh
-sudo pacman -S --needed qt6-base qt6-tools boost-libs openssl qt6-imageformats qt6-svg boost libnotify rapidjson pkgconf cmake hunspell
+sudo pacman -S --needed qt6-base qt6-tools boost-libs openssl qt6-imageformats qt6-svg boost libnotify rapidjson pkgconf cmake hunspell libwebp libvpx libyuv libsecret webkit2gtk-4.1 json-glib ffmpeg
 ```
 
 If you use Wayland, you will also need to ensure `qt6-wayland` is installed.
@@ -55,6 +55,29 @@ sudo dnf install qt6-qtbase-devel qt6-qtimageformats qt6-qtsvg-devel qt6-qtbase-
 ```sh
 nix-shell -p openssl boost qt6.full pkg-config cmake libnotify hunspell
 ```
+
+## Media and account features
+
+All builds need WebP (including `webpdemux`), libvpx, libyuv, and the incremental
+libwebm parser. CMake downloads the pinned libwebm parser when the installed
+package does not provide it. YouTube and TikTok accounts use the system secret
+service through the keychain library; install libsecret development files.
+TikTok login additionally needs WebKitGTK 4.1 version 2.42 or newer and JSON-GLib.
+The browser runs in a separate helper installed alongside Bajerino.
+
+Background video import uses `ffmpeg` and `ffprobe` from `PATH` for local builds.
+Release packages use the pinned, limited codec build produced by
+[.CI/build-video-dependencies.sh](.CI/build-video-dependencies.sh). Set
+`BAJERINO_MEDIA_TOOLS_DIR` to that bundle's `support/media` directory to include
+its executables and licenses in a package. Add the dependency prefix to
+`CMAKE_PREFIX_PATH` when using the script's static codec libraries.
+
+YouTube reading works without OAuth credentials. To enable Google sign-in in
+an independently distributed build, set `MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID` and
+`MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET` for a desktop OAuth client. The imported
+CMake option names are retained for compatibility with Moltorino's provider code.
+Account support can be disabled explicitly with `MOLTORINO_YOUTUBE_ACCOUNTS=OFF`
+or `MOLTORINO_TIKTOK_ACCOUNTS=OFF` when building without their dependencies.
 
 ## Compile
 

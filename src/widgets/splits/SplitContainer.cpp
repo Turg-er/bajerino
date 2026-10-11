@@ -8,8 +8,10 @@
 #include "common/Common.hpp"
 #include "common/QLogging.hpp"
 #include "common/WindowDescriptors.hpp"
+#include "controllers/recording/ChatRecordingController.hpp"
 #include "debug/AssertInGuiThread.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/youtube/YouTubeChatServer.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
@@ -228,6 +230,11 @@ void SplitContainer::addSplit(Split *split)
     this->unsetCursor();
     this->splits_.push_back(split);
 
+    if (auto *recordings = getApp()->getChatRecordings())
+    {
+        recordings->paneAdded(this, split);
+    }
+
     this->refreshTab();
 
     auto &&conns = this->connectionsPerSplit_[split];
@@ -242,6 +249,10 @@ void SplitContainer::addSplit(Split *split)
                          });
 
     conns.managedConnect(split->channelChanged, [this, split] {
+        if (auto *recordings = getApp()->getChatRecordings())
+        {
+            recordings->paneAdded(this, split);
+        }
         if (this->tab_ != nullptr)
         {
             this->tab_->newHighlightSourceAdded(split->getChannelView());
@@ -322,6 +333,17 @@ void SplitContainer::addSplit(Split *split)
 
 void SplitContainer::setSelected(Split *split)
 {
+    if (split == nullptr)
+    {
+        auto *previous = this->selected_;
+        this->selected_ = nullptr;
+        if (auto *youtube = getApp()->getYouTubeChatServer())
+        {
+            youtube->clearActiveChannels(previous);
+        }
+        return;
+    }
+
     // safety
     if (std::find(this->splits_.begin(), this->splits_.end(), split) ==
         this->splits_.end())
@@ -336,6 +358,7 @@ void SplitContainer::setSelected(Split *split)
         this->focusSplitRecursive(node);
         this->setPreferedTargetRecursive(node);
     }
+    split->refreshSelectedYouTube();
 }
 
 void SplitContainer::setPreferedTargetRecursive(Node *node)
@@ -374,11 +397,20 @@ SplitContainer::Position SplitContainer::releaseSplit(Split *split)
 
     this->connectionsPerSplit_.erase(this->connectionsPerSplit_.find(split));
 
+    if (auto *recordings = getApp()->getChatRecordings())
+    {
+        Q_EMIT recordings->stateChanged();
+    }
+
     return position;
 }
 
 SplitContainer::Position SplitContainer::deleteSplit(Split *split)
 {
+    if (auto *recordings = getApp()->getChatRecordings())
+    {
+        recordings->stopPane(split);
+    }
     // Queue up save because: Split removed
     getApp()->getWindows()->queueSave();
 
@@ -535,6 +567,10 @@ void SplitContainer::layout()
 
     for (Split *split : this->splits_)
     {
+        if (getSettings()->continuousSplitBackground)
+        {
+            split->getChannelView().update();
+        }
         const QRect &g = split->geometry();
 
         Node *node = this->baseNode_->findNodeContainingSplit(split);
@@ -848,6 +884,7 @@ void SplitContainer::popup()
 
     // highlighting on new messages
     popupContainer->getTab()->setHighlightsEnabled(tab.highlightsEnabled_);
+    popupContainer->getTab()->setAlwaysVisible(tab.alwaysVisible_);
 
     // splits
     if (tab.rootNode_)
@@ -888,10 +925,11 @@ NodeDescriptor SplitContainer::buildDescriptorRecursively(
     }
 
     ContainerNodeDescriptor descriptor;
+    descriptor.flexH_ = currentNode->flexH_;
+    descriptor.flexV_ = currentNode->flexV_;
+    descriptor.vertical_ = currentNode->type_ == Node::Type::VerticalContainer;
     for (const auto &child : currentNode->children_)
     {
-        descriptor.vertical_ =
-            currentNode->type_ == Node::Type::VerticalContainer;
         descriptor.items_.push_back(
             this->buildDescriptorRecursively(child.get()));
     }
@@ -917,6 +955,7 @@ void SplitContainer::applyFromDescriptorRecursively(
 
         auto *split = new Split(this);
         split->setChannel(splitNode.decodeChannel());
+        split->setAutoModChannelFilter(splitNode.autoModChannelFilter_);
         split->setModerationMode(splitNode.moderationMode_);
         split->setFilters(splitNode.filters_);
         split->setCheckSpellingOverride(splitNode.spellCheckOverride);
@@ -959,6 +998,7 @@ void SplitContainer::applyFromDescriptorRecursively(
                 auto *split = new Split(this);
                 split->setFilters(splitNode.filters_);
                 split->setChannel(splitNode.decodeChannel());
+                split->setAutoModChannelFilter(splitNode.autoModChannelFilter_);
                 split->setModerationMode(splitNode.moderationMode_);
                 split->setCheckSpellingOverride(splitNode.spellCheckOverride);
 
@@ -987,6 +1027,27 @@ void SplitContainer::applyFromDescriptorRecursively(
 
                 baseNode->children_.emplace_back(node);
                 this->applyFromDescriptorRecursively(item, node.get());
+                if (node->type_ == Node::Type::EmptyRoot)
+                {
+                    baseNode->children_.pop_back();
+                }
+            }
+        }
+
+        baseNode->preferedFocusTarget_ = nullptr;
+        if (baseNode->children_.empty())
+        {
+            baseNode->type_ = Node::Type::EmptyRoot;
+        }
+        else if (baseNode->children_.size() == 1)
+        {
+            auto child = baseNode->children_.front();
+            baseNode->type_ = child->type_;
+            baseNode->split_ = child->split_;
+            baseNode->children_ = std::move(child->children_);
+            for (const auto &grandchild : baseNode->children_)
+            {
+                grandchild->parent_ = baseNode;
             }
         }
     }
@@ -1061,7 +1122,9 @@ void SplitContainer::refreshTabLiveStatus()
         }
     }
 
-    if (this->tab_->setLive(liveStatus) || this->tab_->setRerun(rerunStatus))
+    const bool liveChanged = this->tab_->setLive(liveStatus);
+    const bool rerunChanged = this->tab_->setRerun(rerunStatus);
+    if (liveChanged || rerunChanged)
     {
         auto *notebook = dynamic_cast<Notebook *>(this->parentWidget());
         if (notebook)

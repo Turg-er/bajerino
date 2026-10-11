@@ -76,103 +76,28 @@
         {
             "channelName": "pajlada",
             "count": 1,
-            "displayName": "",
+            "displayName": "nerixyz",
             "elements": [
                 {
-                    "emote": {
-                        "homePage": "https://dashboard.twitch.tv/settings/moderation/automod",
-                        "images": {
-                            "1x": ""
-                        },
-                        "name": "",
-                        "tooltip": "AutoMod"
-                    },
-                    "flags": "BadgeChannelAuthority",
+                    "color": "System",
+                    "flags": "Text|IgnoreExactMatch",
                     "link": {
                         "type": "None",
                         "value": ""
                     },
-                    "tooltip": "AutoMod",
-                    "trailingSpace": true,
-                    "type": "BadgeElement"
-                },
-                {
-                    "color": "#ff0000ff",
-                    "flags": "Text",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "style": "ChatMediumBold",
+                    "style": "ChatSmall",
                     "tooltip": "",
                     "trailingSpace": true,
                     "type": "TextElement",
                     "words": [
-                        "AutoMod:"
+                        "Swearing",
+                        "·",
+                        "Level",
+                        "4"
                     ]
                 },
                 {
-                    "color": "Text",
-                    "flags": "Text",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "style": "ChatMedium",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "Held",
-                        "a",
-                        "message",
-                        "for",
-                        "reason:",
-                        "swearing",
-                        "level",
-                        "4.",
-                        "Allow",
-                        "will",
-                        "post",
-                        "it",
-                        "in",
-                        "chat.",
-                        ""
-                    ]
-                },
-                {
-                    "color": "#ff00ff00",
-                    "flags": "Text",
-                    "link": {
-                        "type": "AutoModAllow",
-                        "value": "19d067ff-89b5-4790-a720-97599894eb6b"
-                    },
-                    "style": "ChatMediumBold",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "Allow"
-                    ]
-                },
-                {
-                    "color": "#ffff0000",
-                    "flags": "Text",
-                    "link": {
-                        "type": "AutoModDeny",
-                        "value": "19d067ff-89b5-4790-a720-97599894eb6b"
-                    },
-                    "style": "ChatMediumBold",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "",
-                        "Deny"
-                    ]
-                },
-                {
-                    "flags": "Text",
+                    "flags": "Text|IgnoreExactMatch",
                     "link": {
                         "type": "None",
                         "value": ""
@@ -180,21 +105,6 @@
                     "tooltip": "",
                     "trailingSpace": true,
                     "type": "LinebreakElement"
-                },
-                {
-                    "color": "System",
-                    "flags": "ChannelName",
-                    "link": {
-                        "type": "JumpToChannel",
-                        "value": "pajlada"
-                    },
-                    "style": "ChatMedium",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "#pajlada"
-                    ]
                 },
                 {
                     "element": {
@@ -224,19 +134,9 @@
                     "type": "TimestampElement"
                 },
                 {
-                    "flags": "ModeratorTools",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TwitchModerationElement"
-                },
-                {
                     "color": "Text",
                     "fallbackColor": "Text",
-                    "flags": "Text|Mention",
+                    "flags": "Text|Username|Mention|IgnoreExactMatch",
                     "link": {
                         "type": "None",
                         "value": ""
@@ -265,25 +165,63 @@
                     "words": [
                         "ass"
                     ]
+                },
+                {
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "LinebreakElement"
+                },
+                {
+                    "color": "System",
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatSmall",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "Denied",
+                        "by",
+                        "uint128"
+                    ]
                 }
             ],
             "externalBadges": [
             ],
-            "flags": "Highlighted|Disabled|PubSub|AutoMod|AutoModOffendingMessageHeader|AutoModOffendingMessage|EventSub|ModerationAction",
+            "flags": "PubSub|AutoMod|AutoModOffendingMessageHeader|AutoModOffendingMessage|EventSub|ModerationAction|InvalidReplyTarget",
             "frozen": true,
-            "highlightColor": "#ff404040",
+            "highlightMatches": [
+                {
+                    "color": "#80ffb140",
+                    "length": 3,
+                    "paintID": "",
+                    "pattern": "ass",
+                    "rule": "Twitch AutoMod\nSwearing · Level 4",
+                    "source": "automod",
+                    "start": 0,
+                    "style": "Fill"
+                }
+            ],
             "id": "automod_19d067ff-89b5-4790-a720-97599894eb6b",
             "localizedName": "",
             "loginName": "nerixyz",
-            "messageText": "AutoMod: Held a message for reason: swearing level 4. Allow will post it in chat. Allow Deny nerixyz: ass",
-            "searchText": "AutoMod: Held a message for reason: swearing level 4. Allow will post it in chat. Allow Deny nerixyz: ass",
+            "messageText": "ass",
+            "searchText": "pajlada nerixyz ass Swearing · Level 4 Denied",
             "serverReceivedTime": "2024-05-14T12:31:47Z",
             "timeoutUser": "",
             "twitchBadgeInfos": {
             },
             "twitchBadges": [
             ],
-            "userID": "",
+            "userID": "129546453",
             "usernameColor": "#ff000000"
         }
     ]

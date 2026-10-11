@@ -11,31 +11,47 @@
 #include "controllers/highlights/HighlightCheck.hpp"
 #include "controllers/highlights/HighlightPhrase.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
+#include "controllers/highlights/HighlightWordList.hpp"
+#include "controllers/ignores/HiddenUserController.hpp"
 #include "messages/Message.hpp"
 #include "messages/MessageBuilder.hpp"
 #include "providers/colors/ColorProvider.hpp"
 #include "providers/kick/KickAccount.hpp"
-#include "providers/twitch/TwitchAccount.hpp"  // IWYU pragma: keep
+#include "providers/seventv/SeventvPaints.hpp"
+#include "providers/tiktok/TikTokAccount.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
+#include "providers/youtube/YouTubeAccount.hpp"
 #include "singletons/Settings.hpp"
+
+#include <QSet>
+#include <QTimer>
 
 namespace {
 
 using namespace chatterino;
 
-auto highlightPhraseCheck(const HighlightPhrase &highlight) -> HighlightCheck
+constexpr std::size_t MAX_EXACT_HIGHLIGHT_MARKERS_PER_MESSAGE = 256;
+
+auto highlightPhraseCheck(
+    const HighlightPhrase &highlight, bool hasVisibleExactAppearance,
+    std::optional<MessagePlatform> onlyPlatform = std::nullopt)
+    -> HighlightCheck
 {
     return HighlightCheck{
-        [highlight](const auto &args, const auto &twitchBadges,
-                    const auto &senderName, const auto &originalMessage,
-                    const auto &flags,
-                    const auto self) -> std::optional<HighlightResult> {
-            (void)args;          // unused
-            (void)twitchBadges;  // unused
-            (void)senderName;    // unused
-            (void)flags;         // unused
+        [highlight, hasVisibleExactAppearance, onlyPlatform](
+            const auto &args, const auto &twitchBadges, const auto &senderName,
+            const auto &originalMessage, const auto &flags, const auto self,
+            const auto platform, const auto &normalizedChannelName,
+            const auto collectExactMatches) -> std::optional<HighlightResult> {
+            (void)args;
+            (void)twitchBadges;
+            (void)senderName;
+            (void)flags;
 
-            if (self)
+            if (self || (onlyPlatform && *onlyPlatform != platform) ||
+                !highlight.getChannelScope().appliesToNormalized(
+                    platform, normalizedChannelName))
             {
                 // Phrase checks should ignore highlights from the user
                 return std::nullopt;
@@ -52,11 +68,29 @@ auto highlightPhraseCheck(const HighlightPhrase &highlight) -> HighlightCheck
                 highlightSoundUrl = highlight.getSoundUrl();
             }
 
-            return HighlightResult{
+            auto result = HighlightResult{
                 highlight.hasAlert(),       highlight.hasSound(),
                 highlightSoundUrl,          highlight.getColor(),
                 highlight.showInMentions(),
             };
+            if (!collectExactMatches || !hasVisibleExactAppearance)
+            {
+                return result;
+            }
+            for (const auto &match : highlight.findMatches(originalMessage))
+            {
+                result.matches.emplace_back(HighlightMatch{
+                    .start = match.capturedStart(),
+                    .length = match.capturedLength(),
+                    .color = *highlight.getMatchColor(),
+                    .ruleName = highlight.getPattern(),
+                    .pattern = highlight.getPattern(),
+                    .source = HighlightMatchSource::Phrase,
+                    .style = highlight.getMatchStyle(),
+                    .paintID = highlight.getMatchPaintID(),
+                });
+            }
+            return result;
         }};
 }
 
@@ -79,13 +113,13 @@ void rebuildSubscriptionHighlights(Settings &settings,
         checks.emplace_back(HighlightCheck{
             [=](const auto &args, const auto &twitchBadges,
                 const auto &senderName, const auto &originalMessage,
-                const auto &flags,
-                const auto self) -> std::optional<HighlightResult> {
-                (void)twitchBadges;     // unused
-                (void)senderName;       // unused
-                (void)originalMessage;  // unused
-                (void)flags;            // unused
-                (void)self;             // unused
+                const auto &flags, const auto self, const auto, const auto &,
+                const auto) -> std::optional<HighlightResult> {
+                (void)twitchBadges;
+                (void)senderName;
+                (void)originalMessage;
+                (void)flags;
+                (void)self;
 
                 if (!args.isSubscriptionMessage)
                 {
@@ -126,13 +160,13 @@ void rebuildWhisperHighlights(Settings &settings,
         checks.emplace_back(HighlightCheck{
             [=](const auto &args, const auto &twitchBadges,
                 const auto &senderName, const auto &originalMessage,
-                const auto &flags,
-                const auto self) -> std::optional<HighlightResult> {
-                (void)twitchBadges;     // unused
-                (void)senderName;       // unused
-                (void)originalMessage;  // unused
-                (void)flags;            // unused
-                (void)self;             // unused
+                const auto &flags, const auto self, const auto, const auto &,
+                const auto) -> std::optional<HighlightResult> {
+                (void)twitchBadges;
+                (void)senderName;
+                (void)originalMessage;
+                (void)flags;
+                (void)self;
 
                 if (!args.isReceivedWhisper)
                 {
@@ -167,10 +201,9 @@ void rebuildReplyThreadHighlight(Settings &settings,
         auto highlightInMentions =
             settings.showThreadHighlightInMentions.getValue();
         checks.emplace_back(HighlightCheck{
-            [=](const auto & /*args*/, const auto & /*twitchBadges*/,
-                const auto & /*senderName*/, const auto & /*originalMessage*/,
-                const auto &flags,
-                const auto self) -> std::optional<HighlightResult> {
+            [=](const auto &, const auto &, const auto &, const auto &,
+                const auto &flags, const auto self, const auto, const auto &,
+                const auto) -> std::optional<HighlightResult> {
                 if (flags.has(MessageFlag::SubscribedThread) && !self)
                 {
                     return HighlightResult{
@@ -189,22 +222,56 @@ void rebuildReplyThreadHighlight(Settings &settings,
 }
 
 void rebuildMessageHighlights(Settings &settings,
-                              std::vector<HighlightCheck> &checks)
+                              std::vector<HighlightCheck> &checks,
+                              QObject *lifetimeContext)
 {
+    QSet<QString> explicitPaintIDs;
+    const bool paintsEnabled = settings.displaySevenTVPaints;
+    const auto hasVisibleExactAppearance = [=](HighlightMatchStyle style,
+                                               const QString &paintID) {
+        return style != HighlightMatchStyle::None ||
+               (paintsEnabled && SeventvPaints::isValidPaintID(paintID));
+    };
+    auto selfMatchColor = QColor(settings.selfHighlightMatchColor.getValue());
+    if (!selfMatchColor.isValid())
+    {
+        selfMatchColor = defaultNewHighlightMatchColor();
+    }
+    const auto selfMatchStyle = highlightMatchStyleFromName(
+        settings.selfHighlightMatchStyle.getValue());
+    const auto selfMatchPaintID = settings.selfHighlightMatchPaintID.getValue();
+    const auto addSelfHighlight = [&](const QString &name,
+                                      MessagePlatform platform) {
+        if (name.isEmpty())
+        {
+            return;
+        }
+        HighlightPhrase highlight(
+            name, settings.showSelfHighlightInMentions,
+            settings.enableSelfHighlightTaskbar,
+            settings.enableSelfHighlightSound, false, false,
+            settings.selfHighlightSoundUrl.getValue(),
+            ColorProvider::instance().color(ColorType::SelfHighlight),
+            std::make_shared<QColor>(selfMatchColor), selfMatchStyle,
+            selfMatchPaintID);
+        checks.emplace_back(highlightPhraseCheck(
+            highlight,
+            hasVisibleExactAppearance(highlight.getMatchStyle(),
+                                      highlight.getMatchPaintID()),
+            platform));
+        if (paintsEnabled && SeventvPaints::isValidPaintID(selfMatchPaintID))
+        {
+            explicitPaintIDs.insert(
+                SeventvPaints::normalizePaintID(selfMatchPaintID));
+        }
+    };
     auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
     QString currentUsername = currentUser->getUserName();
 
     if (settings.enableSelfHighlight && !currentUsername.isEmpty() &&
         !currentUser->isAnon())
     {
-        HighlightPhrase highlight(
-            currentUsername, settings.showSelfHighlightInMentions,
-            settings.enableSelfHighlightTaskbar,
-            settings.enableSelfHighlightSound, false, false,
-            settings.selfHighlightSoundUrl.getValue(),
-            ColorProvider::instance().color(ColorType::SelfHighlight));
-
-        checks.emplace_back(highlightPhraseCheck(highlight));
+        addSelfHighlight(currentUsername, MessagePlatform::AnyOrTwitch);
     }
 
     auto kickUser = getApp()->getAccounts()->kick.current();
@@ -212,20 +279,107 @@ void rebuildMessageHighlights(Settings &settings,
     if (settings.enableSelfHighlight && !kickUsername.isEmpty() &&
         !kickUser->isAnonymous())
     {
-        HighlightPhrase highlight(
-            kickUsername, settings.showSelfHighlightInMentions,
-            settings.enableSelfHighlightTaskbar,
-            settings.enableSelfHighlightSound, false, false,
-            settings.selfHighlightSoundUrl.getValue(),
-            ColorProvider::instance().color(ColorType::SelfHighlight));
+        addSelfHighlight(kickUsername, MessagePlatform::Kick);
+    }
 
-        checks.emplace_back(highlightPhraseCheck(highlight));
+    const auto youtubeUser = getApp()->getAccounts()->youtube.current();
+    if (settings.enableSelfHighlight && !youtubeUser->isAnonymous())
+    {
+        const auto handle = youtubeUser->handle();
+        const auto displayName = youtubeUser->displayName();
+        addSelfHighlight(handle, MessagePlatform::YouTube);
+        if (displayName.compare(handle, Qt::CaseInsensitive) != 0)
+        {
+            addSelfHighlight(displayName, MessagePlatform::YouTube);
+        }
+    }
+
+    const auto tiktokUser = getApp()->getAccounts()->tiktok.current();
+    if (settings.enableSelfHighlight && !tiktokUser->isAnonymous())
+    {
+        addSelfHighlight(tiktokUser->handle(), MessagePlatform::TikTok);
+        if (tiktokUser->displayName().compare(tiktokUser->handle(),
+                                              Qt::CaseInsensitive) != 0)
+        {
+            addSelfHighlight(tiktokUser->displayName(),
+                             MessagePlatform::TikTok);
+        }
     }
 
     auto messageHighlights = settings.highlightedMessages.readOnly();
     for (const auto &highlight : *messageHighlights)
     {
-        checks.emplace_back(highlightPhraseCheck(highlight));
+        if (settings.displaySevenTVPaints &&
+            SeventvPaints::isValidPaintID(highlight.getMatchPaintID()))
+        {
+            explicitPaintIDs.insert(
+                SeventvPaints::normalizePaintID(highlight.getMatchPaintID()));
+        }
+        checks.emplace_back(highlightPhraseCheck(
+            highlight, hasVisibleExactAppearance(highlight.getMatchStyle(),
+                                                 highlight.getMatchPaintID())));
+    }
+
+    auto wordLists = settings.highlightWordLists.readOnly();
+    for (const auto &wordList : *wordLists)
+    {
+        if (settings.displaySevenTVPaints && wordList.enabled() &&
+            SeventvPaints::isValidPaintID(wordList.matchPaintID()))
+        {
+            explicitPaintIDs.insert(
+                SeventvPaints::normalizePaintID(wordList.matchPaintID()));
+        }
+        const bool hasExactAppearance = hasVisibleExactAppearance(
+            wordList.matchStyle(), wordList.matchPaintID());
+        checks.emplace_back(HighlightCheck{
+            [wordList, hasExactAppearance](
+                const auto &, const auto &, const auto &,
+                const auto &originalMessage, const auto &, const auto self,
+                const auto platform, const auto &normalizedChannelName,
+                const auto collectExactMatches)
+                -> std::optional<HighlightResult> {
+                if (self)
+                {
+                    return std::nullopt;
+                }
+                auto match = wordList.matchForNormalizedChannel(
+                    originalMessage, normalizedChannelName, platform,
+                    collectExactMatches && hasExactAppearance
+                        ? HighlightWordListMatchMode::WithRanges
+                        : HighlightWordListMatchMode::MatchOnly);
+                if (!match.matched)
+                {
+                    return std::nullopt;
+                }
+
+                std::optional<QUrl> soundUrl;
+                if (wordList.hasCustomSound())
+                {
+                    soundUrl = wordList.soundUrl();
+                }
+                auto result = HighlightResult{
+                    wordList.hasAlert(), wordList.hasSound(), soundUrl,
+                    wordList.color(), wordList.showInMentions()};
+                result.matches = std::move(match.matches);
+                return result;
+            }});
+    }
+
+    if (!explicitPaintIDs.isEmpty())
+    {
+        QTimer::singleShot(3000, lifetimeContext,
+                           [paintIDs = std::move(explicitPaintIDs)] {
+                               auto *app = tryGetApp();
+                               if (app == nullptr)
+                               {
+                                   return;
+                               }
+                               auto *paints = app->getSeventvPaints();
+                               for (const auto &paintID : paintIDs)
+                               {
+                                   paints->loadPaintByID(paintID);
+                               }
+                           });
     }
 
     if (settings.enableAutomodHighlight)
@@ -240,10 +394,9 @@ void rebuildMessageHighlights(Settings &settings,
             ColorProvider::instance().color(ColorType::AutomodHighlight);
 
         checks.emplace_back(HighlightCheck{
-            [=](const auto & /*args*/, const auto & /*twitchBadges*/,
-                const auto & /*senderName*/, const auto & /*originalMessage*/,
-                const auto &flags,
-                const auto /*self*/) -> std::optional<HighlightResult> {
+            [=](const auto &, const auto &, const auto &, const auto &,
+                const auto &flags, const auto, const auto, const auto &,
+                const auto) -> std::optional<HighlightResult> {
                 if (!flags.has(MessageFlag::AutoModOffendingMessage))
                 {
                     return std::nullopt;
@@ -276,16 +429,16 @@ void rebuildUserHighlights(Settings &settings,
         bool showInMentions = settings.showSelfMessageHighlightInMentions;
 
         checks.emplace_back(HighlightCheck{
-            [showInMentions](
-                const auto &args, const auto &twitchBadges,
-                const auto &senderName, const auto &originalMessage,
-                const auto &flags,
-                const auto self) -> std::optional<HighlightResult> {
-                (void)args;             //unused
-                (void)twitchBadges;     //unused
-                (void)senderName;       //unused
-                (void)flags;            //unused
-                (void)originalMessage;  //unused
+            [showInMentions](const auto &args, const auto &twitchBadges,
+                             const auto &senderName,
+                             const auto &originalMessage, const auto &flags,
+                             const auto self, const auto, const auto &,
+                             const auto) -> std::optional<HighlightResult> {
+                (void)args;
+                (void)twitchBadges;
+                (void)senderName;
+                (void)flags;
+                (void)originalMessage;
 
                 if (!self)
                 {
@@ -306,15 +459,18 @@ void rebuildUserHighlights(Settings &settings,
         checks.emplace_back(HighlightCheck{
             [highlight](const auto &args, const auto &twitchBadges,
                         const auto &senderName, const auto &originalMessage,
-                        const auto &flags,
-                        const auto self) -> std::optional<HighlightResult> {
-                (void)args;             // unused
-                (void)twitchBadges;     // unused
-                (void)originalMessage;  // unused
-                (void)flags;            // unused
-                (void)self;             // unused
+                        const auto &flags, const auto self, const auto platform,
+                        const auto &normalizedChannelName,
+                        const auto) -> std::optional<HighlightResult> {
+                (void)args;
+                (void)twitchBadges;
+                (void)originalMessage;
+                (void)flags;
+                (void)self;
 
-                if (!highlight.isMatch(senderName))
+                if (!highlight.getChannelScope().appliesToNormalized(
+                        platform, normalizedChannelName) ||
+                    !highlight.isMatch(senderName))
                 {
                     return std::nullopt;
                 }
@@ -346,13 +502,14 @@ void rebuildBadgeHighlights(Settings &settings,
         checks.emplace_back(HighlightCheck{
             [highlight](const auto &args, const auto &twitchBadges,
                         const auto &senderName, const auto &originalMessage,
-                        const auto &flags,
-                        const auto self) -> std::optional<HighlightResult> {
-                (void)args;             // unused
-                (void)senderName;       // unused
-                (void)originalMessage;  // unused
-                (void)flags;            // unused
-                (void)self;             // unused
+                        const auto &flags, const auto self, const auto,
+                        const auto &,
+                        const auto) -> std::optional<HighlightResult> {
+                (void)args;
+                (void)senderName;
+                (void)originalMessage;
+                (void)flags;
+                (void)self;
 
                 for (const TwitchBadge &badge : twitchBadges)
                 {
@@ -393,6 +550,9 @@ HighlightController::HighlightController(Settings &settings,
     this->rebuildListener_.addSetting(settings.enableSelfHighlightTaskbar);
     this->rebuildListener_.addSetting(settings.selfHighlightSoundUrl);
     this->rebuildListener_.addSetting(settings.showSelfHighlightInMentions);
+    this->rebuildListener_.addSetting(settings.selfHighlightMatchColor);
+    this->rebuildListener_.addSetting(settings.selfHighlightMatchStyle);
+    this->rebuildListener_.addSetting(settings.selfHighlightMatchPaintID);
 
     this->rebuildListener_.addSetting(settings.enableWhisperHighlight);
     this->rebuildListener_.addSetting(settings.enableWhisperHighlightSound);
@@ -420,6 +580,8 @@ HighlightController::HighlightController(Settings &settings,
     this->rebuildListener_.addSetting(settings.enableAutomodHighlightSound);
     this->rebuildListener_.addSetting(settings.enableAutomodHighlightTaskbar);
     this->rebuildListener_.addSetting(settings.automodHighlightSoundUrl);
+
+    this->rebuildListener_.addSetting(settings.displaySevenTVPaints);
 
     this->rebuildListener_.setCB([this, &settings] {
         qCDebug(chatterinoHighlights)
@@ -451,6 +613,14 @@ HighlightController::HighlightController(Settings &settings,
         });
 
     this->signalHolder_.managedConnect(
+        getSettings()->highlightWordLists.delayedItemsChanged,
+        [this, &settings] {
+            qCDebug(chatterinoHighlights)
+                << "Rebuild checks because highlight word lists changed";
+            this->rebuildChecks(settings);
+        });
+
+    this->signalHolder_.managedConnect(
         accounts->twitch.currentUserChanged, [this, &settings] {
             qCDebug(chatterinoHighlights)
                 << "Rebuild checks because user swapped accounts";
@@ -471,6 +641,26 @@ HighlightController::HighlightController(Settings &settings,
             this->rebuildChecks(settings);
         });
 
+    this->signalHolder_.managedConnect(
+        accounts->youtube.currentChanged, [this, &settings] {
+            qCDebug(chatterinoHighlights)
+                << "Rebuild checks because YouTube user changed";
+            this->rebuildChecks(settings);
+        });
+    this->signalHolder_.managedConnect(accounts->youtube.userListUpdated,
+                                       [this, &settings] {
+                                           this->rebuildChecks(settings);
+                                       });
+
+    this->signalHolder_.managedConnect(accounts->tiktok.currentChanged,
+                                       [this, &settings] {
+                                           this->rebuildChecks(settings);
+                                       });
+    this->signalHolder_.managedConnect(accounts->tiktok.userListUpdated,
+                                       [this, &settings] {
+                                           this->rebuildChecks(settings);
+                                       });
+
     this->rebuildChecks(settings);
 }
 
@@ -487,7 +677,7 @@ void HighlightController::rebuildChecks(Settings &settings)
 
     rebuildWhisperHighlights(settings, *checks);
 
-    rebuildMessageHighlights(settings, *checks);
+    rebuildMessageHighlights(settings, *checks, &this->lifetimeGuard_);
 
     rebuildUserHighlights(settings, *checks);
 
@@ -499,12 +689,20 @@ void HighlightController::rebuildChecks(Settings &settings)
 std::pair<bool, HighlightResult> HighlightController::check(
     const MessageParseArgs &args, const std::vector<TwitchBadge> &twitchBadges,
     const QString &senderName, const QString &originalMessage,
-    const MessageFlags &messageFlags, MessagePlatform platform) const
+    const MessageFlags &messageFlags, MessagePlatform platform,
+    const QString &senderID, const QString &channelName,
+    bool forceMatchRanges) const
 {
     bool highlighted = false;
     auto result = HighlightResult::emptyResult();
 
-    // Access for checking
+    if (auto *hiddenUsers = getApp()->getHiddenUsers();
+        hiddenUsers && hiddenUsers->shouldSuppressHighlights(
+                           platform, senderID, senderName, originalMessage))
+    {
+        return {false, result};
+    }
+
     const auto checks = this->checks_.accessConst();
 
     bool self = false;
@@ -521,12 +719,29 @@ std::pair<bool, HighlightResult> HighlightController::check(
                 !kickUser->isAnonymous() && senderName == kickUser->username();
         }
         break;
+        case MessagePlatform::YouTube: {
+            const auto youtubeUser = getApp()->getAccounts()->youtube.current();
+            self = !youtubeUser->isAnonymous() && !senderID.isEmpty() &&
+                   senderID == youtubeUser->channelID();
+        }
+        break;
+        case MessagePlatform::TikTok: {
+            const auto tiktokUser = getApp()->getAccounts()->tiktok.current();
+            self = !tiktokUser->isAnonymous() && !senderID.isEmpty() &&
+                   senderID == tiktokUser->userID();
+        }
+        break;
     }
 
+    const auto normalizedChannelName =
+        normalizeHighlightChannelName(channelName);
+    const bool collectExactMatches =
+        forceMatchRanges || getSettings()->highlightMatchedFragments;
     for (const auto &check : *checks)
     {
-        if (auto checkResult = check.cb(args, twitchBadges, senderName,
-                                        originalMessage, messageFlags, self);
+        if (auto checkResult = check.cb(
+                args, twitchBadges, senderName, originalMessage, messageFlags,
+                self, platform, normalizedChannelName, collectExactMatches);
             checkResult)
         {
             highlighted = true;
@@ -571,11 +786,14 @@ std::pair<bool, HighlightResult> HighlightController::check(
                 }
             }
 
-            if (result.full())
-            {
-                // The final highlight result does not have room to add any more parameters, early out
-                break;
-            }
+            const auto remaining =
+                MAX_EXACT_HIGHLIGHT_MARKERS_PER_MESSAGE -
+                std::min(result.matches.size(),
+                         MAX_EXACT_HIGHLIGHT_MARKERS_PER_MESSAGE);
+            const auto count = std::min(remaining, checkResult->matches.size());
+            result.matches.insert(result.matches.end(),
+                                  checkResult->matches.begin(),
+                                  checkResult->matches.begin() + count);
         }
     }
 

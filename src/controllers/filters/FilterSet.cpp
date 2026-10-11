@@ -46,6 +46,10 @@ bool FilterSet::filter(const MessagePtr &m, ChannelPtr channel) const
         return true;
     }
 
+    if (!m)
+    {
+        return false;
+    }
     filters::RunContext ctx{
         .message = *m,
         .channel = channel.get(),

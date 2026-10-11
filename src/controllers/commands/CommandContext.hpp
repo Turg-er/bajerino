@@ -14,6 +14,7 @@ class Channel;
 using ChannelPtr = std::shared_ptr<Channel>;
 class TwitchChannel;
 class KickChannel;
+class YouTubeChannel;
 
 struct CommandContext {
     QStringList words;
@@ -27,6 +28,7 @@ struct CommandContext {
 
     // Can be null if `channel` is null or if `channel` is not a Kick channel
     KickChannel *kickChannel;
+    YouTubeChannel *youtubeChannel{};
 };
 
 }  // namespace chatterino

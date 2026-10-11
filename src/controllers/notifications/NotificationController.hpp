@@ -9,6 +9,7 @@
 #include "util/QCompareTransparent.hpp"
 
 #include <QTimer>
+#include <QUrl>
 
 namespace chatterino {
 
@@ -19,7 +20,8 @@ struct HelixStream;
 class NotificationModel;
 
 enum class Platform : uint8_t {
-    Twitch,  // 0
+    Twitch,
+    YouTube,
 };
 
 class NotificationController final
@@ -30,10 +32,14 @@ public:
     // Perform an initial load so we don't have to wait for the timer
     void initialize();
 
-    bool isChannelNotified(const QString &channelName, Platform p) const;
-    void updateChannelNotification(const QString &channelName, Platform p);
-    void addChannelNotification(const QString &channelName, Platform p);
-    void removeChannelNotification(const QString &channelName, Platform p);
+    bool isChannelNotified(const QString &channelName, Platform p,
+                           const QString &resolvedChannelId = {}) const;
+    void updateChannelNotification(const QString &channelName, Platform p,
+                                   const QString &resolvedChannelId = {});
+    void addChannelNotification(const QString &channelName, Platform p,
+                                const QString &resolvedChannelId = {});
+    void removeChannelNotification(const QString &channelName, Platform p,
+                                   const QString &resolvedChannelId = {});
 
     struct NotificationPayload {
         QString channelId;
@@ -42,12 +48,17 @@ public:
         QString displayName;
         QString title;
         bool isInitialUpdate = false;
+        Platform platform = Platform::Twitch;
+        QUrl url;
+        QString resolvedChannelId;
+        bool isDuplicateBroadcast = false;
     };
 
     /// @brief Sends out notifications for a channel that has gone live
     ///
     /// Duplicate calls for the same stream have no effect
     void notifyTwitchChannelLive(const NotificationPayload &payload);
+    void notifyChannelLive(const NotificationPayload &payload);
 
     /// @brief Sends out notifications for a channel that has gone offline
     ///
@@ -84,6 +95,8 @@ private:
 
     ChatterinoSetting<std::vector<QString>> twitchSetting_ = {
         "/notifications/twitch"};
+    ChatterinoSetting<std::vector<QString>> youtubeSetting_ = {
+        "/moltorino/notifications/youtube"};
 };
 
 }  // namespace chatterino

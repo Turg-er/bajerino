@@ -51,6 +51,9 @@ public:
 
     virtual void sendMessage(const QString &channelName,
                              const QString &message) = 0;
+    virtual bool sendInvisibleMessage(
+        const std::shared_ptr<TwitchChannel> &channel, const QString &message,
+        const QString &oauthToken) = 0;
     virtual void sendRawMessage(const QString &rawMessage) = 0;
 
     virtual ChannelPtr getOrAddChannel(const QString &dirtyChannelName) = 0;
@@ -63,6 +66,8 @@ public:
     virtual ChannelPtr getAnonymousChannelOrEmpty(
         const QString &dirtyChannelName) = 0;
     virtual void reconnectAnonymousChannels() = 0;
+    virtual void reconnectChannel(
+        const std::shared_ptr<TwitchChannel> &channel) = 0;
     /// Re-evaluates every open Twitch channel's read routing and re-homes it
     /// between the authenticated connection and anonymous pool.
     virtual void reevaluateChannelRouting() = 0;
@@ -162,6 +167,9 @@ public:
 
     void sendMessage(const QString &channelName,
                      const QString &message) override;
+    bool sendInvisibleMessage(const std::shared_ptr<TwitchChannel> &channel,
+                              const QString &message,
+                              const QString &oauthToken) override;
     void sendRawMessage(const QString &rawMessage) override;
 
     ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override;
@@ -175,6 +183,8 @@ public:
     ChannelPtr getAnonymousChannelOrEmpty(
         const QString &dirtyChannelName) override;
     void reconnectAnonymousChannels() override;
+    void reconnectChannel(
+        const std::shared_ptr<TwitchChannel> &channel) override;
     void reevaluateChannelRouting() override;
     bool hasAuthenticatedChannels() override;
 
@@ -222,6 +232,8 @@ protected:
 
     void onReadConnected(IrcConnection *connection);
     void onDisconnected();
+    void handleReadBlock(Communi::IrcMessage *message);
+    bool clearAnonymousReadFallbacks();
     void markChannelsConnected();
     void ensureWriteConnection();
     void ensureReadConnection();

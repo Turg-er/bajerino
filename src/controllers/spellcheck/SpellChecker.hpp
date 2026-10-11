@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <pajlada/signals/signalholder.hpp>
 #include <QString>
 
 #include <memory>
@@ -37,6 +38,7 @@ public:
     SpellChecker();
     ~SpellChecker();
 
+    void ensureLoaded();
     bool isLoaded() const;
 
     bool check(const QString &word);
@@ -49,7 +51,9 @@ public:
     std::vector<DictionaryInfo> getAvailableDictionaries() const;
 
 private:
+    void reload();
     std::unique_ptr<SpellCheckerPrivate> private_;
+    pajlada::Signals::SignalHolder settingConnections_;
 };
 
 }  // namespace chatterino

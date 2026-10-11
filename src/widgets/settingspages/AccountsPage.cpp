@@ -14,6 +14,9 @@
 
 #include <QDialogButtonBox>
 #include <QHeaderView>
+#include <QLabel>
+#include <QPushButton>
+#include <QStringList>
 #include <QTableView>
 #include <QVBoxLayout>
 
@@ -27,6 +30,59 @@ AccountsPage::AccountsPage()
 
     LayoutCreator<AccountsPage> layoutCreator(this);
     auto layout = layoutCreator.emplace<QVBoxLayout>().withoutMargin();
+
+    auto *cleanupWarning = layout.emplace<QLabel>().getElement();
+    cleanupWarning->setWordWrap(true);
+    cleanupWarning->setTextFormat(Qt::RichText);
+    cleanupWarning->setOpenExternalLinks(true);
+    cleanupWarning->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    cleanupWarning->hide();
+
+    auto *dismissCleanupWarning =
+        layout.emplace<QPushButton>("I handled this warning").getElement();
+    dismissCleanupWarning->setToolTip(
+        "Dismiss the warning after resolving the Google account connection. "
+        "Pending automatic cleanup will still retry later.");
+    dismissCleanupWarning->hide();
+
+    auto refreshCleanupWarning = [app, cleanupWarning, dismissCleanupWarning] {
+        const auto errors =
+            app->getAccounts()->youtube.credentialCleanupErrors();
+        if (errors.empty())
+        {
+            cleanupWarning->clear();
+            cleanupWarning->hide();
+            dismissCleanupWarning->hide();
+            return;
+        }
+
+        QStringList details;
+        details.reserve(static_cast<qsizetype>(errors.size()));
+        for (const auto &[channelID, error] : errors)
+        {
+            details.emplace_back(QStringLiteral("%1: %2").arg(
+                channelID.toHtmlEscaped(), error.toHtmlEscaped()));
+        }
+        cleanupWarning->setText(
+            QStringLiteral(
+                "<b>YouTube credential cleanup needs attention.</b> "
+                "The account is disconnected, but Bajerino could not finish "
+                "revoking or removing its Google credential. Any token kept "
+                "for a retry remains saved locally. Follow the detail below, "
+                "or "
+                "remove this app from "
+                "<a href=\"https://myaccount.google.com/connections\">Google "
+                "Account connections</a>."
+                "<br>%1")
+                .arg(details.join(QStringLiteral("<br>"))));
+        cleanupWarning->show();
+        dismissCleanupWarning->show();
+    };
+    refreshCleanupWarning();
+
+    QObject::connect(dismissCleanupWarning, &QPushButton::clicked, this, [app] {
+        app->getAccounts()->youtube.dismissCredentialCleanupErrors();
+    });
 
     EditableModelView *view =
         layout
@@ -43,32 +99,34 @@ AccountsPage::AccountsPage()
         d.exec();
     });
 
+    this->managedConnections_.managedConnect(
+        app->getAccounts()->youtube.credentialCleanupChanged,
+        refreshCleanupWarning);
+
     view->getTableView()->setStyleSheet("background: #333");
 
-    //    auto buttons = layout.emplace<QDialogButtonBox>();
-    //    {
-    //        this->addButton = buttons->addButton("Add",
-    //        QDialogButtonBox::YesRole); this->removeButton =
-    //        buttons->addButton("Remove", QDialogButtonBox::NoRole);
-    //    }
+    auto *youtubeDisconnectHelp = layout.emplace<QLabel>().getElement();
+    youtubeDisconnectHelp->setWordWrap(true);
+    youtubeDisconnectHelp->setOpenExternalLinks(true);
+    youtubeDisconnectHelp->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    youtubeDisconnectHelp->setText(QStringLiteral(
+        "Removing a YouTube account disconnects it and asks Google to "
+        "revoke this app's access. You can also revoke it from your "
+        "<a href=\"https://myaccount.google.com/connections\">Google "
+        "Account</a>."));
 
-    //    layout.emplace<AccountSwitchWidget>(this).assign(&this->accSwitchWidget);
-
-    // ----
-    //    QObject::connect(this->addButton, &QPushButton::clicked, []() {
-    //        static auto loginWidget = new LoginWidget();
-    //        loginWidget->show();
-    //    });
-
-    //    QObject::connect(this->removeButton, &QPushButton::clicked, [this] {
-    //        auto selectedUser = this->accSwitchWidget->currentItem()->text();
-    //        if (selectedUser == ANONYMOUS_USERNAME_LABEL) {
-    //            // Do nothing
-    //            return;
-    //        }
-
-    //        getApp()->getAccounts()->Twitch.removeUser(selectedUser);
-    //    });
+    auto *tiktokWarning = layout.emplace<QLabel>().getElement();
+    tiktokWarning->setWordWrap(true);
+    tiktokWarning->setTextFormat(Qt::PlainText);
+    auto refreshTikTokWarning = [app, tiktokWarning] {
+        const auto &error = app->getAccounts()->tiktok.credentialError();
+        tiktokWarning->setText(error);
+        tiktokWarning->setVisible(!error.isEmpty());
+    };
+    refreshTikTokWarning();
+    this->managedConnections_.managedConnect(
+        app->getAccounts()->tiktok.credentialErrorChanged,
+        refreshTikTokWarning);
 }
 
 }  // namespace chatterino

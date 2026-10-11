@@ -159,6 +159,12 @@ void setLinkOn(MessageElement *el, const Link &link)
         case Link::None:
         case Link::AutoModAllow:
         case Link::AutoModDeny:
+        case Link::AutoModReviewApprove:
+        case Link::AutoModReviewDeny:
+        case Link::AutoModReviewTimeout:
+        case Link::AutoModReviewBan:
+        case Link::AutoModReviewRetry:
+        case Link::OpenModerationReport:
         case Link::OpenAccountsPage:
         case Link::Reconnect:
         case Link::ViewThread:

@@ -4,13 +4,20 @@
 
 #include <pajlada/signals/signal.hpp>
 #include <QDateTime>
+#include <QJsonObject>
 #include <QString>
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace chatterino {
+
+namespace kick {
+inline constexpr QLatin1StringView AUTH_PROXY{"https://c7-auth.nerixyz.de"};
+inline constexpr QLatin1StringView AUTH_CLIENT_ID{"01KEBZBHCX3DKEJ0KRQBDNT05B"};
+}  // namespace kick
 
 struct KickAccountData {
     QString username;
@@ -22,6 +29,8 @@ struct KickAccountData {
     QString refreshToken;
     QDateTime expiresAt;
 
+    QString tokenUrl() const;
+    bool setTokens(const QJsonObject &response);
     void save() const;
     static std::optional<KickAccountData> loadRaw(const std::string &key);
 };
@@ -72,6 +81,7 @@ public:
     {
         return this->authToken_;
     }
+
     QString refreshToken() const
     {
         return this->refreshToken_;
@@ -83,6 +93,7 @@ public:
     }
 
     void refreshIfNeeded();
+    void cancelRefresh();
     void loadSeventvUser();
 
     pajlada::Signals::NoArgSignal authUpdated;
@@ -103,7 +114,6 @@ private:
     };
 
     void check(const std::function<void(CheckResult)> &cb);
-    void doRefresh();
 
     QString username_;
     uint64_t userID_ = 0;
@@ -113,6 +123,8 @@ private:
     QString authToken_;
     QString refreshToken_;
     QDateTime expiresAt_;
+    uint64_t refreshGeneration_ = 0;
+    bool refreshing_ = false;
 
     QString seventvUserID_;
 };

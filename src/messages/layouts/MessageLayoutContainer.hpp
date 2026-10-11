@@ -10,6 +10,7 @@
 
 #include <QPoint>
 #include <QRect>
+#include <QRegion>
 
 #include <memory>
 #include <optional>
@@ -23,6 +24,11 @@ class QPainter;
 
 namespace chatterino {
 
+struct AnimatedElementRegions {
+    QRegion periodic;
+    QRegion selfTimed;
+};
+
 enum class TextDirection : uint8_t {
     Neutral,
     RTL,
@@ -30,6 +36,7 @@ enum class TextDirection : uint8_t {
 };
 
 class MessageLayoutElement;
+struct AnimatedMessageShadow;
 struct Selection;
 struct MessagePaintContext;
 
@@ -50,6 +57,7 @@ struct MessageLayoutContainer {
      * Finish the layout process of this message
      */
     void endLayout();
+    void releasePickerImages() const;
 
     /**
      * Add the given `element` to this message.
@@ -74,17 +82,15 @@ struct MessageLayoutContainer {
      */
     void breakLine();
 
-    /**
-     * Paint the elements in this message
-     */
-    void paintElements(QPainter &painter, const MessagePaintContext &ctx) const;
+    void paintElements(QPainter &painter, const MessagePaintContext &ctx,
+                       bool paintFragmentHighlights = true,
+                       bool paintEmotes = true) const;
 
-    /**
-     * Paint the animated elements in this message
-     * @returns true if this container contains at least one animated element
-     */
-    bool paintAnimatedElements(QPainter &painter, qreal yOffset,
-                               bool isCollapsed = false) const;
+    AnimatedElementRegions paintAnimatedElements(
+        QPainter &painter, qreal yOffset, bool isCollapsed = false,
+        const AnimatedMessageShadow *shadow = nullptr,
+        const MessageLayoutElement *hoveredElement = nullptr,
+        bool hoverAnimateOnly = false) const;
 
     /**
      * Paint the selection for this container
@@ -281,21 +287,9 @@ private:
     void addElement(MessageLayoutElement *element, bool forceAdd,
                     qsizetype prevIndex);
 
-    /// @brief Reorders the last line according to @a textDirection_
-    ///
-    /// If a line contains RTL or the text direction is RTL, elements need to be
-    /// reordered (see @a lineContainsRTL_ and @a isRTL respectively).
-    /// This method reverses sequences of text in the opposite direction for it
-    /// to remain in its intended direction when rendered. Non-text elements
-    /// won't be reordered.
-    ///
-    /// For example, in an RTL container, the sequence
-    /// "1_R 2_R 3_N 4_R 5_L 6_L 7_N 8_R" will be (visually) reordered to
-    /// "8_R 5_L 6_L 7_N 4_R 3_N 2_R 1_R" (x_{L,N,R} indicates the element with
-    /// id x which is in the direction {LTR,Neutral,RTL}).
-    ///
-    /// @param firstTextIndex The index of the first element of the message
-    ///                       (i.e. the index after the username).
+    bool shouldRemoveSpaceBetweenEmotes(const MessageLayoutElement &element,
+                                        qsizetype prevIndex) const;
+
     void reorderRTL(size_t firstTextIndex);
 
     /**
@@ -370,6 +364,9 @@ private:
     bool centerBadges_ = false;
     qreal width_ = 0;
     float descent_ = 0.F;
+    qreal metadataCenterAboveBottom_ = 0;
+    bool hasUsernameAlignment_ = false;
+    bool useBalancedMetadataAlignment_ = true;
     MessageFlags flags_;
     /**
      * line_ is the current line index we are adding

@@ -4,6 +4,7 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
+#include "singletons/ThemeCustomization.hpp"
 #include "util/Helpers.hpp"
 #include "widgets/dialogs/PredictionDialog.hpp"
 #include "widgets/splits/Split.hpp"
@@ -408,6 +409,8 @@ void PredictionBanner::setPrediction(
     {
         this->updateTimer_->stop();
         this->prediction_ = std::nullopt;
+        this->autoDismissScheduledKey_.clear();
+        this->expiryRefreshQueued_ = false;
         this->twitchChannel_ = nullptr;
         this->metadataLabel_->clear();
         this->titleLabel_->clear();
@@ -419,6 +422,10 @@ void PredictionBanner::setPrediction(
         return;
     }
 
+    if (!this->prediction_ || this->prediction_->id != prediction->id)
+    {
+        this->expiryRefreshQueued_ = false;
+    }
     this->prediction_ = prediction;
     this->twitchChannel_ = channel;
 
@@ -470,7 +477,8 @@ void PredictionBanner::setPrediction(
     this->updateLayout();
     this->updateTimer();
 
-    if (prediction->status == "ACTIVE" && this->predictionEndsAt().isValid())
+    if (prediction->status == "ACTIVE" && this->predictionEndsAt().isValid() &&
+        !this->expiryRefreshQueued_)
     {
         this->updateTimer_->start();
     }
@@ -482,18 +490,32 @@ void PredictionBanner::setPrediction(
     if (this->dismissedPredictionKey_ !=
         chatterino::PredictionBanner::dismissalKey(*prediction))
     {
-        const int autoDismiss = getSettings()->predictionAutoDismissSeconds;
-        if (autoDismiss > 0 && (prediction->status == "RESOLVED" ||
-                                prediction->status == "CANCELED"))
+        const auto predictionKey = this->dismissalKey(*prediction);
+        const bool terminal = prediction->status == "RESOLVED" ||
+                              prediction->status == "CANCELED";
+        if (!terminal && this->autoDismissScheduledKey_ == predictionKey)
         {
-            QTimer::singleShot(autoDismiss * 1000, this, [this] {
-                if (this->prediction_ &&
-                    (this->prediction_->status == "RESOLVED" ||
-                     this->prediction_->status == "CANCELED"))
+            this->autoDismissScheduledKey_.clear();
+        }
+
+        const int autoDismiss = getSettings()->predictionAutoDismissSeconds;
+        if (autoDismiss > 0 && terminal &&
+            this->autoDismissScheduledKey_ != predictionKey)
+        {
+            this->autoDismissScheduledKey_ = predictionKey;
+            QTimer::singleShot(autoDismiss * 1000, this, [this, predictionKey] {
+                if (this->autoDismissScheduledKey_ != predictionKey)
                 {
-                    this->dismissedPredictionKey_ =
-                        chatterino::PredictionBanner::dismissalKey(
-                            *this->prediction_);
+                    return;
+                }
+                this->autoDismissScheduledKey_.clear();
+                if (this->prediction_ &&
+                    this->dismissalKey(*this->prediction_) == predictionKey &&
+                    (this->prediction_->status == "RESOLVED" ||
+                     this->prediction_->status == "CANCELED") &&
+                    this->dismissedPredictionKey_ != predictionKey)
+                {
+                    this->dismissedPredictionKey_ = predictionKey;
                     this->hide();
                     this->dismissed.invoke();
                 }
@@ -765,6 +787,7 @@ void PredictionBanner::updateTimer()
         const auto endsAt = this->predictionEndsAt();
         if (!endsAt.isValid())
         {
+            this->expiryRefreshQueued_ = false;
             this->timerLabel_->setText("LIVE");
             this->timerLabel_->show();
             this->timerLabel_->setStyleSheet(
@@ -773,11 +796,16 @@ void PredictionBanner::updateTimer()
             return;
         }
 
-        qint64 remaining = now.secsTo(endsAt);
+        const auto remainingMs = now.msecsTo(endsAt);
+        const auto remaining =
+            remainingMs > 0
+                ? remainingMs / 1000 + (remainingMs % 1000 != 0 ? 1 : 0)
+                : 0;
         auto timerColor = QColor("#ef4444");
 
         if (remaining > 0)
         {
+            this->expiryRefreshQueued_ = false;
             if (remaining > 300)
             {
                 timerColor = QColor("#f59e0b");
@@ -789,9 +817,18 @@ void PredictionBanner::updateTimer()
         }
         else
         {
+            if (!this->expiryRefreshQueued_)
+            {
+                this->expiryRefreshQueued_ = true;
+                if (this->twitchChannel_ != nullptr)
+                {
+                    this->twitchChannel_->refreshPrediction(true);
+                }
+            }
             this->timerLabel_->setText("Closing soon");
             this->timerLabel_->show();
             timerColor = QColor("#f59e0b");
+            this->updateTimer_->stop();
         }
 
         this->timerLabel_->setStyleSheet(
@@ -801,6 +838,7 @@ void PredictionBanner::updateTimer()
     }
     else
     {
+        this->expiryRefreshQueued_ = false;
         if (this->prediction_->status == "LOCKED")
         {
             this->timerLabel_->setText(
@@ -961,8 +999,13 @@ void PredictionBanner::paintEvent(QPaintEvent * /*event*/)
                         : this->theme->splits.header.border;
 
     painter.fillRect(this->rect(), background);
-    painter.setPen(border);
-    painter.drawRect(0, 0, this->width() - 1, this->height() - 1);
+    const auto &appearance = this->theme->customization;
+    if (appearance.foundation != ThemeFoundation::MoltorinoPolished ||
+        !appearance.roundChat || appearance.cornerRadius() <= 0)
+    {
+        painter.setPen(border);
+        painter.drawRect(0, 0, this->width() - 1, this->height() - 1);
+    }
 
     if (!this->prediction_ || !this->outcomeBar_->isVisible())
     {

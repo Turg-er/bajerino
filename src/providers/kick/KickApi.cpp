@@ -14,14 +14,11 @@ using namespace chatterino;
 using namespace Qt::Literals;
 
 template <typename T>
-struct IsCollectionS : std::false_type {
-};
+struct IsCollectionS : std::false_type {};
 template <typename T, typename Alloc>
-struct IsCollectionS<std::vector<T, Alloc>> : std::true_type {
-};
+struct IsCollectionS<std::vector<T, Alloc>> : std::true_type {};
 template <typename T>
-struct IsCollectionS<QList<T>> : std::true_type {
-};
+struct IsCollectionS<QList<T>> : std::true_type {};
 
 template <typename T>
 concept IsCollection = IsCollectionS<T>::value;
@@ -91,6 +88,8 @@ void getJsonNoAuth(
     std::function<void(Expected<T, std::pair<unsigned, QString>>)> cb)
 {
     NetworkRequest(url)
+        .timeout(20'000)
+        .maximumResponseSize(2 * 1024 * 1024)
         .onError([cb](const NetworkResult &res) {
             cb(makeUnexpected(
                 std::pair(res.status().value_or(0), res.formatError())));
@@ -201,7 +200,7 @@ KickPrivateUserInfo::KickPrivateUserInfo(BoostJsonObject obj)
     , username(obj["username"].toQString())
 {
     auto pictureUrl = obj["profile_pic"];
-    if (pictureUrl.isString())
+    if (pictureUrl.isString() && !pictureUrl.toStringView().empty())
     {
         this->profilePictureURL = pictureUrl.toQString();
     }
@@ -253,6 +252,16 @@ KickPrivateChannelInfo::KickPrivateChannelInfo(BoostJsonObject obj)
     {
         this->followersCount =
             QLatin1StringView(followers.toStringView()).toULongLong();
+    }
+    if (obj["livestream"].isObject())
+    {
+        const auto stream = obj["livestream"].toObject();
+        this->isLive = stream["is_live"].toBool();
+        this->streamTitle = stream["session_title"].toQString();
+    }
+    else if (obj["livestream"].isNull())
+    {
+        this->isLive = false;
     }
 }
 
@@ -513,6 +522,8 @@ template <typename T>
 void KickApi::doRequest(NetworkRequest &&req, Callback<T> cb)
 {
     std::move(req)
+        .timeout(20'000)
+        .maximumResponseSize(2 * 1024 * 1024)
         .header("Authorization"_ba, "Bearer "_ba + this->authToken)
         .onError([cb](const NetworkResult &res) {
             auto message = res.parseJson().value("message").toString();

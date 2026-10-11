@@ -2,6 +2,7 @@
 
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 
 #include <span>
@@ -34,6 +35,7 @@ private:
     QTimer refreshTimer;
 
     std::vector<uint64_t> immediateChannels;
+    QSet<uint64_t> publicRequests;
 };
 
 }  // namespace chatterino

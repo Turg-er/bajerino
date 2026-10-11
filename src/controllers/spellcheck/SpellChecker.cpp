@@ -12,6 +12,9 @@
 #include "util/FilesystemHelpers.hpp"
 #include "util/XDGDirectory.hpp"
 
+#include <QFile>
+#include <QSaveFile>
+
 #ifdef CHATTERINO_WITH_SPELLCHECK
 #    include <hunspell/hunspell.hxx>
 #endif
@@ -22,7 +25,57 @@ namespace chatterino {
 
 namespace {
 
-/// Returns a list of available dictionaries in the given directory
+const auto INCLUDED_ENGLISH_DICTIONARY = QStringLiteral("included:en_US");
+const auto INCLUDED_ENGLISH_DICTIONARY_NAME =
+    QStringLiteral("English (United States, included)");
+const auto INCLUDED_ENGLISH_CACHE_DIRECTORY =
+    QStringLiteral("spellcheck/en_US-4fa94195");
+
+QString materializeIncludedEnglishDictionary()
+{
+    const auto directory = combinePath(getApp()->getPaths().cacheDirectory(),
+                                       INCLUDED_ENGLISH_CACHE_DIRECTORY);
+    if (!QDir().mkpath(directory))
+    {
+        qCWarning(chatterinoSpellcheck)
+            << "Unable to create the included dictionary directory"
+            << directory;
+        return {};
+    }
+
+    const auto outputBase = combinePath(directory, QStringLiteral("en_US"));
+    for (const auto &extension : {QStringLiteral("aff"), QStringLiteral("dic")})
+    {
+        const auto destination = outputBase % "." % extension;
+        QFile source(QStringLiteral(":/dictionaries/en_US.") % extension);
+        if (!source.open(QIODevice::ReadOnly))
+        {
+            qCWarning(chatterinoSpellcheck)
+                << "Unable to open the included dictionary resource"
+                << source.fileName();
+            return {};
+        }
+
+        const QFileInfo destinationInfo(destination);
+        if (destinationInfo.isFile() && destinationInfo.size() == source.size())
+        {
+            continue;
+        }
+
+        QSaveFile output(destination);
+        if (!output.open(QIODevice::WriteOnly) ||
+            output.write(source.readAll()) != source.size() || !output.commit())
+        {
+            qCWarning(chatterinoSpellcheck)
+                << "Unable to prepare the included dictionary at"
+                << destination;
+            return {};
+        }
+    }
+
+    return outputBase;
+}
+
 std::vector<DictionaryInfo> loadDictionariesFromDirectory(
     const QDir &searchDirectory, bool isSystem)
 {
@@ -68,6 +121,11 @@ std::vector<DictionaryInfo> loadDictionariesFromDirectory(
 
 QString resolveDictionaryPath(const QString &path)
 {
+    if (path == INCLUDED_ENGLISH_DICTIONARY)
+    {
+        return materializeIncludedEnglishDictionary();
+    }
+
     if (QDir::isAbsolutePath(path))
     {
         return path;
@@ -100,6 +158,10 @@ std::unique_ptr<SpellCheckerPrivate> SpellCheckerPrivate::tryLoad(
     }
 
     auto resolvedPath = resolveDictionaryPath(path);
+    if (resolvedPath.isEmpty())
+    {
+        return nullptr;
+    }
     auto aff = qStringToStdPath(resolvedPath % ".aff");
     auto dic = qStringToStdPath(resolvedPath % ".dic");
 
@@ -137,9 +199,15 @@ SpellCheckerPrivate::SpellCheckerPrivate(const char *affpath, const char *dpath)
 }
 
 SpellChecker::SpellChecker()
-    : private_(SpellCheckerPrivate::tryLoad(
-          getSettings()->spellCheckingDefaultDictionary))
 {
+    auto reload = [this] {
+        this->reload();
+    };
+    getSettings()->enableSpellChecking.connect(
+        reload, this->settingConnections_, false);
+    getSettings()->spellCheckingDefaultDictionary.connect(
+        reload, this->settingConnections_, false);
+    this->reload();
 }
 #else
 class SpellCheckerPrivate
@@ -149,6 +217,36 @@ SpellChecker::SpellChecker() = default;
 #endif
 
 SpellChecker::~SpellChecker() = default;
+
+void SpellChecker::reload()
+{
+#ifdef CHATTERINO_WITH_SPELLCHECK
+    this->private_.reset();
+    if (!getSettings()->enableSpellChecking)
+    {
+        return;
+    }
+
+    this->ensureLoaded();
+#endif
+}
+
+void SpellChecker::ensureLoaded()
+{
+#ifdef CHATTERINO_WITH_SPELLCHECK
+    if (this->private_)
+    {
+        return;
+    }
+
+    auto dictionary = getSettings()->spellCheckingDefaultDictionary.getValue();
+    if (dictionary.isEmpty())
+    {
+        dictionary = INCLUDED_ENGLISH_DICTIONARY;
+    }
+    this->private_ = SpellCheckerPrivate::tryLoad(dictionary);
+#endif
+}
 
 bool SpellChecker::isLoaded() const
 {
@@ -217,6 +315,8 @@ std::vector<DictionaryInfo> SpellChecker::getAvailableDictionaries() const
 #    endif
 
     std::vector<DictionaryInfo> dictionaries;
+    dictionaries.push_back({INCLUDED_ENGLISH_DICTIONARY_NAME,
+                            INCLUDED_ENGLISH_DICTIONARY, false, false});
 
     for (const auto &[searchDirectory, isSystem] : searchDirectories)
     {

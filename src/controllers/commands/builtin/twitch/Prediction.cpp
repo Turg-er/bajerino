@@ -83,7 +83,7 @@ Split *findOpenSplitForChannel(const ChannelPtr &channel)
     {
         if (auto *selectedSplit = currentPage->getSelectedSplit())
         {
-            if (selectedSplit->getChannel() == channel)
+            if (selectedSplit->getSelectedChannel() == channel)
             {
                 return selectedSplit;
             }
@@ -101,7 +101,7 @@ Split *findOpenSplitForChannel(const ChannelPtr &channel)
 
         for (auto *split : page->getSplits())
         {
-            if (split->getChannel() == channel)
+            if (split != nullptr && split->getSelectedChannel() == channel)
             {
                 return split;
             }
@@ -411,7 +411,7 @@ void withActivePrediction(const CommandContext &ctx, const QString &action,
     const auto channelLogin = ctx.twitchChannel->getName();
 
     TwitchGql::getActivePrediction(
-        channelLogin, *token,
+        channelLogin, ctx.twitchChannel->roomId(), *token,
         [channel, weak, action, token = *token, callback = std::move(callback)](
             std::optional<TwitchChannel::PredictionEvent> prediction) mutable {
             runInGuiThread([channel, weak, action, token,
@@ -552,8 +552,8 @@ static QString lockPredictionHelix(const CommandContext &ctx)
             getHelix()->endPrediction(
                 roomId, prediction.id, false, {},
                 [channel](const HelixPrediction &data) {
-                    int totalPoints = 0;
-                    int numUsers = 0;
+                    qint64 totalPoints = 0;
+                    qint64 numUsers = 0;
                     for (const auto &outcome : data.outcomes)
                     {
                         totalPoints += outcome.channelPoints;
@@ -623,8 +623,8 @@ static QString cancelPredictionHelix(const CommandContext &ctx)
             getHelix()->endPrediction(
                 roomId, prediction.id, true, {},
                 [channel](const HelixPrediction &data) {
-                    int totalPoints = 0;
-                    int numUsers = 0;
+                    qint64 totalPoints = 0;
+                    qint64 numUsers = 0;
                     for (const auto &outcome : data.outcomes)
                     {
                         totalPoints += outcome.channelPoints;
@@ -791,7 +791,14 @@ static QString completePredictionHelix(const CommandContext &ctx)
             getHelix()->endPrediction(
                 roomId, prediction.id, false, winnerId,
                 [channel](const HelixPrediction &result) {
-                    int totalPoints = 0;
+                    qint64 totalPoints = 0;
+                    if (result.outcomes.empty())
+                    {
+                        channel->addSystemMessage(
+                            "Prediction completed, but Twitch returned no "
+                            "outcomes.");
+                        return;
+                    }
                     HelixPredictionOutcome winner = result.outcomes.front();
                     for (const auto &outcome : result.outcomes)
                     {

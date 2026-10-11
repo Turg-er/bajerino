@@ -16,14 +16,49 @@
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Theme.hpp"
+#include "singletons/WindowManager.hpp"
+#include "util/MultiChannel.hpp"
+#include "widgets/ChatterListWidget.hpp"
+#include "widgets/Notebook.hpp"
+#include "widgets/splits/Split.hpp"
+#include "widgets/Window.hpp"
 
 #include <QApplication>
 #include <QLoggingCategory>
 #include <QString>
 
+#include <algorithm>
+
 namespace {
 
 using namespace chatterino;
+
+Split *selectedSplitForChannel(const Channel *channel)
+{
+    if (!channel)
+    {
+        return nullptr;
+    }
+    auto *windows = getApp()->getWindows();
+    auto *window = windows ? windows->getLastSelectedWindow() : nullptr;
+    auto *page = window ? window->getNotebook().getSelectedPage() : nullptr;
+    auto *split = page ? page->getSelectedSplit() : nullptr;
+    if (!split)
+    {
+        return nullptr;
+    }
+    const auto root = split->getChannel();
+    const auto *multi = dynamic_cast<MultiChannel *>(root.get());
+
+    return root.get() == channel ||
+                   (multi && std::ranges::any_of(
+                                 multi->channels(),
+                                 [&](const auto &child) {
+                                     return child.channel.get() == channel;
+                                 }))
+               ? split
+               : nullptr;
+}
 
 QString formatChattersError(HelixGetChattersError error, const QString &message)
 {
@@ -63,6 +98,17 @@ QString formatChattersError(HelixGetChattersError error, const QString &message)
 
 namespace chatterino::commands {
 
+bool isChattersCommandAvailable(const Channel *channel)
+{
+    if (ChatterListWidget::supportsChannel(channel))
+    {
+        return true;
+    }
+    auto *split = selectedSplitForChannel(channel);
+    return ChatterListWidget::supportsChannel(split ? split->getChannel().get()
+                                                    : channel);
+}
+
 QString chatters(const CommandContext &ctx)
 {
     if (ctx.channel == nullptr)
@@ -70,27 +116,23 @@ QString chatters(const CommandContext &ctx)
         return "";
     }
 
-    if (ctx.twitchChannel == nullptr)
+    auto *split = selectedSplitForChannel(ctx.channel.get());
+    if (!ChatterListWidget::supportsChannel(split ? split->getChannel().get()
+                                                  : ctx.channel.get()))
     {
         ctx.channel->addSystemMessage(
-            "The /chatters command only works in Twitch Channels.");
-        return "";
+            "Chatter lists are only available in Twitch and TikTok chats.");
+        return {};
+    }
+    if (split)
+    {
+        split->openChatterList();
+        return {};
     }
 
-    // Refresh chatter list via helix api for mods
-    getHelix()->getChatters(
-        ctx.twitchChannel->roomId(),
-        getApp()->getAccounts()->twitch.getCurrent()->getUserId(), 1, nullptr,
-        [channel{ctx.channel}](auto result) {
-            channel->addSystemMessage(QString("Chatter count: %1.")
-                                          .arg(localizeNumbers(result.total)));
-        },
-        [channel{ctx.channel}](auto error, auto message) {
-            auto errorMessage = formatChattersError(error, message);
-            channel->addSystemMessage(errorMessage);
-        });
-
-    return "";
+    ctx.channel->addSystemMessage(
+        "Open this chat in a split before using /chatters.");
+    return {};
 }
 
 QString testChatters(const CommandContext &ctx)

@@ -37,6 +37,8 @@ enum class SettingsDialogPreference {
     ModerationActions,
     About,
     Moltorino,
+    MoltorinoAccounts,
+    BotBadge,
 };
 
 class SettingsDialog : public BaseWindow
@@ -46,6 +48,8 @@ class SettingsDialog : public BaseWindow
 public:
     static void showDialog(QWidget *parent,
                            SettingsDialogPreference preferredTab =
+                               SettingsDialogPreference::NoPreference);
+    static void showDialog(SettingsDialogPreference preferredTab =
                                SettingsDialogPreference::NoPreference);
 
 protected:
@@ -60,6 +64,7 @@ private:
     void addTabs();
     void addTab(std::function<SettingsPage *()> page, const QString &name,
                 const QString &iconPath, SettingsTabId id = {},
+                float iconOpticalScale = 1.0F,
                 Qt::Alignment alignment = Qt::AlignTop);
     void selectTab(SettingsDialogTab *tab, const bool byUser = true);
     void selectTab(SettingsTabId id);

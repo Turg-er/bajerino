@@ -9,6 +9,7 @@
 #include <QColor>
 #include <QString>
 
+#include <memory>
 #include <optional>
 
 class QSvgRenderer;
@@ -32,6 +33,7 @@ public:
         QString dark;
         /// Source to load in a light theme
         QString light;
+        bool useAccent = false;
     };
 
     [[nodiscard]] SvgButton(Src source, BaseWidget *parent = nullptr,
@@ -74,7 +76,7 @@ private:
     void loadSource();
 
     Src source_;
-    QSvgRenderer *svg_;
+    std::shared_ptr<QSvgRenderer> svg_;
     QSize padding_;
     std::optional<QColor> color_;
 };

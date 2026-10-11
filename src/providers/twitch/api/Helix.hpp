@@ -201,6 +201,24 @@ struct HelixClip {
     }
 };
 
+struct HelixContentClassificationLabelState {
+    QString id;
+    bool isEnabled = false;
+};
+
+struct HelixChannelUpdate {
+    std::optional<QString> gameId;
+    std::optional<QString> language;
+    std::optional<QString> title;
+    std::optional<QStringList> tags;
+    std::optional<std::vector<HelixContentClassificationLabelState>>
+        contentClassificationLabels;
+    std::optional<bool> isBrandedContent;
+
+    [[nodiscard]] bool empty() const;
+    [[nodiscard]] QJsonObject toJson() const;
+};
+
 struct HelixChannel {
     QString userId;
     QString name;
@@ -208,6 +226,9 @@ struct HelixChannel {
     QString gameId;
     QString gameName;
     QString title;
+    QStringList tags;
+    QStringList contentClassificationLabels;
+    bool isBrandedContent = false;
 
     explicit HelixChannel(QJsonObject jsonObject)
         : userId(jsonObject.value("broadcaster_id").toString())
@@ -216,7 +237,20 @@ struct HelixChannel {
         , gameId(jsonObject.value("game_id").toString())
         , gameName(jsonObject.value("game_name").toString())
         , title(jsonObject.value("title").toString())
+        , isBrandedContent(jsonObject.value("is_branded_content").toBool())
     {
+        const auto jsonTags = jsonObject.value("tags").toArray();
+        for (const auto &tag : jsonTags)
+        {
+            this->tags.push_back(tag.toString());
+        }
+
+        const auto jsonLabels =
+            jsonObject.value("content_classification_labels").toArray();
+        for (const auto &label : jsonLabels)
+        {
+            this->contentClassificationLabels.push_back(label.toString());
+        }
     }
 };
 
@@ -386,10 +420,27 @@ struct HelixVip {
     // Login name of the user
     QString userLogin;
 
+    QDateTime grantedAt;
+
     explicit HelixVip(const QJsonObject &jsonObject)
         : userId(jsonObject.value("user_id").toString())
         , userName(jsonObject.value("user_name").toString())
         , userLogin(jsonObject.value("user_login").toString())
+        , grantedAt([&jsonObject] {
+            auto value = jsonObject.value("granted_at").toString();
+            if (value.isEmpty())
+            {
+                value = jsonObject.value("grantedAt").toString();
+            }
+
+            const auto dot = value.indexOf(QLatin1Char('.'));
+            const auto zone = value.indexOf(QLatin1Char('Z'), dot);
+            if (dot >= 0 && zone > dot + 4)
+            {
+                value.remove(dot + 4, zone - dot - 4);
+            }
+            return QDateTime::fromString(value, Qt::ISODate);
+        }())
     {
     }
 };
@@ -817,7 +868,12 @@ public:
         ResultCallback<HelixGetChannelFollowersResponse> successCallback,
         std::function<void(QString)> failureCallback) = 0;
 
-    // https://dev.twitch.tv/docs/api/reference#get-streams
+    virtual void getChannelFollowDate(QString broadcasterID, QString userID,
+                                      QString clientID, QString oauthToken,
+                                      const QObject *caller,
+                                      ResultCallback<QDateTime> successCallback,
+                                      HelixFailureCallback failureCallback) = 0;
+
     virtual void fetchStreams(
         QStringList userIds, QStringList userLogins,
         ResultCallback<std::vector<HelixStream>> successCallback,
@@ -892,7 +948,7 @@ public:
 
     // https://dev.twitch.tv/docs/api/reference#modify-channel-information
     virtual void updateChannel(
-        QString broadcasterId, QString gameId, QString language, QString title,
+        QString broadcasterId, const HelixChannelUpdate &update,
         std::function<void(NetworkResult)> successCallback,
         FailureCallback<HelixUpdateChannelError, QString> failureCallback) = 0;
 
@@ -1270,7 +1326,12 @@ public:
         ResultCallback<HelixGetChannelFollowersResponse> successCallback,
         std::function<void(QString)> failureCallback) final;
 
-    // https://dev.twitch.tv/docs/api/reference#get-streams
+    void getChannelFollowDate(QString broadcasterID, QString userID,
+                              QString clientID, QString oauthToken,
+                              const QObject *caller,
+                              ResultCallback<QDateTime> successCallback,
+                              HelixFailureCallback failureCallback) final;
+
     void fetchStreams(QStringList userIds, QStringList userLogins,
                       ResultCallback<std::vector<HelixStream>> successCallback,
                       HelixFailureCallback failureCallback,
@@ -1339,9 +1400,7 @@ public:
                      std::function<void()> successCallback,
                      HelixFailureCallback failureCallback) final;
 
-    // https://dev.twitch.tv/docs/api/reference#modify-channel-information
-    void updateChannel(QString broadcasterId, QString gameId, QString language,
-                       QString title,
+    void updateChannel(QString broadcasterId, const HelixChannelUpdate &update,
                        std::function<void(NetworkResult)> successCallback,
                        FailureCallback<HelixUpdateChannelError, QString>
                            failureCallback) final;

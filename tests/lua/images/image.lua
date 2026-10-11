@@ -17,8 +17,8 @@ local tests = {
         assert(not img.animated)
         assert(not img.is_loaded)
         assert(not img.is_empty)
-        assert(img.width == 4) -- default width * scale * scale (once in the constructor and once in the width accessor)
-        assert(img.height == 4) -- default height * scale * scale
+        assert(img.width == 16) -- default logical width is independent of source scale
+        assert(img.height == 16) -- default logical height is independent of source scale
         assert(img.scale == 0.5)
         assert(img.size[1] == img.width)
         assert(img.size[2] == img.height)
@@ -56,13 +56,13 @@ local tests = {
         local imageB = c2.Image.from_url("https://chatterino.com/image-equality/B")
         local imageC = c2.Image.from_url("https://chatterino.com/image-equality/C")
         local imageC2 = c2.Image.from_url("https://chatterino.com/image-equality/C") -- should be the same as C
-        local imageA2 = c2.Image.from_url("https://chatterino.com/image-equality/A", 0.5) -- should be the same as A
+        local imageA2 = c2.Image.from_url("https://chatterino.com/image-equality/A", 0.5) -- a different scale must have a separate cache entry
 
         assert(imageA == imageA)
         assert(imageA ~= imageB)
         assert(imageA ~= imageC)
         assert(imageA ~= imageC2)
-        assert(imageA == imageA2)
+        assert(imageA ~= imageA2)
 
         assert(imageB ~= imageA)
         assert(imageB == imageB)

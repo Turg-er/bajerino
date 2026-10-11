@@ -7,6 +7,7 @@
 #include "Application.hpp"
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/automod/AutoModReviewController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
 #include "messages/Link.hpp"
@@ -104,6 +105,8 @@ void rememberRecentRoleMod(const QString &key)
     const auto now = QDateTime::currentDateTimeUtc();
     pruneRecentRoleMods(now);
 
+    if (RECENT_ROLE_MODS.size() >= 512)
+        RECENT_ROLE_MODS.removeFirst();
     RECENT_ROLE_MODS.push_back({.key = key, .expiresAt = now.addMSecs(2500)});
 }
 
@@ -192,6 +195,26 @@ void Connection::onNotification(const lib::messages::Metadata &metadata,
     (void)metadata;
     auto jsonString = boost::json::serialize(jv);
     qCDebug(LOG) << "on notification: " << jsonString.c_str();
+}
+
+void Connection::onRevocation(const lib::messages::Metadata &,
+                              const boost::json::value &jv)
+{
+    const auto *subscription =
+        jv.is_object() ? jv.as_object().if_contains("subscription") : nullptr;
+    if (!subscription || !subscription->is_object())
+    {
+        return;
+    }
+    const auto &object = subscription->as_object();
+    const auto *id = object.if_contains("id");
+    const auto *status = object.if_contains("status");
+    if (id && id->is_string() && status && status->is_string())
+    {
+        getApp()->getEventSub()->subscriptionRevoked(
+            QString::fromStdString(std::string(id->as_string())),
+            QString::fromStdString(std::string(status->as_string())));
+    }
 }
 
 void Connection::onClose(std::unique_ptr<lib::Listener> self,
@@ -297,6 +320,19 @@ void Connection::onChannelModerate(
     std::visit(
         [&](auto &&action) {
             using Action = std::remove_cvref_t<decltype(action)>;
+            if constexpr (std::is_same_v<Action, channel_moderate::Mod> ||
+                          std::is_same_v<Action, channel_moderate::Unmod>)
+            {
+                if (!payload.event.isFromSharedChat())
+                {
+                    runInGuiThread([channelPtr, channel, now,
+                                    login = action.userLogin.qt()] {
+                        channel->setKnownModeratorStatus(
+                            login,
+                            std::is_same_v<Action, channel_moderate::Mod>, now);
+                    });
+                }
+            }
             static_assert(CanMakeModMessage<Action> ||
                               CanHandleModMessage<Action> ||
                               std::is_same_v<Action, std::string>,
@@ -317,6 +353,12 @@ void Connection::onChannelModerate(
                 }
                 EventSubMessageBuilder builder(channel, now);
                 builder->loginName = payload.event.moderatorUserLogin.qt();
+                if (payload.event.isFromSharedChat() &&
+                    payload.event.sourceBroadcasterUserID)
+                {
+                    builder->sharedChatSourceId =
+                        payload.event.sourceBroadcasterUserID->qt();
+                }
                 makeModerateMessage(builder, payload.event, action);
                 auto msg = builder.release();
                 if constexpr (std::is_same_v<Action, channel_moderate::Mod>)
@@ -361,19 +403,23 @@ void Connection::onChannelModerate(
                 }
                 else
                 {
-                    runInGuiThread([channel, msg] {
-                        if (!acceptsAuthenticatedEvents(channel))
+                    runInGuiThread([channelPtr, msg] {
+                        auto *moderateChannel =
+                            dynamic_cast<TwitchChannel *>(channelPtr.get());
+                        if (!acceptsAuthenticatedEvents(moderateChannel))
                         {
                             return;
                         }
-                        if constexpr (std::is_same_v<Action,
-                                                     channel_moderate::Delete>)
+
+                        if constexpr (std::is_base_of_v<
+                                          channel_moderate::Delete, Action>)
                         {
-                            addOrReplaceDeleteAction(channel, msg);
+                            addOrReplaceDeleteAction(moderateChannel, msg);
                         }
                         else
                         {
-                            channel->addMessage(msg, MessageContext::Original);
+                            moderateChannel->addMessage(
+                                msg, MessageContext::Original);
                         }
                     });
                 }
@@ -385,18 +431,18 @@ void Connection::onChannelModerate(
             }
         },
         payload.event.action);
+
+    runInGuiThread([channel = std::move(channelPtr)] {});
 }
 
 void Connection::onAutomodMessageHold(
     const lib::messages::Metadata &metadata,
     const lib::payload::automod_message_hold::v2::Payload &payload)
 {
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG)
             << "Automod message hold for broadcaster we're not interested in"
@@ -404,78 +450,55 @@ void Connection::onAutomodMessageHold(
         return;
     }
 
-    auto time = chronoToQDateTime(metadata.messageTimestamp);
-    auto [message, messageAlert] =
-        makeAutomodHoldMessage(channel, time, payload.event);
-
-    runInGuiThread([channel, message, messageAlert] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
-            return;
-        }
-        MessageBuilder::triggerHighlights(channel, messageAlert);
-
-        channel->addMessage(message, MessageContext::Original);
-
-        getApp()->getTwitch()->getAutomodChannel()->addMessage(
-            message, MessageContext::Original);
-
-        if (getSettings()->showAutomodInMentions)
-        {
-            getApp()->getTwitch()->getMentionsChannel()->addMessage(
-                message, MessageContext::Original);
-        }
-    });
+    auto data = makeAutoModReviewHoldData(
+        QString::fromStdString(metadata.messageID),
+        chronoToQDateTime(metadata.messageTimestamp), payload.event);
+    runInGuiThread(
+        [channel = std::move(channel), data = std::move(data)]() mutable {
+            if (!acceptsAuthenticatedEvents(channel.get()))
+                return;
+            if (auto *review = getApp()->getAutoModReview())
+            {
+                review->ingestHold(std::move(data), channel);
+            }
+        });
 }
 void Connection::onAutomodMessageUpdate(
-    const lib::messages::Metadata & /*metadata*/,
+    const lib::messages::Metadata &metadata,
     const lib::payload::automod_message_update::v2::Payload &payload)
 {
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG)
-            << "Automod message hold for broadcaster we're not interested in"
+            << "Automod message update for broadcaster we're not interested in"
             << payload.event.broadcasterUserLogin.qt();
         return;
     }
-
-    // Gray out approve/deny button upon "ALLOWED" and "DENIED" statuses
-    // They are versions of automod_message_(denied|approved) but for mods.
-    auto id = "automod_" + payload.event.messageID.qt();
-    runInGuiThread([channel, id] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
-            return;
-        }
-        channel->disableMessage(id);
-    });
+    auto data = makeAutoModReviewUpdateData(
+        QString::fromStdString(metadata.messageID),
+        chronoToQDateTime(metadata.messageTimestamp), payload.event);
+    runInGuiThread(
+        [channel = std::move(channel), data = std::move(data)]() mutable {
+            if (!acceptsAuthenticatedEvents(channel.get()))
+                return;
+            if (auto *review = getApp()->getAutoModReview())
+            {
+                review->ingestUpdate(std::move(data), channel);
+            }
+        });
 }
 
 void Connection::onChannelSuspiciousUserMessage(
     const lib::messages::Metadata &metadata,
     const lib::payload::channel_suspicious_user_message::v1::Payload &payload)
 {
-    // monitored chats are received over irc; in the future, we will use eventsub instead
-    if (payload.event.lowTrustStatus !=
-        lib::suspicious_users::Status::Restricted)
-    {
-        qCInfo(LOG) << "Ignoring low trust status message from user"
-                    << payload.event.userLogin.qt() << "because status is"
-                    << static_cast<std::uint8_t>(payload.event.lowTrustStatus);
-        return;
-    }
-
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG)
             << "Suspicious message for broadcaster we're not interested in"
@@ -484,16 +507,30 @@ void Connection::onChannelSuspiciousUserMessage(
     }
 
     auto time = chronoToQDateTime(metadata.messageTimestamp);
-    auto header = makeSuspiciousUserMessageHeader(channel, time, payload.event);
-    auto body = makeSuspiciousUserMessageBody(channel, time, payload.event);
-
-    runInGuiThread([channel, header, body] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
+    const auto &event = payload.event;
+    const auto status = event.lowTrustStatus;
+    const auto messageID =
+        event.message.messageID ? event.message.messageID->qt() : QString{};
+    auto header = makeSuspiciousUserMessageHeader(channel.get(), time, event);
+    auto body = status == lib::suspicious_users::Status::Restricted
+                    ? makeSuspiciousUserMessageBody(channel.get(), time, event)
+                    : MessagePtr{};
+    runInGuiThread([channel = std::move(channel), status, messageID, header,
+                    body] {
+        if (!acceptsAuthenticatedEvents(channel.get()))
             return;
+        if (status == lib::suspicious_users::Status::ActiveMonitoring)
+        {
+            if (!messageID.isEmpty())
+            {
+                channel->markMonitoredMessage(messageID, header->messageText);
+            }
         }
-        channel->addMessage(header, MessageContext::Original);
-        channel->addMessage(body, MessageContext::Original);
+        else if (body)
+        {
+            channel->addMessage(header, MessageContext::Original);
+            channel->addMessage(body, MessageContext::Original);
+        }
     });
 }
 
@@ -501,12 +538,10 @@ void Connection::onChannelSuspiciousUserUpdate(
     const lib::messages::Metadata &metadata,
     const lib::payload::channel_suspicious_user_update::v1::Payload &payload)
 {
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG) << "Channel Suspicious User Update for broadcaster we're "
                         "not interested in"
@@ -515,13 +550,11 @@ void Connection::onChannelSuspiciousUserUpdate(
     }
 
     auto time = chronoToQDateTime(metadata.messageTimestamp);
-    auto message = makeSuspiciousUserUpdate(channel, time, payload.event);
+    auto message = makeSuspiciousUserUpdate(channel.get(), time, payload.event);
 
-    runInGuiThread([channel, message] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
+    runInGuiThread([channel = std::move(channel), message] {
+        if (!acceptsAuthenticatedEvents(channel.get()))
             return;
-        }
         channel->addMessage(message, MessageContext::Original);
     });
 }
@@ -530,12 +563,10 @@ void Connection::onChannelChatUserMessageHold(
     const lib::messages::Metadata &metadata,
     const lib::payload::channel_chat_user_message_hold::v1::Payload &payload)
 {
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG) << "Channel Chat User Message Hold for broadcaster we're "
                         "not interested in"
@@ -544,13 +575,12 @@ void Connection::onChannelChatUserMessageHold(
     }
 
     auto time = chronoToQDateTime(metadata.messageTimestamp);
-    auto message = makeUserMessageHeldMessage(channel, time, payload.event);
+    auto message =
+        makeUserMessageHeldMessage(channel.get(), time, payload.event);
 
-    runInGuiThread([channel, message] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
+    runInGuiThread([channel = std::move(channel), message] {
+        if (!acceptsAuthenticatedEvents(channel.get()))
             return;
-        }
         channel->addMessage(message, MessageContext::Original);
     });
 }
@@ -559,12 +589,10 @@ void Connection::onChannelChatUserMessageUpdate(
     const lib::messages::Metadata &metadata,
     const lib::payload::channel_chat_user_message_update::v1::Payload &payload)
 {
-    auto *channel = dynamic_cast<TwitchChannel *>(
-        getApp()
-            ->getTwitch()
-            ->getChannelOrEmpty(payload.event.broadcasterUserLogin.qt())
-            .get());
-    if (!acceptsAuthenticatedEvents(channel))
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        getApp()->getTwitch()->getChannelOrEmpty(
+            payload.event.broadcasterUserLogin.qt()));
+    if (!acceptsAuthenticatedEvents(channel.get()))
     {
         qCDebug(LOG)
             << "Channel Chat User Message Update for broadcaster we're "
@@ -574,13 +602,12 @@ void Connection::onChannelChatUserMessageUpdate(
     }
 
     auto time = chronoToQDateTime(metadata.messageTimestamp);
-    auto message = makeUserMessageUpdateMessage(channel, time, payload.event);
+    auto message =
+        makeUserMessageUpdateMessage(channel.get(), time, payload.event);
 
-    runInGuiThread([channel, message] {
-        if (!acceptsAuthenticatedEvents(channel))
-        {
+    runInGuiThread([channel = std::move(channel), message] {
+        if (!acceptsAuthenticatedEvents(channel.get()))
             return;
-        }
         channel->addMessage(message, MessageContext::Original);
     });
 }

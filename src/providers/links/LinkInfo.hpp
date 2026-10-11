@@ -93,11 +93,9 @@ public:
     /// @pre The caller must check #hasThumbnail() before calling this method
     [[nodiscard]] ImagePtr thumbnail() const;
 
-    /// @brief Updates the state and emits #stateChanged accordingly
-    ///
-    /// @pre The caller must be in the GUI thread.
-    /// @pre @a state must be greater or equal to the current state.
-    /// @see #state(), #stateChanged
+    int thumbnailSize(int preferredSize) const;
+    void setThumbnailSizeRange(int minimum, int maximum);
+
     void setState(State state);
 
     /// @brief Updates the resolved url of this link
@@ -134,6 +132,8 @@ private:
     ImagePtr thumbnail_;
 
     State state_ = State::Created;
+    int minimumThumbnailSize_ = 0;
+    int maximumThumbnailSize_ = 0;
 };
 
 }  // namespace chatterino

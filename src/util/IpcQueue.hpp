@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <memory>
 #include <utility>
 
@@ -33,10 +34,7 @@ public:
 
     static bool remove(const char *name);
 
-    // TODO: use std::expected
-    /// Try to receive a message.
-    /// In the case of an error, the buffer is empty.
-    QByteArray receive();
+    QByteArray receive(std::chrono::milliseconds timeout);
 
 private:
     IpcQueue(IpcQueuePrivate *priv);

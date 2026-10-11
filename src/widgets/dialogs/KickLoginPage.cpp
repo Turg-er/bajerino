@@ -102,7 +102,7 @@ AuthParams startAuthSession()
 {
     auto base64Opts =
         QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals;
-    auto codeVerifier = generateRandomBytes(1024).toBase64(base64Opts);
+    auto codeVerifier = generateRandomBytes(32).toBase64(base64Opts);
 
     QCryptographicHash h(QCryptographicHash::Sha256);
     h.addData(codeVerifier);
@@ -111,27 +111,28 @@ AuthParams startAuthSession()
     return {
         .codeVerifier = codeVerifier,
         .codeChallenge = codeChallenge,
-        .state = generateRandomBytes(512).toBase64(base64Opts),
+        .state = generateRandomBytes(32).toBase64(base64Opts),
     };
 }
 
 class AuthDialog : public QDialog
 {
 public:
-    AuthDialog(QString clientID, SecretOrProxy secretOrProxy,
-               QWidget *parent = nullptr)
+    AuthDialog(KickAccountData credentials, QWidget *parent = nullptr)
         : QDialog(parent)
-        , clientID(std::move(clientID))
-        , secretOrProxy(std::move(secretOrProxy))
+        , credentials(std::move(credentials))
         , authParams(startAuthSession())
         , statusLabel("Waiting...")
     {
         this->setAttribute(Qt::WA_DeleteOnClose);
         this->setWindowTitle("Waiting...");
+        this->setWindowModality(Qt::WindowModal);
+        this->statusLabel.setWordWrap(true);
+        this->statusLabel.setTextFormat(Qt::PlainText);
 
         QUrlQuery query{
             {"response_type", "code"},
-            {"client_id", this->clientID},
+            {"client_id", this->credentials.clientID},
             {"redirect_uri", REDIRECT_URL},
             {"scope", "user:read channel:read channel:write chat:write "
                       "moderation:ban moderation:chat_message:manage"},
@@ -142,9 +143,16 @@ public:
         this->authURL = u"https://id.kick.com/oauth/authorize?" %
                         query.toString(QUrl::FullyEncoded);
 
-        auto *srv = new HttpServer(SERVER_PORT, this);
-        srv->setHandler([this](const QString &path) {
-            return this->handleRequest(path);
+        this->server = new HttpServer(SERVER_PORT, this);
+        this->server->setRequestHandler(
+            [this](const HttpServer::Request &request) {
+                return request.method == u"GET"
+                           ? this->handleRequest(request.target)
+                           : std::pair<unsigned, QByteArray>{405, "Use GET"_ba};
+            });
+        QObject::connect(this, &QDialog::finished, this, [this] {
+            this->active = false;
+            this->server->close();
         });
 
         auto *root = new QVBoxLayout(this);
@@ -157,7 +165,7 @@ public:
 
         auto *openUrl = new QPushButton(u"Log in (Opens in browser)"_s);
         QObject::connect(openUrl, &QPushButton::clicked, this, [this] {
-            QDesktopServices::openUrl(this->authURL);
+            this->openBrowser();
         });
         urlButtonLayout->addWidget(openUrl, 1);
 
@@ -174,10 +182,31 @@ public:
         root->addWidget(buttons);
         QObject::connect(buttons, &QDialogButtonBox::rejected, this,
                          &QDialog::reject);
+        if (!this->server->isListening())
+        {
+            this->statusLabel.setText("Could not start Kick login. Close any "
+                                      "other Kick login window and try again.");
+            openUrl->setEnabled(false);
+            copyUrl->setEnabled(false);
+        }
+        else
+        {
+            QTimer::singleShot(0, this, [this] {
+                this->openBrowser();
+            });
+        }
     }
 
     std::pair<unsigned, QByteArray> handleRequest(const QString &path)
     {
+        if (!this->active)
+        {
+            return {410, "Login closed"_ba};
+        }
+        if (QUrl(path).path() != u"/")
+        {
+            return {404, "Not found"_ba};
+        }
         auto queryIdx = path.indexOf('?');
         if (queryIdx < 0)
         {
@@ -190,16 +219,30 @@ public:
             return {200, "You can close this tab now."_ba};
         }
 
-        if (!query.hasQueryItem("code"))
-        {
-            return {400, "No code"_ba};
-        }
-        if (query.queryItemValue("state") != this->authParams.state)
+        if (query.queryItemValue("state", QUrl::FullyDecoded) !=
+            this->authParams.state)
         {
             return {400, "State mismatch!"_ba};
         }
-
-        this->requestToken(query.queryItemValue("code"));
+        if (this->callbackReceived)
+        {
+            return {409, "Login already received"_ba};
+        }
+        if (query.hasQueryItem("error"))
+        {
+            this->callbackReceived = true;
+            this->statusLabel.setText("Kick login was not completed. Close "
+                                      "this window to try again.");
+            return {200, "Login was not completed. You can close this tab."_ba};
+        }
+        const auto code = query.queryItemValue("code", QUrl::FullyDecoded);
+        if (code.isEmpty())
+        {
+            return {400, "No code"_ba};
+        }
+        this->callbackReceived = true;
+        this->statusLabel.setText("Connecting your Kick account...");
+        this->requestToken(code);
 
         return {
             200,
@@ -208,109 +251,122 @@ public:
     }
 
 private:
+    void openBrowser()
+    {
+        if (this->active && this->server->isListening() &&
+            !this->callbackReceived &&
+            !QDesktopServices::openUrl(this->authURL))
+        {
+            this->statusLabel.setText("Could not open your browser. Copy the "
+                                      "link and open it manually.");
+        }
+    }
+
     void requestToken(const QString &code)
     {
         QUrlQuery payload{
             {"grant_type", "authorization_code"},
-            {"client_id", this->clientID},
+            {"client_id", this->credentials.clientID},
             {"redirect_uri", REDIRECT_URL},
             {"code_verifier", this->authParams.codeVerifier},
             {"code", code},
         };
-        NetworkRequest(this->applySecretAndProxy(payload),
-                       NetworkRequestType::Post)
+        if (this->credentials.publicProxy.isEmpty())
+        {
+            payload.addQueryItem(u"client_secret"_s,
+                                 this->credentials.clientSecret);
+        }
+        NetworkRequest(this->credentials.tokenUrl(), NetworkRequestType::Post)
             .header("Content-Type", "application/x-www-form-urlencoded")
+            .hideRequestBody()
+            .timeout(20'000)
+            .maximumResponseSize(64 * 1024)
             .payload(payload.toString(QUrl::FullyEncoded).toUtf8())
             .caller(this)
             .onError([this](const NetworkResult &result) {
+                if (!this->active)
+                {
+                    return;
+                }
                 auto error = formatAPIError(result);
                 qCWarning(chatterinoKick) << "Getting token failed" << error;
-                this->statusLabel.setText(error);
+                this->statusLabel.setText(
+                    error +
+                    QStringLiteral("\nClose this window to try again."));
             })
             .onSuccess([this](const NetworkResult &result) {
-                this->getAuthenticatedUser(result.parseJson());
+                if (!this->active)
+                {
+                    return;
+                }
+                if (!this->credentials.setTokens(result.parseJson()))
+                {
+                    this->statusLabel.setText(
+                        "Kick returned an incomplete login. Close this window "
+                        "and try again.");
+                    return;
+                }
+                this->getAuthenticatedUser();
             })
             .execute();
     }
 
-    void getAuthenticatedUser(const QJsonObject &tokenData)
+    void getAuthenticatedUser()
     {
-        qint64 expiresIn = 0;
-        auto expiresInVal = tokenData["expires_in"];
-        if (expiresInVal.isString())
-        {
-            expiresIn = expiresInVal.toString().toLongLong();
-        }
-        else
-        {
-            expiresIn = expiresInVal.toInteger();
-        }
-
-        auto expiresAt = QDateTime::currentDateTimeUtc().addSecs(expiresIn);
         NetworkRequest("https://api.kick.com/public/v1/users")
-            .header("Authorization",
-                    u"Bearer " % tokenData["access_token"_L1].toString())
+            .header("Authorization", u"Bearer " % this->credentials.authToken)
+            .timeout(20'000)
+            .maximumResponseSize(64 * 1024)
             .caller(this)
             .onError([this](const NetworkResult &result) {
+                if (!this->active)
+                {
+                    return;
+                }
                 auto error = formatAPIError(result);
                 qCWarning(chatterinoKick) << "Getting user failed" << error;
-                this->statusLabel.setText(error);
+                this->statusLabel.setText(
+                    error +
+                    QStringLiteral("\nClose this window to try again."));
             })
-            .onSuccess([this, tokenData,
-                        expiresAt](const NetworkResult &result) {
-                const auto obj = result.parseJson()
-                                     .value("data"_L1)
-                                     .toArray()
-                                     .at(0)
-                                     .toObject();
-                KickAccountData data{
-                    .username = obj["name"].toString(),
-                    .userID =
-                        static_cast<uint64_t>(obj["user_id"_L1].toInteger()),
-                    .clientID = this->clientID,
-                    .authToken = tokenData["access_token"_L1].toString(),
-                    .refreshToken = tokenData["refresh_token"_L1].toString(),
-                    .expiresAt = expiresAt,
-                };
-                std::visit(variant::Overloaded{
-                               [&](const ClientSecret &s) {
-                                   data.clientSecret = s.value;
-                               },
-                               [&](const PublicProxyRef &p) {
-                                   data.publicProxy = p.value;
-                               },
-                           },
-                           this->secretOrProxy);
-
-                data.save();
+            .onSuccess([this](const NetworkResult &result) {
+                if (!this->active)
+                {
+                    return;
+                }
+                const auto users =
+                    result.parseJson().value("data"_L1).toArray();
+                const auto obj =
+                    users.isEmpty() ? QJsonObject{} : users.first().toObject();
+                const auto name = obj["name"].toString().trimmed();
+                const auto id = obj["user_id"].toInteger();
+                if (name.isEmpty() || id <= 0)
+                {
+                    this->statusLabel.setText(
+                        "Kick did not return your account. Close this window "
+                        "and try again.");
+                    return;
+                }
+                this->credentials.username = name.toLower();
+                this->credentials.userID = static_cast<uint64_t>(id);
+                this->credentials.save();
                 getApp()->getAccounts()->kick.reloadUsers();
-                getApp()->getAccounts()->kick.currentUsername = data.username;
+                getApp()->getAccounts()->kick.currentUsername =
+                    this->credentials.username;
                 this->accept();
                 this->close();
             })
             .execute();
     }
 
-    QUrl applySecretAndProxy(QUrlQuery &query)
-    {
-        return std::visit(
-            variant::Overloaded{[&](const ClientSecret &s) {
-                                    query.addQueryItem(u"client_secret"_s,
-                                                       s.value);
-                                    return u"https://id.kick.com/oauth/token"_s;
-                                },
-                                [&](const PublicProxyRef &p) {
-                                    return QString(p.value % u"/oauth/token");
-                                }},
-            this->secretOrProxy);
-    }
-
-    QString clientID;
-    SecretOrProxy secretOrProxy;
+    KickAccountData credentials;
     AuthParams authParams;
     QUrl authURL;
 
     QLabel statusLabel;
+    HttpServer *server = nullptr;
+    bool active = true;
+    bool callbackReceived = false;
 };
 
 }  // namespace
@@ -395,14 +451,25 @@ KickLoginPage::KickLoginPage()
         {
             return;
         }
-        SecretOrProxy sop{ClientSecret{this->ui.clientSecret->text()}};
-        QString clientID = this->ui.clientID->text();
+        if (this->authDialog_)
+        {
+            this->authDialog_->raise();
+            this->authDialog_->activateWindow();
+            return;
+        }
+        KickAccountData credentials;
+        credentials.clientID = this->ui.clientID->text().trimmed();
+        credentials.clientSecret = this->ui.clientSecret->text().trimmed();
         if (proxy)
         {
-            sop = PublicProxyRef{proxy->baseURL};
-            clientID = proxy->clientID;
+            credentials.publicProxy = proxy->baseURL;
+            credentials.clientID = proxy->clientID;
         }
-        auto *diag = new AuthDialog(clientID, std::move(sop), this);
+        auto *diag = new AuthDialog(std::move(credentials), this);
+        this->authDialog_ = diag;
+        QObject::connect(diag, &QDialog::finished, this, [this] {
+            this->authDialog_.clear();
+        });
         QObject::connect(diag, &QDialog::accepted, this, [this] {
             this->window()->close();
         });
@@ -412,16 +479,6 @@ KickLoginPage::KickLoginPage()
                      this, &KickLoginPage::refreshState);
 
     this->refreshState();
-}
-
-void KickLoginPage::paintEvent(QPaintEvent * /*event*/)
-{
-    QPainter painter(this);
-    // The default QFrame background in the fusion theme has very poor contrast
-    // on links, because it's bright gray.
-    painter.setBrush(getTheme()->window.background);
-    painter.setPen({});
-    painter.drawRect(this->rect());
 }
 
 void KickLoginPage::refreshState() const
@@ -468,6 +525,24 @@ void KickLoginPage::refreshState() const
         this->ui.layout->setRowVisible(rowClientID, false);
         this->ui.layout->setRowVisible(rowClientSecret, false);
     }
+}
+
+void KickLoginPage::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+
+    painter.setBrush(getTheme()->window.background);
+    painter.setPen({});
+    painter.drawRect(this->rect());
+}
+
+void KickLoginPage::hideEvent(QHideEvent *event)
+{
+    if (this->authDialog_)
+    {
+        this->authDialog_->reject();
+    }
+    QWidget::hideEvent(event);
 }
 
 }  // namespace chatterino

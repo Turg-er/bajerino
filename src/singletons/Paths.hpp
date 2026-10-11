@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 
 namespace chatterino {
 
@@ -43,6 +44,7 @@ public:
 
     // Custom themes live here. <appDataDirectory>/Themes
     QString themesDirectory;
+    QStringList bluzyrinoDataDirectories;
 
     // Spell checking dictionaries <appDataDirectory>/Dictionaries
     QString dictionariesDirectory;

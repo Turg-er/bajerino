@@ -57,6 +57,8 @@ const QMap<QString, QString> VALID_IDENTIFIERS_MAP{
     {"flags.watch_streak", "watch streak message?"},
     {"flags.webchat_detected", "Twitch web chat message?"},
     {"flags.announcement", "announcement message?"},
+    {"flags.emote_only", "message contains only emotes?"},
+    {"flags.moderation_action", "moderation action?"},
     {"message.content", "message text"},
     {"message.length", "message length"},
     {"moltorino.client_detection",

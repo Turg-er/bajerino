@@ -18,6 +18,8 @@
 #include <set>
 #include <span>
 
+class QMenu;
+
 namespace chatterino {
 
 class Settings;
@@ -36,6 +38,8 @@ using NodeDescriptor =
 
 class Channel;
 using ChannelPtr = std::shared_ptr<Channel>;
+class MessageLayout;
+class MessageLayoutElement;
 struct Message;
 using MessagePtr = std::shared_ptr<const Message>;
 class MessageLayout;
@@ -95,6 +99,7 @@ public:
 
     void repaintVisibleChatWidgets(Channel *channel = nullptr);
     void repaintGifEmotes();
+    void repaintTwitchGifs();
 
     Window &getMainWindow();
 
@@ -127,7 +132,8 @@ public:
      */
     void scrollToMessage(const MessagePtr &message);
     void openChannelOrMessageFromTray(const QString &channelName,
-                                      const QString &messageId);
+                                      const QString &messageId,
+                                      bool newTab = false);
     void showMainWindow();
     bool hideMainWindowToTray();
     void notifyTrayHighlight(const Channel *channel, const MessagePtr &message,
@@ -161,12 +167,13 @@ public:
     void toggleAllOverlayInertia();
 
     std::set<QString> getVisibleChannelNames() const;
-    QJsonArray getOpenTabSnapshot() const;
+    bool shouldSuppressTabGroupAlerts(const Channel *channel) const;
 
     std::span<Window *const> windows() const;
 
     /// Signals
     pajlada::Signals::NoArgSignal gifRepaintRequested;
+    pajlada::Signals::NoArgSignal twitchGifRepaintRequested;
 
     // This signal fires whenever views rendering a channel, or all views if the
     // channel is a nullptr, need to redo their layout
@@ -223,6 +230,7 @@ private:
 
     MessageElementFlags wordFlags_;
 
+    QTimer twitchGifRepaintTimer_;
     QTimer *saveTimer;
 
     pajlada::Signals::SignalHolder signalHolder;

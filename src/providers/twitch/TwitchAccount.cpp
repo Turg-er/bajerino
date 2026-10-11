@@ -382,9 +382,15 @@ void TwitchAccount::loadSeventvUserID()
         return;
     }
 
+    CancellationToken token(false);
+    this->seventvUserToken_ = token;
     seventv->getUserByTwitchID(
         this->getUserId(),
-        [this, loadPersonalEmotes](const auto &json, const auto & /*raw*/) {
+        [this, token, loadPersonalEmotes](const auto &json, const auto &) {
+            if (token.isCancelled())
+            {
+                return;
+            }
             const auto user = json["user"].toObject();
             const auto id = user["id"].toString();
             if (id.isEmpty())

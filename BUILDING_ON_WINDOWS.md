@@ -75,6 +75,18 @@ Note: This installation will take about 2.1 GB of disk space.
 
 </details>
 
+## Media and account features
+
+The Conan recipe includes WebP, libvpx, libwebm, libyuv, and the FFmpeg/ffprobe
+video conversion bundle. Its generated CMake toolchain sets
+`BAJERINO_MEDIA_TOOLS_DIR`, so the executables and licenses are copied beside the
+app automatically. Include the entire `support/media` directory in portable
+packages, and install the Qt SVG and SQL components along with Qt Widgets.
+
+TikTok login uses WebView2; CMake fetches the pinned SDK when account support is
+enabled. YouTube account credentials and optional account build flags are
+listed in the [media and account build notes](BUILDING_ON_LINUX.md#media-and-account-features).
+
 ## Building
 
 ### Using CMake

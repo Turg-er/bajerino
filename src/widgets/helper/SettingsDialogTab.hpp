@@ -25,6 +25,8 @@ enum class SettingsTabId {
     Moderation,
     About,
     Moltorino,
+    Customization,
+    SettingsManager,
 };
 
 class SettingsDialogTab : public BaseWidget
@@ -35,7 +37,7 @@ public:
     SettingsDialogTab(SettingsDialog *dialog_,
                       std::function<SettingsPage *()> page_,
                       const QString &name, QString imageFileName,
-                      SettingsTabId id);
+                      SettingsTabId id, float iconOpticalScale = 1.0F);
 
     void setSelected(bool selected_);
     SettingsPage *page();
@@ -48,6 +50,7 @@ Q_SIGNALS:
     void selectedChanged(bool);
 
 private:
+    void themeChangedEvent() override;
     void paintEvent(QPaintEvent *) override;
     void mousePressEvent(QMouseEvent *event) override;
 
@@ -62,6 +65,7 @@ private:
     std::function<SettingsPage *()> lazyPage_;
     SettingsTabId id_;
     QString name_;
+    float iconOpticalScale_ = 1.0F;
 
     bool selected_ = false;
 };

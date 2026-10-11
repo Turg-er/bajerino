@@ -100,6 +100,7 @@ struct NukeJob {
     std::weak_ptr<TwitchChannel> twitchChannel;
     QString moderatorID;
     pajlada::Signals::ScopedConnection messageConnection;
+    pajlada::Signals::ScopedConnection accountConnection;
 
     QVector<NukeTarget> queue;
     QSet<QString> processedMessages;
@@ -109,6 +110,7 @@ struct NukeJob {
     bool windowOpen = true;
     bool queueScheduled = false;
     bool fatalError = false;
+    bool targetLimitReached = false;
     int extraDelayMs = 0;
     int inFlight = 0;
 
@@ -132,6 +134,7 @@ struct SpamJob {
     QString label = u"Spam"_s;
     QString commandName = u"/spam"_s;
     pajlada::Signals::ScopedConnection messageConnection;
+    pajlada::Signals::ScopedConnection accountConnection;
     int total = 0;
     int sent = 0;
     int echoed = 0;
@@ -158,17 +161,21 @@ QHash<QString, std::shared_ptr<SpamJob>> &activeSpams()
 
 QString usage()
 {
-    return u"Usage: /nuke <text> <timeout|ban|delete> <range>, for example /nuke bots 10m 30s. Use /nuke stop to cancel active nukes."_s;
+    return QStringLiteral(
+        "Usage: /nuke <text> <timeout|ban|delete> <range>, for example /nuke "
+        "bots 10m 30s. Use /nuke stop to cancel active nukes.");
 }
 
 QString spamUsage()
 {
-    return u"Usage: /spam <count> <message>, for example /spam 50 get in the predict. Use /spam stop to cancel."_s;
+    return QStringLiteral("Usage: /spam <count> <message>, for example /spam "
+                          "50 get in the predict. Use /spam stop to cancel.");
 }
 
 QString pyramidUsage()
 {
-    return u"Usage: /pyramid <height> <message>, for example /pyramid 6 Kappa. Use /pyramid stop to cancel."_s;
+    return QStringLiteral("Usage: /pyramid <height> <message>, for example "
+                          "/pyramid 6 Kappa. Use /pyramid stop to cancel.");
 }
 
 QString actionName(const ParseResult &plan)
@@ -812,6 +819,7 @@ QString channelKey(TwitchChannel *channel)
 
 void removeNukeJob(const std::shared_ptr<NukeJob> &job)
 {
+    job->accountConnection = pajlada::Signals::ScopedConnection();
     auto &jobsByChannel = activeNukes();
     auto it = jobsByChannel.find(job->channelKey);
     if (it == jobsByChannel.end())
@@ -1011,7 +1019,7 @@ void pumpNukeQueue(const std::shared_ptr<NukeJob> &job)
 void scheduleNukePump(const std::shared_ptr<NukeJob> &job)
 {
     if (job->queueScheduled || job->stopped || job->fatalError ||
-        job->queue.isEmpty())
+        job->queue.isEmpty() || job->inFlight > 0)
     {
         maybeFinishNukeJob(job);
         return;
@@ -1031,6 +1039,21 @@ void scheduleNukePump(const std::shared_ptr<NukeJob> &job)
 void enqueueTarget(const std::shared_ptr<NukeJob> &job,
                    const NukeTarget &target)
 {
+    if (job->stopped || job->fatalError || job->targetLimitReached)
+    {
+        return;
+    }
+    if (job->queuedActions >= 10000)
+    {
+        job->targetLimitReached = true;
+        if (auto channel = job->channel.lock())
+        {
+            channel->addSystemMessage("Nuke reached its limit of 10000 "
+                                      "targets. Pending actions will finish.");
+        }
+        return;
+    }
+
     if (job->plan.action == NukeAction::Delete)
     {
         if (job->processedMessages.contains(target.messageID))
@@ -1074,7 +1097,8 @@ void enqueueMatches(const std::shared_ptr<NukeJob> &job,
 void processFutureMessage(const std::shared_ptr<NukeJob> &job,
                           MessagePtr &message)
 {
-    if (job->stopped || job->fatalError || !job->windowOpen)
+    if (job->stopped || job->fatalError || job->targetLimitReached ||
+        !job->windowOpen)
     {
         return;
     }
@@ -1103,6 +1127,7 @@ void stopNukesForChannel(TwitchChannel *channel)
         job->windowOpen = false;
         job->queue.clear();
         job->messageConnection = pajlada::Signals::ScopedConnection();
+        job->accountConnection = pajlada::Signals::ScopedConnection();
     }
 
     channel->addSystemMessage(
@@ -1128,6 +1153,18 @@ void startNukeJob(const CommandContext &ctx, const ParseResult &plan)
     }
 
     const auto key = channelKey(ctx.twitchChannel);
+    int activeJobs = 0;
+    for (const auto &jobs : activeNukes())
+    {
+        activeJobs += jobs.size();
+    }
+    if (activeJobs >= 16 || activeNukes().value(key).size() >= 4)
+    {
+        ctx.channel->addSystemMessage("Too many nukes are active. Use /nuke "
+                                      "stop or wait for them to finish.");
+        return;
+    }
+
     auto job = std::make_shared<NukeJob>();
     job->channelKey = key;
     job->plan = plan;
@@ -1137,6 +1174,26 @@ void startNukeJob(const CommandContext &ctx, const ParseResult &plan)
 
     auto &jobs = activeNukes()[key];
     jobs.push_back(job);
+
+    job->accountConnection =
+        getApp()->getAccounts()->twitch.currentUserChanged.connect(
+            [weakJob = std::weak_ptr<NukeJob>(job)] {
+                if (auto currentJob = weakJob.lock();
+                    currentJob && !currentJob->stopped)
+                {
+                    currentJob->stopped = true;
+                    currentJob->windowOpen = false;
+                    currentJob->queue.clear();
+                    currentJob->messageConnection =
+                        pajlada::Signals::ScopedConnection();
+                    if (auto channel = currentJob->channel.lock())
+                    {
+                        channel->addSystemMessage(
+                            "Nuke stopped because the Twitch account changed.");
+                    }
+                    maybeFinishNukeJob(currentJob);
+                }
+            });
 
     auto pastMatches = collectPastMatches(plan, ctx.channel);
     enqueueMatches(job, pastMatches);
@@ -1152,9 +1209,7 @@ void startNukeJob(const CommandContext &ctx, const ParseResult &plan)
         maybeFinishNukeJob(job);
     });
 
-    const auto targetCount = plan.action == NukeAction::Delete
-                                 ? pastMatches.messageTargets.size()
-                                 : pastMatches.userTargets.size();
+    const auto targetCount = job->queuedActions;
     ctx.channel->addSystemMessage(
         u"Nuke armed for %1s: %2 past target%3 queued."_s.arg(plan.rangeSeconds)
             .arg(targetCount)
@@ -1166,6 +1221,7 @@ void startNukeJob(const CommandContext &ctx, const ParseResult &plan)
 void removeSpamJob(const std::shared_ptr<SpamJob> &job)
 {
     job->messageConnection = pajlada::Signals::ScopedConnection();
+    job->accountConnection = pajlada::Signals::ScopedConnection();
     auto &jobs = activeSpams();
     auto it = jobs.find(job->channelKey);
     if (it != jobs.end() && it.value().get() == job.get())
@@ -1193,7 +1249,10 @@ void stopSpamJobForSendFailure(const std::shared_ptr<SpamJob> &job,
                       job->label)
             // NOLINTNEXTLINE(readability-avoid-nested-conditional-operator)
             : rateLimited
-                ? u"%1 stopped: Twitch rate-limited this account in this channel. Fast bursts usually only work reliably when the account is mod, VIP, or broadcaster."_s
+                ? QStringLiteral(
+                      "%1 stopped: Twitch rate-limited this account in this "
+                      "channel. Fast bursts usually only work reliably when "
+                      "the account is mod, VIP, or broadcaster.")
                       .arg(job->label)
                 : u"%1 stopped: %2"_s.arg(job->label, error));
     }
@@ -1310,6 +1369,7 @@ void stopSpamForChannel(TwitchChannel *channel, const QString &requestedLabel)
     const auto label = it.value()->label.toLower();
     it.value()->stopped = true;
     it.value()->messageConnection = pajlada::Signals::ScopedConnection();
+    it.value()->accountConnection = pajlada::Signals::ScopedConnection();
     jobs.erase(it);
     channel->addSystemMessage(
         u"Stopped %1 after %2 message%3."_s.arg(label).arg(sent).arg(
@@ -1344,6 +1404,13 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
         return;
     }
 
+    if (activeSpams().size() >= 16)
+    {
+        ctx.channel->addSystemMessage(
+            "Too many chat commands are active. Wait for them to finish.");
+        return;
+    }
+
     auto job = std::make_shared<SpamJob>();
     job->channelKey = key;
     job->channel = std::dynamic_pointer_cast<TwitchChannel>(ctx.channel);
@@ -1362,6 +1429,24 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
         job->normalizedMessages.insert(normalizeExact(message));
     }
     activeSpams()[key] = job;
+
+    job->accountConnection =
+        getApp()->getAccounts()->twitch.currentUserChanged.connect(
+            [weakJob = std::weak_ptr<SpamJob>(job)] {
+                if (auto currentJob = weakJob.lock();
+                    currentJob && !currentJob->stopped && !currentJob->finished)
+                {
+                    currentJob->stopped = true;
+                    if (auto channel = currentJob->channel.lock())
+                    {
+                        channel->addSystemMessage(
+                            QStringLiteral("%1 stopped because the Twitch "
+                                           "account changed.")
+                                .arg(currentJob->label));
+                    }
+                    removeSpamJob(currentJob);
+                }
+            });
 
     job->messageConnection = ctx.channel->messageAppended.connect(
         [job](MessagePtr &message, auto) mutable {
@@ -1400,7 +1485,8 @@ void startChatMessageJob(const CommandContext &ctx, QVector<QString> messages,
     else
     {
         ctx.channel->addSystemMessage(
-            u"%1 %2 message%3 through %4 every %5 ms. Use %6 stop to cancel."_s
+            QStringLiteral("%1 %2 message%3 through %4 every %5 ms. Use %6 "
+                           "stop to cancel.")
                 .arg(startVerb)
                 .arg(job->total)
                 .arg(job->total == 1 ? "" : "s")
@@ -1523,6 +1609,12 @@ QString sendSpam(const CommandContext &ctx)
     if (message.isEmpty())
     {
         ctx.channel->addSystemMessage(spamUsage());
+        return "";
+    }
+    if (message.size() > MAX_CHAT_MESSAGE_LENGTH)
+    {
+        ctx.channel->addSystemMessage(
+            "That message is too long. Use 500 characters or fewer.");
         return "";
     }
     if (message.startsWith(QLatin1Char('/')) ||

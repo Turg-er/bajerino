@@ -125,7 +125,8 @@
                     "tooltip": "[Y A Y Yes GIF by Djemilah Birnie]",
                     "trailingSpace": true,
                     "type": "LinkElement",
-                    "words": []
+                    "words": [
+                    ]
                 },
                 {
                     "background": "#ffa0a0a4",
@@ -141,8 +142,9 @@
                     "url": ""
                 }
             ],
-            "externalBadges": [],
-            "flags": "Collapsed",
+            "externalBadges": [
+            ],
+            "flags": "Collapsed|TwitchGif",
             "frozen": false,
             "id": "401abf17-7e99-45d6-9bdf-43934e839327",
             "localizedName": "",

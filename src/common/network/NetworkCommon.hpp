@@ -28,6 +28,7 @@ enum class NetworkRequestType {
     Put,
     Delete,
     Patch,
+    Head,
 };
 
 // parseHeaderList takes a list of headers in string form,

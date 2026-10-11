@@ -10,6 +10,7 @@
 #include <QString>
 
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 class QJsonValue;
@@ -17,6 +18,10 @@ class QJsonValue;
 namespace chatterino {
 class Paths;
 }  // namespace chatterino
+
+namespace pajlada::Settings {
+class SettingManager;
+}
 
 namespace chatterino::backup {
 
@@ -58,6 +63,10 @@ std::vector<BackupFile> findBackupsFor(const QString &directory,
 /// If the load fails and any backups are available, spawn a restore backups dialog.
 void loadWithBackups(const FileData &fileData,
                      const std::function<ExpectedStr<void>()> &load);
+
+void loadSettingManagerWithBackups(
+    const FileData &fileData,
+    const std::shared_ptr<pajlada::Settings::SettingManager> &manager);
 
 }  // namespace chatterino::backup
 

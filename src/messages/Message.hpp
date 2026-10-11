@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "controllers/highlights/HighlightResult.hpp"
 #include "messages/MessageFlag.hpp"
 #include "providers/twitch/api/HelixEnums.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
@@ -16,7 +17,7 @@
 #include <cinttypes>
 #include <functional>
 #include <memory>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 class QJsonObject;
@@ -26,10 +27,15 @@ class MessageElement;
 class MessageThread;
 class TwitchBadge;
 class ScrollbarHighlight;
+namespace automod {
+struct ReviewItem;
+}
 
 enum class MessagePlatform : uint8_t {
     AnyOrTwitch,
     Kick,
+    YouTube,
+    TikTok,
 };
 
 struct Message;
@@ -69,7 +75,8 @@ struct Message {
     /// List of Twitch badges associated with this message
     std::vector<TwitchBadge> twitchBadges;
 
-    /// Map of extra data associated with each Twitch badge
+    std::unique_ptr<const std::vector<TwitchBadge>> sharedChatSourceBadges;
+
     std::unordered_map<QString, QString> twitchBadgeInfos;
 
     /// List of external badges associated with this message
@@ -80,9 +87,9 @@ struct Message {
     QStringList externalBadges;
 
     std::shared_ptr<QColor> highlightColor;
-    // Each reply holds a reference to the thread. When every reply is dropped,
-    // the reply thread will be cleaned up by the TwitchChannel.
-    // The root of the thread does not have replyThread set.
+    std::shared_ptr<const std::vector<HighlightMatch>> highlightMatches;
+    std::shared_ptr<const automod::ReviewItem> autoModReview;
+
     std::shared_ptr<MessageThread> replyThread;
     MessagePtr replyParent;
     MessagePtr translatedFrom;
@@ -117,6 +124,7 @@ struct Message {
         Abnormal,
     };
     static QString clientDetectionStatusToString(ClientDetectionStatus status);
+    static ClientDetectionStatus classifyClientNonce(const QString &nonce);
 
     uint32_t count = 1;
 
@@ -134,12 +142,15 @@ struct Message {
     std::vector<std::unique_ptr<MessageElement>> elements;
     ClientDetectionStatus clientDetection = ClientDetectionStatus::Unknown;
 
+    bool emoteOnly = false;
+
     ScrollbarHighlight getScrollBarHighlight() const;
+    bool isHiddenByClientNonce() const;
+    bool usesTwitchGigantifyPresentation() const;
 
     std::shared_ptr<ChannelPointReward> reward = nullptr;
-
+    QString sharedChatSourceId;
     uint32_t bits{0};
-
     HelixAnnouncementColor announcementColor{HelixAnnouncementColor::Primary};
 
     /// Returns an identical, non-frozen message, independent from this one.

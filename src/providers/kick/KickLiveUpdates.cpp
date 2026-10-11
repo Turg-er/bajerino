@@ -114,6 +114,8 @@ bool KickLiveUpdatesPrivate::hasManagerOrFetch()
                     QJsonObject{{"accepted_providers"_L1, accepted}},
                 },
             })
+            .timeout(10'000)
+            .maximumResponseSize(64 * 1024)
             .onSuccess([weak =
                             this->weak_from_this()](const NetworkResult &res) {
                 auto self = weak.lock();

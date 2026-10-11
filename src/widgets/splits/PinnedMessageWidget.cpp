@@ -6,7 +6,10 @@
 
 #include "Application.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/ignores/IgnoreController.hpp"
 #include "messages/Message.hpp"
+#include "messages/MessageBuilder.hpp"
+#include "messages/MessageElement.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
@@ -14,7 +17,10 @@
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "util/Crypto.hpp"
+#include "util/FormatTime.hpp"
 #include "widgets/buttons/DrawnButton.hpp"
+#include "widgets/buttons/LabelButton.hpp"
+#include "widgets/helper/ChannelView.hpp"
 
 #include <QHBoxLayout>
 #include <QLabel>
@@ -25,6 +31,8 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 using namespace std::chrono_literals;
 using namespace Qt::Literals;
@@ -75,6 +83,29 @@ PinnedMessageWidget::PinnedMessageWidget(QWidget *parent)
     this->menuButton_->setMenu(this->buildModMenu());
     this->menuButton_->hide();
     headerRow->addWidget(this->menuButton_);
+    this->toggleButton_ = new LabelButton(u"↔"_s, this);
+    this->toggleButton_->setToolTip(u"Cycle banners"_s);
+    this->toggleButton_->hide();
+    headerRow->addWidget(this->toggleButton_);
+    QObject::connect(this->toggleButton_, &Button::leftClicked, this, [this] {
+        this->toggleBannerRequested.invoke();
+    });
+    this->closeButton_ = new LabelButton(u"×"_s, this);
+    headerRow->addWidget(this->closeButton_);
+    QObject::connect(this->closeButton_, &Button::leftClicked, this, [this] {
+        if (getSettings()->pinCloseButtonAction == 1 && this->channel_ &&
+            this->channel_->canManagePinnedMessages())
+        {
+            this->channel_->unpinMessage();
+        }
+        else
+        {
+            this->userToggled_ = false;
+            this->autoHideTimer_->stop();
+            this->hide();
+            this->dismissed.invoke();
+        }
+    });
 
     contentBox->addLayout(headerRow);
 
@@ -101,6 +132,30 @@ PinnedMessageWidget::PinnedMessageWidget(QWidget *parent)
                                             QSizePolicy::Fixed);
     this->messageScrollArea_->setWidget(this->messageLabel_);
     contentBox->addWidget(this->messageScrollArea_);
+    this->messageView_ =
+        new ChannelView(this, ChannelView::Context::UserCard, 1);
+    this->messageView_->setTransparentBackground(true);
+    this->messageView_->setHighlightsEnabled(false);
+    this->messageView_->setOverrideFlags(MessageElementFlags{
+        MessageElementFlag::Text, MessageElementFlag::EmoteImage,
+        MessageElementFlag::EmojiImage, MessageElementFlag::BitsStatic,
+        MessageElementFlag::BitsAmount, MessageElementFlag::TwitchGif});
+    this->messageView_->setEnableScrollingToBottom(false);
+    this->displayChannel_ =
+        std::make_shared<Channel>(QString{}, Channel::Type::None, 1);
+    this->messageView_->setChannel(this->displayChannel_);
+    this->messageView_->hide();
+    contentBox->addWidget(this->messageView_);
+    this->settingsConnections_.managedConnect(this->messageView_->layoutChanged,
+                                              [this] {
+                                                  this->updateMessageHeight();
+                                              });
+    this->expandButton_ = new LabelButton(u"Expand"_s, this);
+    contentBox->addWidget(this->expandButton_, 0, Qt::AlignRight);
+    QObject::connect(this->expandButton_, &Button::leftClicked, this, [this] {
+        this->expanded_ = !this->expanded_;
+        this->updateMessageHeight();
+    });
 
     // Footer: [lock] [sender · time] ... [countdown]
     auto *footerRow = new QHBoxLayout();
@@ -149,47 +204,71 @@ PinnedMessageWidget::PinnedMessageWidget(QWidget *parent)
         }
     });
 
+    auto refreshAppearance = [this](const auto &, auto) {
+        this->scaleChangedEvent(this->scale());
+        this->refresh();
+    };
+    getSettings()->pinnedMessageScale.connect(
+        refreshAppearance, this->settingsConnections_, false);
+    getSettings()->pinnedContentScale.connect(
+        refreshAppearance, this->settingsConnections_, false);
+    getSettings()->pinTimerDisplay.connect(refreshAppearance,
+                                           this->settingsConnections_, false);
+    getSettings()->pinTimestampFormat.connect(
+        refreshAppearance, this->settingsConnections_, false);
+    getSettings()->pinCloseButtonAction.connect(
+        refreshAppearance, this->settingsConnections_, false);
+    getSettings()->alwaysShowPinnedMessage.connect(
+        refreshAppearance, this->settingsConnections_, false);
+    getSettings()->alwaysExpandPinnedMessages.connect(
+        [this](bool expanded) {
+            this->expanded_ = expanded;
+            this->updateMessageHeight();
+        },
+        this->settingsConnections_);
+    getSettings()->pinBannerBackgroundColor.connect(
+        [this](const auto &) {
+            this->update();
+        },
+        this->settingsConnections_, false);
     this->scaleChangedEvent(this->scale());
     this->hide();
 }
 
 void PinnedMessageWidget::tickProgress()
 {
-    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-    const qint64 endsMs = this->pinEndsAt_.toMSecsSinceEpoch();
-
-    if (nowMs >= endsMs)
+    const auto now = QDateTime::currentDateTimeUtc();
+    if (this->pinEndsAt_.isValid() && now >= this->pinEndsAt_)
     {
         this->progressTimer_->stop();
-        this->countdownLabel_->hide();
         if (this->channel_)
-        {
             this->channel_->clearPinnedMessage();
-        }
         return;
     }
-
-    const qint64 remainingMs = endsMs - nowMs;
-    const qint64 totalSecs = (remainingMs + 999) / 1000;  // round up
-    const qint64 hours = totalSecs / 3600;
-    const qint64 mins = (totalSecs % 3600) / 60;
-    const qint64 secs = totalSecs % 60;
-
-    QString timeStr;
-    if (hours > 0)
+    const int mode = getSettings()->pinTimerDisplay;
+    QString timestamp;
+    if (this->pinnedAt_.isValid())
     {
-        timeStr = u"\u23F1 %1:%2:%3"_s.arg(hours)
-                      .arg(mins, 2, 10, QChar(u'0'))
-                      .arg(secs, 2, 10, QChar(u'0'));
+        const auto format = getSettings()->pinTimestampFormat.getValue();
+        timestamp =
+            format == u"Relative"
+                ? formatLongFriendlyDuration(this->pinnedAt_, now) + u" ago"
+                : this->pinnedAt_.toLocalTime().toString(format);
     }
-    else
+    QString remaining = u"Indefinitely"_s;
+    if (this->pinEndsAt_.isValid())
     {
-        timeStr = u"\u23F1 %1:%2"_s.arg(mins, 2, 10, QChar(u'0'))
-                      .arg(secs, 2, 10, QChar(u'0'));
+        const auto seconds = (now.msecsTo(this->pinEndsAt_) + 999) / 1000;
+        remaining = u"%1:%2"_s.arg(seconds / 60).arg(seconds % 60, 2, 10, u'0');
     }
-
-    this->countdownLabel_->setText(timeStr);
-    this->countdownLabel_->show();
+    this->pinnedByLabel_->setText(
+        this->pinnedByText_ + ((mode == 0 || mode == 1) && !timestamp.isEmpty()
+                                   ? u" · " + timestamp.toHtmlEscaped()
+                                   : QString{}));
+    this->countdownLabel_->setText(remaining);
+    this->countdownLabel_->setVisible(mode == 0 || mode == 2);
+    this->pinnedByLabel_->setToolTip(mode == 3 ? timestamp + u" · " + remaining
+                                               : QString{});
 }
 
 void PinnedMessageWidget::paintEvent(QPaintEvent *event)
@@ -198,7 +277,10 @@ void PinnedMessageWidget::paintEvent(QPaintEvent *event)
     auto *theme = getTheme();
 
     // Fill background (same color as the split header above)
-    painter.fillRect(event->rect(), theme->splits.header.background);
+    const QColor custom(getSettings()->pinBannerBackgroundColor.getValue());
+    painter.fillRect(event->rect(), custom.isValid()
+                                        ? custom
+                                        : theme->splits.header.background);
 
     // Draw 1px top border
     painter.setPen(theme->splits.header.border);
@@ -207,7 +289,13 @@ void PinnedMessageWidget::paintEvent(QPaintEvent *event)
 
 void PinnedMessageWidget::setChannel(TwitchChannel *channel)
 {
+    if (this->channel_ == channel)
+    {
+        this->refresh();
+        return;
+    }
     this->signalHolder_.clear();
+    this->pinIdentity_.clear();
     this->channel_ = channel;
     this->autoHideTimer_->stop();
 
@@ -271,7 +359,9 @@ std::unique_ptr<QMenu> PinnedMessageWidget::buildModMenu()
     menu->addSeparator();
 
     menu->addAction(u"Hide for Yourself"_s, this, [this] {
+        this->userToggled_ = false;
         this->hide();
+        this->dismissed.invoke();
     });
 
     return menu;
@@ -299,10 +389,25 @@ void PinnedMessageWidget::refresh()
         return;
     }
 
+    if (pin->endsAt && *pin->endsAt <= QDateTime::currentDateTimeUtc())
+    {
+        this->channel_->clearPinnedMessage();
+        return;
+    }
+
     const auto mode = static_cast<UsernameDisplayMode>(
         getSettings()->usernameDisplayMode.getValue());
-    this->pinnedByLabel_->setText(u"Pinned by <b>%1</b>"_s.arg(
-        pin->pinnedBy.formatted(mode).toHtmlEscaped()));
+    const auto identity =
+        pin->messageID + pin->startsAt.toString(Qt::ISODateWithMs);
+    if (this->pinIdentity_ != identity)
+    {
+        this->pinIdentity_ = identity;
+        this->userToggled_.reset();
+        this->expanded_ = getSettings()->alwaysExpandPinnedMessages;
+    }
+    this->pinnedByText_ = u"Pinned by <b>%1</b>"_s.arg(
+        pin->pinnedBy.formatted(mode).toHtmlEscaped());
+    this->pinnedAt_ = pin->startsAt;
 
     QString messageText = pin->messageText;
     bool decrypted = false;
@@ -321,7 +426,24 @@ void PinnedMessageWidget::refresh()
                                    getSettings()->encryptionKey.getValue());
     }
 
-    this->messageLabel_->setText(messageText);
+    const auto original = this->channel_->findMessageByID(pin->messageID);
+    const bool hidden =
+        isIgnoredMessage({.message = messageText,
+                          .twitchUserID = pin->sender.id,
+                          .twitchUserLogin = pin->sender.login,
+                          .isMod = this->channel_->isMod(),
+                          .isBroadcaster = this->channel_->isBroadcaster()});
+    this->displayChannel_->clearMessages();
+    if (original && !hidden)
+    {
+        this->messageView_->setSourceChannel(this->channel_->sharedFromThis());
+        this->displayChannel_->addMessage(original, MessageContext::Repost);
+    }
+    this->messageView_->setVisible(original != nullptr && !hidden);
+    this->messageScrollArea_->setVisible(original == nullptr || hidden);
+    this->messageLabel_->setText(
+        hidden ? u"This pinned message is hidden by your ignore settings."_s
+               : messageText);
     this->encryptionIcon_->setVisible(decrypted);
     this->updateMessageHeight();
 
@@ -332,17 +454,16 @@ void PinnedMessageWidget::refresh()
             pin->sender.formatted(mode).toHtmlEscaped(), sentAt));
     }
 
-    this->progressTimer_->stop();
-    this->countdownLabel_->hide();
-    if (pin->endsAt.has_value() && pin->endsAt->isValid())
-    {
-        this->pinEndsAt_ = *pin->endsAt;
-        this->tickProgress();  // set initial text immediately
+    this->pinEndsAt_ = pin->endsAt.value_or(QDateTime{});
+    this->tickProgress();
+    if (this->pinnedAt_.isValid() || this->pinEndsAt_.isValid())
         this->progressTimer_->start();
-    }
-
-    const bool isMod = this->channel_->hasModRights();
+    const bool isMod = this->channel_->canManagePinnedMessages();
     this->menuButton_->setVisible(isMod);
+    this->closeButton_->setToolTip(getSettings()->pinCloseButtonAction == 1 &&
+                                           isMod
+                                       ? u"Unpin message"_s
+                                       : u"Hide for yourself"_s);
 
     if (this->userToggled_.value_or(true))
     {
@@ -391,9 +512,20 @@ void PinnedMessageWidget::updateMessageHeight()
         contentH = this->messageLabel_->sizeHint().height();
     }
 
+    if (!this->messageView_->isHidden())
+        contentH = this->messageView_->contentHeight(10000);
+    const auto maxHeight =
+        this->expanded_
+            ? std::max(this->messageMaxHeight_,
+                       (this->parentWidget() ? this->parentWidget()->height()
+                                             : this->height()) /
+                           2)
+            : this->messageMaxHeight_;
+    this->messageView_->setFixedHeight(qBound(1, contentH, maxHeight));
+    this->expandButton_->setVisible(contentH > this->messageMaxHeight_);
+    this->expandButton_->setText(this->expanded_ ? u"Collapse"_s : u"Expand"_s);
     // Size to content, but never taller than the cap.
-    this->messageScrollArea_->setFixedHeight(
-        qBound(1, contentH, this->messageMaxHeight_));
+    this->messageScrollArea_->setFixedHeight(qBound(1, contentH, maxHeight));
 }
 
 void PinnedMessageWidget::updateMessageHeightIfNeeded()
@@ -425,13 +557,18 @@ void PinnedMessageWidget::hideEvent(QHideEvent *event)
 
 void PinnedMessageWidget::scaleChangedEvent(float newScale)
 {
+    newScale *=
+        std::clamp(getSettings()->pinnedMessageScale.getValue(), 0.5F, 3.0F);
+    const auto contentScale =
+        std::clamp(getSettings()->pinnedContentScale.getValue(), 0.5F, 3.0F);
+    this->messageView_->setOverrideScale(newScale * contentScale);
     QFont headerFont = this->pinnedByLabel_->font();
     headerFont.setPointSizeF(9.5F * newScale);
     this->pinnedByLabel_->setFont(headerFont);
     this->countdownLabel_->setFont(headerFont);
 
     QFont bodyFont = this->messageLabel_->font();
-    bodyFont.setPointSizeF(11.0F * newScale);
+    bodyFont.setPointSizeF(11.0F * newScale * contentScale);
     this->messageLabel_->setFont(bodyFont);
     this->messageMaxHeight_ = int(110 * newScale);
     this->updateMessageHeight();
@@ -451,6 +588,29 @@ void PinnedMessageWidget::scaleChangedEvent(float newScale)
 void PinnedMessageWidget::mousePressEvent(QMouseEvent *event)
 {
     // ignore to disable the parent's right click menu
+}
+
+void PinnedMessageWidget::setPinnedMessage(
+    const std::optional<TwitchChannel::PinnedMessage> &pin,
+    TwitchChannel *channel)
+{
+    this->setChannel(pin ? channel : nullptr);
+}
+
+bool PinnedMessageWidget::hasPinnedMessage() const
+{
+    return this->channel_ && this->channel_->getPinnedMessage() &&
+           this->userToggled_.value_or(true);
+}
+
+void PinnedMessageWidget::setToggleButtonVisible(bool visible)
+{
+    this->toggleButton_->setVisible(visible);
+}
+
+void PinnedMessageWidget::refreshLayout()
+{
+    this->refresh();
 }
 
 }  // namespace chatterino

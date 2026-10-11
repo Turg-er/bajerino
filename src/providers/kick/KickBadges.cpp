@@ -5,6 +5,9 @@
 
 #include <boost/unordered/unordered_flat_map.hpp>
 #include <magic_enum/magic_enum.hpp>
+#include <QCache>
+
+#include <algorithm>
 
 namespace {
 
@@ -109,6 +112,9 @@ BadgeNameData nameDataFor(BadgeID id)
     return {};
 }
 
+using V2BadgeCache =
+    boost::unordered_flat_map<QString, std::weak_ptr<const Emote>>;
+
 using CacheData = std::pair<EmotePtr, MessageElementFlag>;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -209,19 +215,22 @@ std::pair<EmotePtr, MessageElementFlag> KickBadges::lookup(
     return entry;
 }
 
+}  // namespace chatterino
+
+namespace chatterino {
+
 std::pair<EmotePtr, MessageElementFlag> KickBadges::getV2Cached(
     BoostJsonObject badgeObj)
 {
-    static boost::unordered_flat_map<QString, EmotePtr> cache;
     assertInGuiThread();
+    static V2BadgeCache cache;
+    static size_t newEntriesSinceSweep = 0;
 
     auto imageUrl = badgeObj["image_url"].toQString();
-    auto it = cache.find(imageUrl);
-    if (it != cache.end())
+    if (imageUrl.isEmpty())
     {
-        return {it->second, MessageElementFlag::BadgeVanity};
+        return {};
     }
-
     QString name;
     auto origName = badgeObj["name"].toStringView();
     if (origName == "level")
@@ -235,6 +244,38 @@ std::pair<EmotePtr, MessageElementFlag> KickBadges::getV2Cached(
                                  static_cast<qsizetype>(origName.size()));
     }
 
+    const auto key = QString::number(imageUrl.size()) + u':' + imageUrl + name;
+    auto it = cache.find(key);
+    if (it != cache.end())
+    {
+        if (auto emote = it->second.lock())
+        {
+            return {std::move(emote), MessageElementFlag::BadgeVanity};
+        }
+        cache.erase(it);
+    }
+
+    constexpr size_t CACHE_SWEEP_INTERVAL = 128;
+    constexpr size_t CACHE_SWEEP_MIN_SIZE = 256;
+    if (++newEntriesSinceSweep >= CACHE_SWEEP_INTERVAL)
+    {
+        newEntriesSinceSweep = 0;
+        if (cache.size() >= CACHE_SWEEP_MIN_SIZE)
+        {
+            for (auto entry = cache.begin(); entry != cache.end();)
+            {
+                if (entry->second.expired())
+                {
+                    entry = cache.erase(entry);
+                }
+                else
+                {
+                    ++entry;
+                }
+            }
+        }
+    }
+
     auto emote = std::make_shared<const Emote>(Emote{
         .name = {name},
         .images =
@@ -243,50 +284,49 @@ std::pair<EmotePtr, MessageElementFlag> KickBadges::getV2Cached(
             },
         .tooltip = Tooltip{name},
     });
-    cache.emplace(imageUrl, emote);
+    if (cache.size() >= 1024)
+    {
+        cache.erase(cache.begin());
+    }
+    cache.emplace(key, std::weak_ptr<const Emote>{emote});
     return {emote, MessageElementFlag::BadgeVanity};
 }
 
 EmotePtr KickBadges::lookupSubGifter(unsigned amount)
 {
-    static std::map<unsigned, EmotePtr> fullCache;
-    static auto fixpoints = makeGiftFixpoints();
-
     assertInGuiThread();
-
-    auto fullIt = fullCache.find(amount);
-    if (fullIt != fullCache.end())
+    static QCache<unsigned, EmotePtr> cache(256);
+    if (const auto *cached = cache.object(amount))
     {
-        return fullIt->second;
+        return *cached;
     }
-
-    auto fixpointsIt = std::ranges::lower_bound(
-        fixpoints, amount, std::less<>{}, [](const auto &it) {
-            return it.first;
-        });
-    if (fixpointsIt != fixpoints.begin() &&
-        (fixpointsIt == fixpoints.end() || fixpointsIt->first != amount))
+    static constexpr unsigned tiers[] = {
+        1,   5,   10,  25,   50,   100,  150,  200,  250, 300,
+        350, 400, 450, 500,  550,  600,  650,  700,  750, 800,
+        850, 900, 950, 1000, 2000, 3000, 4000, 5000,
+    };
+    auto tier = std::ranges::upper_bound(tiers, amount);
+    if (tier == std::begin(tiers))
     {
-        --fixpointsIt;
+        return {};
     }
-    assert(fixpointsIt != fixpoints.end());
-    if (fixpointsIt->first > amount)
-    {
-        return nullptr;
-    }
-    QString name = u"Gifted " % QString::number(amount) % u" sub";
-    if (amount != 1)
-    {
-        name += 's';
-    }
-    fullIt = fullCache
-                 .emplace(amount, std::make_shared<const Emote>(Emote{
-                                      .name = {name},
-                                      .images = fixpointsIt->second,
-                                      .tooltip = Tooltip{name},
-                                  }))
-                 .first;
-    return fullIt->second;
+    const auto number = QString::number(*--tier);
+    const auto name = QStringLiteral("Gifted %1 %2")
+                          .arg(amount)
+                          .arg(amount == 1 ? "sub" : "subs");
+    auto badge = std::make_shared<const Emote>(Emote{
+        .name = EmoteName{name},
+        .images =
+            ImageSet{
+                Image::fromUrl({u":/kick/badges/gift-" % number % u"-18.webp"},
+                               1., {18, 18}),
+                Image::fromUrl({u":/kick/badges/gift-" % number % u"-36.webp"},
+                               .5, {36, 36}),
+            },
+        .tooltip = Tooltip{name},
+    });
+    cache.insert(amount, new EmotePtr(badge));
+    return badge;
 }
 
 }  // namespace chatterino

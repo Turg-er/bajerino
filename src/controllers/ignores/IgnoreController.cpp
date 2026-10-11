@@ -50,7 +50,7 @@ QString makeRegexReplacement(QStringView source,
     QVarLengthArray<QStringCapture> backReferences;
 
     SizeType replacementLength = replacement.size();
-    for (SizeType i = 0; i < replacementLength - 1; i++)
+    for (SizeType i = 0; i + 1 < replacementLength; i++)
     {
         if (replacement[i] != u'\\')
         {
@@ -252,10 +252,11 @@ void processIgnorePhrases(const std::vector<IgnorePhrase> &phrases,
             {
                 if (word == emote.first.string)
                 {
-                    if (emote.second == nullptr)
+                    if (emote.first.string.isEmpty() || emote.second == nullptr)
                     {
                         qCDebug(chatterinoTwitch)
                             << "emote null" << emote.first.string;
+                        continue;
                     }
                     twitchSpecials.push_back(TwitchSpecialOccurrence{
                         .start = static_cast<int>(startIndex + pos),
@@ -315,7 +316,7 @@ void processIgnorePhrases(const std::vector<IgnorePhrase> &phrases,
                 continue;
             }
             QRegularExpression emoteregex(
-                "\\b" + data->name.string + "\\b",
+                "\\b" + QRegularExpression::escape(data->name.string) + "\\b",
                 QRegularExpression::UseUnicodePropertiesOption);
             auto match = emoteregex.matchView(midExtendedRef);
             if (match.hasMatch())

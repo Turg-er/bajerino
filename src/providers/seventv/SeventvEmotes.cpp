@@ -83,10 +83,12 @@ struct CreateEmoteResult {
 
 EmotePtr cachedOrMake(Emote &&emote, const EmoteId &id)
 {
-    static std::unordered_map<EmoteId, std::weak_ptr<const Emote>> cache;
+    static WeakEmoteCache cache;
     static std::mutex mutex;
+    static size_t newEntriesSinceSweep = 0;
 
-    return cachedOrMakeEmotePtr(std::move(emote), cache, mutex, id);
+    return cachedOrMakeEmotePtr(std::move(emote), cache, mutex,
+                                newEntriesSinceSweep, id);
 }
 
 /**
@@ -467,8 +469,10 @@ void SeventvEmotes::loadChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << channelId << ", error" << errorString;
                             shared->addSystemMessage(
-                                u"Failed to fetch 7TV channel "_s
-                                "emotes. (Error: %1)".arg(errorString));
+                                QStringLiteral("Failed to fetch 7TV "
+                                               "channel emotes. "
+                                               "(Error: %1)")
+                                    .arg(errorString));
                             if (cacheHit)
                             {
                                 shared->addSystemMessage(
@@ -600,7 +604,8 @@ void SeventvEmotes::loadKickChannelEmotes(
                                 << "Error fetching 7TV emotes for channel"
                                 << userID << ", error" << errorString;
                             shared->addSystemMessage(
-                                u"Failed to fetch 7TV channel emotes. (Error: %1)"_s
+                                QStringLiteral("Failed to fetch 7TV channel "
+                                               "emotes. (Error: %1)")
                                     .arg(errorString));
                             if (cacheHit)
                             {
@@ -794,6 +799,23 @@ ImageSet SeventvEmotes::createImageSet(const QJsonObject &emoteData,
             Image::fromUrl({QString("https:%1/%2").arg(baseUrl, name)}, scale,
                            {static_cast<int>(width), file["height"].toInt(16)});
         image->setFrameCacheLifetime(SEVENTV_DECODED_FRAME_CACHE_LIFETIME);
+        if (targetFormat == u"AVIF"_s && !useStatic)
+        {
+            for (const auto &alternativeItem : files)
+            {
+                const auto alternative = alternativeItem.toObject();
+                if (alternative["format"].toString() == u"WEBP"_s &&
+                    alternative["width"] == file["width"] &&
+                    alternative["height"] == file["height"] &&
+                    !alternative["name"].toString().isEmpty())
+                {
+                    image->setPickerUrl(
+                        {QString("https:%1/%2")
+                             .arg(baseUrl, alternative["name"].toString())});
+                    break;
+                }
+            }
+        }
 
         sizes.at(nextSize) = image;
         nextSize++;

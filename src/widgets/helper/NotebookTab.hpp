@@ -13,6 +13,7 @@
 #include <pajlada/signals/signalholder.hpp>
 #include <QColor>
 #include <QMenu>
+#include <QPixmap>
 #include <QPropertyAnimation>
 
 #include <memory>
@@ -29,7 +30,8 @@ class NotebookTab : public Button
     Q_OBJECT
 
 public:
-    explicit NotebookTab(Notebook *notebook);
+    enum class Role { Page, GroupHeader };
+    explicit NotebookTab(Notebook *notebook, Role role = Role::Page);
 
     void refreshAndCommitSize(bool notify);
     void commitSize(bool notify);
@@ -60,6 +62,9 @@ public:
 
     void setInLastRow(bool value);
     void setTabLocation(NotebookTabLocation location);
+    void setVisibleEdgeFlags(bool first, bool last);
+    void setAlwaysVisible(bool value);
+    bool isAlwaysVisible() const;
 
     /**
      * @brief Sets the live status of this tab
@@ -106,6 +111,22 @@ public:
 
     void growWidth(int width);
 
+    Role role() const;
+    const QString &groupId() const;
+    void setGroupId(const QString &groupId);
+    int ungroupedIndex() const;
+    void setUngroupedIndex(int index);
+    bool setGroupHeaderState(const QString &title, int memberCount,
+                             bool collapsed, bool selected, bool live,
+                             HighlightState highlightState,
+                             const QString &colorMode, const QColor &color,
+                             const QString &icon, const QString &customIconPath,
+                             bool muted, bool openMenuOnClick,
+                             bool forceCustomIconReload = false);
+    void setGroupDropTarget(bool value);
+    void setGroupMuted(bool value, bool notifyNotebook = true);
+    bool isGroupMuted() const;
+
 protected:
     void themeChangedEvent() override;
 
@@ -134,6 +155,7 @@ private:
     void showRenameDialog();
 
     bool hasXButton() const;
+    bool reservesXButtonSpace() const;
     bool shouldDrawXButton() const;
     QRect getXRect() const;
     void titleUpdated();
@@ -166,6 +188,23 @@ private:
 
     Notebook *notebook_;
 
+    Role role_ = Role::Page;
+    QString groupId_;
+    int ungroupedIndex_ = -1;
+    int groupMemberCount_ = 0;
+    bool groupCollapsed_ = false;
+    bool groupMuted_ = false;
+    bool groupDropTarget_ = false;
+    QString groupColorMode_ = QStringLiteral("theme");
+    QString groupIcon_ = QStringLiteral("folder");
+    QString groupCustomIconPath_;
+    QPixmap groupCustomIcon_;
+    bool dragMoved_ = false;
+    bool dragActive_ = false;
+    bool groupDragRequested_ = false;
+    bool selectionDeferred_ = false;
+    QPoint dragStartGlobal_;
+
     QString customTitle_;
     QColor customTabColor_;
     QString defaultTitle_;
@@ -176,14 +215,19 @@ private:
     bool mouseOverX_{};
     bool mouseDownX_{};
     bool isInLastRow_{};
+    bool isFirstVisible_{};
+    bool isLastVisible_{};
+    int mouseWheelDelta_ = 0;
     NotebookTabLocation tabLocation_ = NotebookTabLocation::Top;
 
     HighlightState highlightState_ = HighlightState::None;
     bool highlightEnabled_ = true;
-    QAction *highlightNewMessagesAction_;
+    QAction *highlightNewMessagesAction_{};
 
     bool isLive_{};
     bool isRerun_{};
+    bool alwaysVisible_{};
+    QAction *alwaysVisibleAction_{};
 
     int growWidth_ = 0;
     QSize computedMinimumSize;
@@ -192,6 +236,7 @@ private:
     bool queuedMoveAnimated = false;
 
     QMenu menu_;
+    QMenu *tabGroupMenu_{};
     QMenu *closeMultipleTabsMenu_{};
     QAction *closeTabsBeforeSelectedAction_{};
     QAction *closeTabsAfterSelectedAction_{};

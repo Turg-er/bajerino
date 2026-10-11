@@ -7,11 +7,18 @@
 #include "Application.hpp"
 #include "common/Args.hpp"
 #include "common/Env.hpp"
+#include "common/network/NetworkRequest.hpp"
+#include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
 #include "common/Version.hpp"
+#include "controllers/accounts/AccountController.hpp"
 #include "providers/NetworkConfigurationProvider.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/eventsub/Connection.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchIrcServer.hpp"
+#include "util/PostToThread.hpp"
 #include "util/QMagicEnum.hpp"
 #include "util/RenameThread.hpp"
 
@@ -20,6 +27,7 @@
 #include <boost/asio/ssl/verify_mode.hpp>
 #include <boost/certify/https_verification.hpp>
 #include <QNetworkProxy>
+#include <QUrlQuery>
 #include <twitch-eventsub-ws/session.hpp>
 
 #include <memory>
@@ -285,6 +293,7 @@ void Controller::deleteSubscription(const SubscriptionRequest &request,
 void Controller::setQuitting()
 {
     this->quitting = true;
+    *this->alive = false;
 }
 
 SubscriptionHandle Controller::subscribe(const SubscriptionRequest &request)
@@ -416,6 +425,206 @@ void Controller::reconnectConnection(
     {
         this->subscribe(sub, false, generation);
     }
+}
+
+void Controller::subscriptionRevoked(const QString &subscriptionID,
+                                     const QString &status)
+{
+    if (this->quitting || subscriptionID.isEmpty())
+    {
+        return;
+    }
+    std::lock_guard lock(this->subscriptionsMutex);
+    const auto broadcasterID = [](const SubscriptionRequest &request) {
+        for (const auto &[key, value] : request.conditions)
+        {
+            if (key == "broadcaster_user_id")
+                return value;
+        }
+        return QString{};
+    };
+    for (auto &[request, subscription] : this->subscriptions)
+    {
+        if (subscription.subscriptionID != subscriptionID)
+        {
+            continue;
+        }
+        const auto channelID = broadcasterID(request);
+        const bool alreadyWarned =
+            std::ranges::any_of(this->subscriptions, [&](const auto &entry) {
+                return entry.first.ownerTwitchUserID ==
+                           request.ownerTwitchUserID &&
+                       broadcasterID(entry.first) == channelID &&
+                       entry.second.revocationStatus == status &&
+                       (status != "moderator_removed" ||
+                        (entry.second.state == Subscription::State::Failed &&
+                         !entry.second.moderatorRecoveryAttempted));
+            });
+        subscription.revocationStatus = status;
+        if (auto connection = subscription.connection.lock())
+        {
+            if (auto *listener =
+                    dynamic_cast<Connection *>(connection->getListener()))
+            {
+                listener->markRequestUnsubscribed(request);
+            }
+        }
+        subscription.subscriptionID.clear();
+        subscription.connection.reset();
+        subscription.retryTimer.reset();
+        subscription.generation = ++this->nextSubscriptionGeneration;
+        subscription.state = Subscription::State::Failed;
+        if (subscription.refCount == 0)
+        {
+            this->subscriptions.erase(request);
+            return;
+        }
+        if (alreadyWarned && status != "authorization_revoked")
+            return;
+        postToThread([this, alive = this->alive, request,
+                      generation = subscription.generation,
+                      userID = request.ownerTwitchUserID, channelID, status] {
+            if (!*alive)
+                return;
+            if (auto *app = tryGetApp(); app && !isAppAboutToQuit())
+            {
+                if (status == "moderator_removed")
+                {
+                    this->checkModeratorAccess(request, generation);
+                }
+                else if (status == "authorization_revoked")
+                {
+                    app->getAccounts()->twitch.validateCurrentAccount(userID);
+                }
+                else
+                {
+                    const auto account =
+                        app->getAccounts()->twitch.getCurrent();
+                    if (account->isAnon() || account->getUserId() != userID)
+                        return;
+                    auto channel =
+                        app->getTwitch()->getChannelOrEmptyByID(channelID);
+                    const auto message =
+                        QStringLiteral(
+                            "Twitch stopped sending some live updates "
+                            "(%1). Some features may stop working.")
+                            .arg(status);
+                    if (!channel->isEmpty())
+                        channel->addSystemMessage(message);
+                    else if (channelID.isEmpty())
+                        app->getTwitch()->addGlobalSystemMessage(message);
+                }
+            }
+        });
+        return;
+    }
+}
+
+void Controller::checkModeratorAccess(const SubscriptionRequest &request,
+                                      uint64_t generation)
+{
+    auto *app = tryGetApp();
+    if (!app || this->quitting || isAppAboutToQuit())
+        return;
+    auto account = app->getAccounts()->twitch.getCurrent();
+    if (account->isAnon() || account->getUserId() != request.ownerTwitchUserID)
+        return;
+    QString channelID;
+    for (const auto &[key, value] : request.conditions)
+        if (key == "broadcaster_user_id")
+            channelID = value;
+    auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+        app->getTwitch()->getChannelOrEmptyByID(channelID));
+    if (!channel || channelID.isEmpty())
+        return;
+    const auto token = account->getOAuthToken();
+    const auto checkedAt = QDateTime::currentDateTimeUtc();
+    const auto roleRevision = channel->moderatorStatusRevision();
+    auto isCurrent = [this, alive = this->alive, account, token, request,
+                      generation, weak = channel->weakFromThis()] {
+        if (!*alive || !tryGetApp() || isAppAboutToQuit() ||
+            getApp()->getAccounts()->twitch.getCurrent() != account ||
+            account->getOAuthToken() != token)
+            return std::shared_ptr<TwitchChannel>{};
+        auto channel = weak.lock();
+        if (!channel)
+            return channel;
+        std::lock_guard lock(this->subscriptionsMutex);
+        const auto it = this->subscriptions.find(request);
+        return it != this->subscriptions.end() &&
+                       it->second.generation == generation &&
+                       it->second.refCount != 0 &&
+                       it->second.state == Subscription::State::Failed
+                   ? channel
+                   : std::shared_ptr<TwitchChannel>{};
+    };
+    auto apply = [this, account, channelID, checkedAt, roleRevision,
+                  isCurrent](bool moderator) {
+        auto channel = isCurrent();
+        if (!channel || (channel->moderatorStatusRevision() != roleRevision &&
+                         channel->isMod() != moderator))
+            return;
+        if (moderator)
+        {
+            std::lock_guard lock(this->subscriptionsMutex);
+            for (auto &[candidate, subscription] : this->subscriptions)
+            {
+                if (candidate.ownerTwitchUserID != account->getUserId() ||
+                    subscription.state != Subscription::State::Failed ||
+                    subscription.refCount == 0 ||
+                    subscription.revocationStatus != "moderator_removed" ||
+                    subscription.moderatorRecoveryAttempted ||
+                    !std::ranges::any_of(
+                        candidate.conditions, [&](const auto &condition) {
+                            return condition.first == "broadcaster_user_id" &&
+                                   condition.second == channelID;
+                        }))
+                    continue;
+                subscription.moderatorRecoveryAttempted = true;
+                subscription.state = Subscription::State::Subscribing;
+                subscription.backoff.reset();
+                subscription.generation = ++this->nextSubscriptionGeneration;
+                boost::asio::post(
+                    this->ioContext,
+                    [this, candidate, generation = subscription.generation] {
+                        this->subscribe(candidate, false, generation);
+                    });
+            }
+        }
+        channel->setKnownModeratorStatus(account->getUserName(), moderator,
+                                         checkedAt);
+    };
+    QUrl url(QStringLiteral("https://api.twitch.tv/helix/chat/chatters"));
+    QUrlQuery query;
+    query.addQueryItem("broadcaster_id", channelID);
+    query.addQueryItem("moderator_id", account->getUserId());
+    query.addQueryItem("first", "1");
+    url.setQuery(query);
+    NetworkRequest(url, NetworkRequestType::Get)
+        .useProxy()
+        .timeout(5000)
+        .maximumResponseSize(64 * 1024)
+        .followRedirects(false)
+        .header("Client-ID", account->getOAuthClient())
+        .header("Authorization", "Bearer " + token)
+        .onSuccess([apply](const auto &result) {
+            if (result.status() == 200 && result.parseJson()["data"].isArray())
+                apply(true);
+        })
+        .onError([apply, isCurrent](const auto &result) {
+            if (result.status() == 403)
+                apply(false);
+            else if (result.status() == 401 && isCurrent())
+                getApp()->getAccounts()->twitch.validateCurrentAccount();
+        })
+        .execute();
+}
+
+void DummyController::reconnectConnection(
+    std::unique_ptr<lib::Listener> /* connection */,
+    const std::optional<std::string> & /* reconnectURL */,
+    const std::unordered_set<SubscriptionRequest> & /* subs */)
+{
 }
 
 void Controller::debug()

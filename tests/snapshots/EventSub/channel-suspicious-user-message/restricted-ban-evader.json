@@ -164,7 +164,7 @@
                 {
                     "color": "Text",
                     "fallbackColor": "Text",
-                    "flags": "Text|Mention",
+                    "flags": "Text|Username|Mention",
                     "link": {
                         "type": "None",
                         "value": ""

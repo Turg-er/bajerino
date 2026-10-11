@@ -7,7 +7,10 @@
 #include <QObject>
 #include <QTimer>
 
+#include <functional>
 #include <memory>
+#include <optional>
+#include <stop_token>
 
 class QNetworkReply;
 
@@ -43,12 +46,14 @@ private:
     void writeToCache(const QByteArray &bytes) const;
 
     std::shared_ptr<NetworkData> data_;
-    QNetworkReply *reply_{};  // parent: default (accessManager)
-    QTimer *timer_{};         // parent: this
+    QNetworkReply *reply_{};
+    QTimer *timer_{};
+    std::optional<std::stop_callback<std::function<void()>>> cancellation_;
 
     // NOLINTNEXTLINE(readability-redundant-access-specifiers)
 private Q_SLOTS:
     void timeout();
+    void responseTooLarge();
     void finished();
 };
 

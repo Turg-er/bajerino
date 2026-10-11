@@ -38,7 +38,7 @@ jobs:
         run: |
           sudo apt update
           sudo DEBIAN_FRONTEND=noninteractive apt -y --no-install-recommends install \
-            libbenchmark-dev gcovr gnupg
+            libbenchmark-dev gcovr gnupg libwebp-dev libvpx-dev libyuv-dev libsecret-1-dev libwebkit2gtk-4.1-dev libjson-glib-dev ffmpeg
 
       - name: Install httpbox
         run: |

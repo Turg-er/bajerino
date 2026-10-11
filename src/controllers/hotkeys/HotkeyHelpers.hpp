@@ -21,4 +21,11 @@ std::optional<ActionDefinition> findHotkeyActionDefinition(
 // convert key_enter to key_return so that both keys function the same. preserves multi-key sequences and combinations.
 QKeySequence normalizeKeySequence(const QKeySequence &seq);
 
+std::optional<Qt::Key> physicalNumberRowKey(const QString &platformName,
+                                            int logicalKey,
+                                            quint32 nativeScanCode,
+                                            quint32 nativeVirtualKey);
+std::vector<QString> remapIndexedHotkeyArguments(
+    const std::vector<QString> &arguments, const std::vector<int> &oldToNew);
+
 }  // namespace chatterino

@@ -38,6 +38,10 @@ case "$ubuntu_release" in
         ;;
 esac
 
+# Video codecs are linked statically by the release workflow. WebP, secure
+# credentials and the isolated TikTok browser use distribution libraries.
+dependencies="$dependencies, libwebpdemux2, libsecret-1-0, libwebkit2gtk-4.1-0 (>= 2.42), libjson-glib-1.0-0"
+
 echo "Building Ubuntu .deb file on '$ubuntu_release'"
 echo "Dependencies: $dependencies"
 

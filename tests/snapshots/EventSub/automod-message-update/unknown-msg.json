@@ -37,5 +37,156 @@
         "user_name": "nerixyz"
     },
     "output": [
+        {
+            "channelName": "pajlada",
+            "count": 1,
+            "displayName": "nerixyz",
+            "elements": [
+                {
+                    "color": "System",
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatSmall",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "Swearing",
+                        "·",
+                        "Level",
+                        "4"
+                    ]
+                },
+                {
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "LinebreakElement"
+                },
+                {
+                    "element": {
+                        "color": "System",
+                        "flags": "Timestamp",
+                        "link": {
+                            "type": "None",
+                            "value": ""
+                        },
+                        "style": "TimestampMedium",
+                        "tooltip": "",
+                        "trailingSpace": true,
+                        "type": "TextElement",
+                        "words": [
+                            "12:31"
+                        ]
+                    },
+                    "flags": "Timestamp",
+                    "format": "",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "time": "12:31:47",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TimestampElement"
+                },
+                {
+                    "color": "Text",
+                    "fallbackColor": "Text",
+                    "flags": "Text|Username|Mention|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatMedium",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "MentionElement",
+                    "userColor": "Text",
+                    "userLoginName": "nerixyz",
+                    "words": [
+                        "nerixyz:"
+                    ]
+                },
+                {
+                    "color": "Text",
+                    "flags": "Text",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatMedium",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "ass"
+                    ]
+                },
+                {
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "LinebreakElement"
+                },
+                {
+                    "color": "System",
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatSmall",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "Approved",
+                        "by",
+                        "uint128"
+                    ]
+                }
+            ],
+            "externalBadges": [
+            ],
+            "flags": "PubSub|AutoMod|AutoModOffendingMessageHeader|AutoModOffendingMessage|EventSub|ModerationAction|InvalidReplyTarget",
+            "frozen": true,
+            "highlightMatches": [
+                {
+                    "color": "#80ffb140",
+                    "length": 3,
+                    "paintID": "",
+                    "pattern": "ass",
+                    "rule": "Twitch AutoMod\nSwearing · Level 4",
+                    "source": "automod",
+                    "start": 0,
+                    "style": "Fill"
+                }
+            ],
+            "id": "automod_19d067ff-89b5-4790-a720-97599894eb6b",
+            "localizedName": "",
+            "loginName": "nerixyz",
+            "messageText": "ass",
+            "searchText": "pajlada nerixyz ass Swearing · Level 4 Approved",
+            "serverReceivedTime": "2024-05-14T12:31:47Z",
+            "timeoutUser": "",
+            "twitchBadgeInfos": {
+            },
+            "twitchBadges": [
+            ],
+            "userID": "129546453",
+            "usernameColor": "#ff000000"
+        }
     ]
 }

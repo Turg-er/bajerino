@@ -5,6 +5,7 @@
 #pragma once
 
 #include "buttons/SvgButton.hpp"
+#include "common/ChatterinoSetting.hpp"
 #include "widgets/BaseWindow.hpp"
 
 #include <QPoint>
@@ -25,8 +26,22 @@ public:
     /// If closeAutomatically is set, the window will close when losing focus,
     /// and the window will be frameless.
     DraggablePopup(bool closeAutomatically, QWidget *parent);
+    ~DraggablePopup() override;
 
 protected:
+    enum class ResizeMode { Setting, Always };
+
+    void enableResize(QSizeSetting &setting, QSize defaultSize = {},
+                      bool rememberSize = true,
+                      ResizeMode resizeMode = ResizeMode::Setting);
+    bool hasCustomSize() const;
+    QSize preferredSize(QSize fallback) const;
+    void applyPopupSize(QSize suggestedSize);
+    void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void scaleChangedEvent(float scale) override;
+    bool event(QEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
@@ -50,7 +65,17 @@ protected:
     bool ensurePinned();
 
 private:
-    // isMoving_ is set to true if the user is holding the left mouse button down and has moved the mouse a small amount away from the original click point (startPosDrag_)
+    bool resizeEnabled() const;
+    void savePopupSize();
+    void positionSizeGrip();
+    QSizeSetting *sizeSetting_ = nullptr;
+    QWidget *sizeGrip_ = nullptr;
+    QSize customSize_;
+    bool resizing_ = false;
+    bool applyingSize_ = false;
+    bool sizeDirty_ = false;
+    QTimer saveSizeTimer_;
+
     bool isMoving_ = false;
 
     bool closeAutomatically_ = false;
@@ -75,6 +100,11 @@ private:
         .light = ":/buttons/pinEnabled.svg",
     };
     bool isPinned_ = false;
+    QSize defaultSize_;
+    QSize suggestedSize_;
+    bool rememberSize_ = true;
+    ResizeMode resizeMode_ = ResizeMode::Setting;
+    pajlada::Signals::SignalHolder resizeConnections_;
 };
 
 }  // namespace chatterino

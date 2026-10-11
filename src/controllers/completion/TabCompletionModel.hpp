@@ -11,10 +11,14 @@
 #include <QStringListModel>
 
 #include <optional>
+#include <vector>
 
 namespace chatterino {
 
 class Channel;
+namespace completion {
+struct EmoteItem;
+}
 
 /// @brief TabCompletionModel is a QStringListModel intended to provide tab
 /// completion to a ResizingTextInput. The model automatically selects a completion
@@ -36,6 +40,9 @@ public:
     /// @param isFirstWord Whether the completion is the first word in the input
     void updateResults(const QString &query, const QString &fullTextContent,
                        int cursorPosition, bool isFirstWord = false);
+
+    void clearResults();
+    const completion::EmoteItem *emoteAt(int row) const;
 
 private:
     enum class SourceKind {
@@ -73,10 +80,12 @@ private:
 
     std::unique_ptr<completion::Source> buildEmoteSource() const;
     std::unique_ptr<completion::Source> buildUserSource(bool prependAt) const;
-    std::unique_ptr<completion::Source> buildCommandSource() const;
+    std::unique_ptr<completion::Source> buildCommandSource(
+        bool explicitCommand = false) const;
 
     Channel &channel_;
     std::unique_ptr<completion::Source> source_{};
+    std::vector<qsizetype> sourceRows_;
 };
 
 }  // namespace chatterino

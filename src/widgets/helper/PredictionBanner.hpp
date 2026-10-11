@@ -76,6 +76,8 @@ private:
     std::optional<TwitchChannel::PredictionEvent> prediction_;
     QTimer *updateTimer_{};
     QString dismissedPredictionKey_;
+    QString autoDismissScheduledKey_;
+    bool expiryRefreshQueued_ = false;
 
     std::vector<double> previousFractions_;
     std::vector<double> targetFractions_;

@@ -26,20 +26,15 @@ struct Narrow {
     using Type = T;
 };
 template <>
-struct Narrow<unsigned int> : Narrow<int> {
-};
+struct Narrow<unsigned int> : Narrow<int> {};
 template <>
-struct Narrow<long> : Narrow<int> {
-};
+struct Narrow<long> : Narrow<int> {};
 template <>
-struct Narrow<unsigned long> : Narrow<int> {
-};
+struct Narrow<unsigned long> : Narrow<int> {};
 template <>
-struct Narrow<long long> : Narrow<int> {
-};
+struct Narrow<long long> : Narrow<int> {};
 template <>
-struct Narrow<unsigned long long> : Narrow<int> {
-};
+struct Narrow<unsigned long long> : Narrow<int> {};
 
 template <typename T>
 QVariant makeVariantFor(T &&v)
@@ -130,7 +125,8 @@ const AccessorMap &accessorMap()
             {
                 Type::StringList,
                 [](RunContext ctx) {
-                    QStringList badges(static_cast<qsizetype>(
+                    QStringList badges;
+                    badges.reserve(static_cast<qsizetype>(
                         ctx.message.twitchBadges.size()));
                     for (const auto &e : ctx.message.twitchBadges)
                     {
@@ -347,6 +343,15 @@ const AccessorMap &accessorMap()
         {
             u"flags.announcement"_s,
             {Type::Bool, flagAccessor<MessageFlag::Announcement>},
+        },
+
+        {
+            u"flags.emote_only"_s,
+            {Type::Bool, memberAccessor<&Message::emoteOnly>},
+        },
+        {
+            u"flags.moderation_action"_s,
+            {Type::Bool, flagAccessor<MessageFlag::ModerationAction>},
         },
 
         // message.*

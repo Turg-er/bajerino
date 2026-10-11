@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#pragma once
+
 #include "providers/kick/ws/KickWebSocketManager.hpp"
 
 #include <memory>

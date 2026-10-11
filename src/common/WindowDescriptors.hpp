@@ -37,6 +37,8 @@ class IndirectChannel;
  *    This container node would then contain a list of nodes on its own, which could be split nodes or further container nodes
  **/
 
+class IndirectChannel;
+
 // from widgets/Window.hpp
 enum class WindowType;
 
@@ -64,6 +66,8 @@ struct SplitDescriptor {
 
     // Whether "Moderation Mode" (the sword icon) is enabled in this split or not
     bool moderationMode_{false};
+
+    QString autoModChannelFilter_;
 
     std::optional<bool> spellCheckOverride;
 
@@ -110,7 +114,8 @@ struct ContainerNodeDescriptor {
 
     std::vector<NodeDescriptor> items_;
 
-    static ContainerNodeDescriptor loadFromJSON(const QJsonObject &root);
+    static ContainerNodeDescriptor loadFromJSON(const QJsonObject &root,
+                                                unsigned depth = 0);
 
     QJsonObject toJson() const;
 };
@@ -118,12 +123,27 @@ struct ContainerNodeDescriptor {
 struct TabDescriptor {
     QString customTitle_;
     QString customTabColor_;
+    QString groupId_;
+    int ungroupedIndex_ = -1;
     bool selected_{false};
     bool highlightsEnabled_{true};
+    bool alwaysVisible_{false};
 
     std::optional<NodeDescriptor> rootNode_;
 
     static TabDescriptor loadFromJSON(const QJsonObject &tabObj);
+};
+
+struct TabGroupDescriptor {
+    QString id_;
+    QString name_;
+    QString colorMode_;
+    QString color_;
+    QString icon_;
+    QString customIconPath_;
+    bool collapsed_{false};
+    bool muted_{false};
+    bool openMenuOnClick_{false};
 };
 
 struct WindowDescriptor {
@@ -139,6 +159,7 @@ struct WindowDescriptor {
     QRect geometry_;
     std::optional<size_t> popupID;
 
+    std::vector<TabGroupDescriptor> tabGroups_;
     std::vector<TabDescriptor> tabs_;
 };
 

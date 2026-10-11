@@ -6,8 +6,10 @@
 
 #include "controllers/accounts/AccountController.hpp"
 #include "mocks/BaseApplication.hpp"
+#include "mocks/Helix.hpp"
 #include "mocks/Logging.hpp"
 #include "providers/twitch/PubSubManager.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "Test.hpp"
 #include "TwitchChannelTestAccess.hpp"
@@ -34,6 +36,29 @@ public:
         TwitchIrcServer &server, const std::shared_ptr<TwitchChannel> &channel)
     {
         server.channels.insert(channel->getName(), channel);
+    }
+
+    static void setReadPool(TwitchIrcServer &server,
+                            TwitchReadConnectionPool *pool)
+    {
+        server.anonymousReadConnection_.reset(pool);
+    }
+
+    static void handleReadBlock(TwitchIrcServer &server, const QByteArray &raw)
+    {
+        std::unique_ptr<Communi::IrcMessage> message(
+            Communi::IrcMessage::fromData(raw, nullptr));
+        ASSERT_NE(message, nullptr);
+        server.handleReadBlock(message.get());
+    }
+
+    static void restoreReadRoute(TwitchIrcServer &server,
+                                 const std::shared_ptr<TwitchChannel> &channel)
+    {
+        // Suppress connection startup: this test checks routing and identity.
+        server.readConnectionStarted_ = true;
+        channel->clearExpectedReconnectParts();
+        server.reconnectChannel(channel);
     }
 
     static void clearChannels(TwitchIrcServer &server)
@@ -90,6 +115,92 @@ public:
     PubSub pubSub{"wss://127.0.0.1:1"};
     TwitchIrcServer twitch;
 };
+
+class ReadPoolProbe : public TwitchReadConnectionPool
+{
+public:
+    using TwitchReadConnectionPool::TwitchReadConnectionPool;
+    void onChannelCreated(TwitchChannel &channel) override
+    {
+        ++this->added;
+        this->name = channel.getName();
+    }
+    void removeChannel(const QString &name) override
+    {
+        ++this->removed;
+        EXPECT_EQ(name, this->name);
+    }
+    void reconnectChannel(TwitchChannel &) override
+    {
+        ++this->rejoined;
+    }
+    void reconnect() override
+    {
+        ++this->reconnected;
+    }
+    void close() override
+    {
+    }
+    QString name;
+    int added = 0;
+    int removed = 0;
+    int rejoined = 0;
+    int reconnected = 0;
+};
+
+TEST(TwitchIrcServer, BanFallbackPreservesChannelIdentityAndConfiguredMode)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    auto account =
+        std::make_shared<TwitchAccount>("viewer", "token", "client", "123");
+    app.accounts.twitch.accounts.append(account);
+    app.accounts.twitch.currentUsername = "viewer";
+    app.accounts.twitch.load();
+
+    auto channel = std::make_shared<TwitchChannel>(
+        "pajlada", TwitchChannelMode::Authenticated);
+    TwitchIrcServerTestAccess::addAuthenticatedReadChannel(app.twitch, channel);
+    auto *pool = new ReadPoolProbe(&app.twitch);
+    TwitchIrcServerTestAccess::setReadPool(app.twitch, pool);
+
+    for (const auto &ignored :
+         {QByteArray("@target-user-id=123;ban-duration=60 :tmi.twitch.tv "
+                     "CLEARCHAT #pajlada :viewer"),
+          QByteArray(
+              "@target-user-id=456 :tmi.twitch.tv CLEARCHAT #pajlada :other"),
+          QByteArray("@historical=1;msg-id=msg_banned :tmi.twitch.tv NOTICE "
+                     "#pajlada :banned")})
+    {
+        TwitchIrcServerTestAccess::handleReadBlock(app.twitch, ignored);
+        EXPECT_FALSE(channel->usesAnonymousReadConnection());
+        EXPECT_EQ(pool->added, 0);
+    }
+
+    const QByteArray ban(
+        "@target-user-id=123 :tmi.twitch.tv CLEARCHAT #pajlada :viewer");
+    TwitchIrcServerTestAccess::handleReadBlock(app.twitch, ban);
+    EXPECT_TRUE(channel->usesAnonymousReadConnection());
+    EXPECT_TRUE(channel->usesAuthenticatedFeatures());
+    EXPECT_TRUE(channel->canSendMessage());
+    EXPECT_EQ(channel->modeOverride(), TwitchChannelMode::Authenticated);
+    EXPECT_EQ(app.twitch.getOrAddChannel("pajlada"), channel);
+    EXPECT_EQ(app.twitch.getAnonymousChannelOrEmpty("pajlada"), channel);
+    EXPECT_EQ(pool->added, 1);
+    EXPECT_EQ(pool->reconnected, 1);
+
+    TwitchIrcServerTestAccess::handleReadBlock(app.twitch, ban);
+    EXPECT_EQ(pool->added, 1);
+
+    TwitchIrcServerTestAccess::restoreReadRoute(app.twitch, channel);
+    EXPECT_FALSE(channel->usesAnonymousReadConnection());
+    EXPECT_TRUE(channel->usesAuthenticatedFeatures());
+    EXPECT_EQ(channel->modeOverride(), TwitchChannelMode::Authenticated);
+    EXPECT_EQ(app.twitch.getOrAddChannel("pajlada"), channel);
+    EXPECT_TRUE(app.twitch.getAnonymousChannelOrEmpty("pajlada")->isEmpty());
+    EXPECT_EQ(pool->removed, 1);
+}
 
 TEST(TwitchIrcServer, AppliesModeratedChannelInfoWithoutHoldingChannelMutex)
 {

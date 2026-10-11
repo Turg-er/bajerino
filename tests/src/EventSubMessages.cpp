@@ -4,10 +4,12 @@
 
 #include "common/Literals.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/automod/AutoModReviewController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "lib/Snapshot.hpp"
 #include "messages/Message.hpp"
 #include "mocks/BaseApplication.hpp"
+#include "mocks/LinkResolver.hpp"
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
 #include "providers/twitch/eventsub/Connection.hpp"
@@ -181,7 +183,7 @@ const std::map<QString, std::string_view, QCompareCaseInsensitive>
             "cost": 0
         })",
         },
-    };
+};
 
 class MockApplication : public mock::BaseApplication
 {
@@ -211,6 +213,18 @@ public:
         return &this->highlights;
     }
 
+    automod::AutoModReviewController *getAutoModReview() override
+    {
+        return &this->autoModReview;
+    }
+
+    automod::AutoModReviewController autoModReview;
+    ILinkResolver *getLinkResolver() override
+    {
+        return &this->linkResolver;
+    }
+
+    mock::EmptyLinkResolver linkResolver;
     mock::EmptyLogging logging;
     mock::MockTwitchIrcServer twitch;
     AccountController accounts;

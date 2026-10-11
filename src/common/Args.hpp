@@ -15,26 +15,6 @@ namespace chatterino {
 
 class Paths;
 
-/// Command line arguments passed to Chatterino.
-///
-/// All accepted arguments:
-///
-/// Crash recovery:
-///   --crash-recovery
-///   --cr-exception-code code
-///   --cr-exception-message message
-///
-/// Native messaging:
-///   --parent-window
-///   --x-attach-split-to-window=window-id
-///
-/// -v, --verbose
-/// -V, --version
-/// -c, --channels=t:channel1;t:channel2;...
-/// -a, --activate=t:channel
-///     --safe-mode
-///
-/// See documentation on `QGuiApplication` for documentation on Qt arguments like -platform.
 class Args
 {
 public:

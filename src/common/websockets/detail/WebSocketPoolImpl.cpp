@@ -10,7 +10,58 @@
 #include "util/RenameThread.hpp"
 
 #include <boost/certify/https_verification.hpp>
+#include <QFileInfo>
 #include <QStringBuilder>
+#include <QStringList>
+
+namespace {
+#ifdef Q_OS_LINUX
+void loadLinuxSystemCaCertificates(boost::asio::ssl::context &ssl)
+{
+    const QStringList files{
+        qEnvironmentVariable("SSL_CERT_FILE"),
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/etc/ssl/ca-bundle.pem",
+        "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+        "/etc/ssl/cert.pem",
+    };
+    for (const auto &path : files)
+    {
+        if (!QFileInfo(path).isFile())
+        {
+            continue;
+        }
+        boost::system::error_code ec;
+        ssl.load_verify_file(path.toStdString(), ec);
+        if (ec)
+        {
+            qCDebug(chatterinoWebsocket) << "Failed to load CA file" << path;
+        }
+    }
+    const QStringList directories{
+        qEnvironmentVariable("SSL_CERT_DIR"),
+        "/etc/ssl/certs",
+        "/etc/pki/tls/certs",
+        "/etc/pki/ca-trust/extracted/pem",
+    };
+    for (const auto &path : directories)
+    {
+        if (!QFileInfo(path).isDir())
+        {
+            continue;
+        }
+        boost::system::error_code ec;
+        ssl.add_verify_path(path.toStdString(), ec);
+        if (ec)
+        {
+            qCDebug(chatterinoWebsocket)
+                << "Failed to load CA directory" << path;
+        }
+    }
+}
+#endif
+}  // namespace
 
 namespace chatterino::ws::detail {
 
@@ -38,7 +89,15 @@ WebSocketPoolImpl::WebSocketPoolImpl(const QString &shortName)
         this->ssl.set_verify_mode(
             boost::asio::ssl::verify_peer |
             boost::asio::ssl::verify_fail_if_no_peer_cert);
-        this->ssl.set_default_verify_paths();
+        boost::system::error_code verifyPathsError;
+        this->ssl.set_default_verify_paths(verifyPathsError);
+        if (verifyPathsError)
+        {
+            qCWarning(chatterinoWebsocket) << "Failed to load default CA paths";
+        }
+#ifdef Q_OS_LINUX
+        loadLinuxSystemCaCertificates(this->ssl);
+#endif
 
         boost::certify::enable_native_https_server_verification(this->ssl);
     }
@@ -61,9 +120,12 @@ WebSocketPoolImpl::WebSocketPoolImpl(const QString &shortName)
 WebSocketPoolImpl::~WebSocketPoolImpl()
 {
     assert(this->closing);
-    // After 10s, we stop and, through std::thread::~thread, std::terminate will
-    // be called.
-    this->tryShutdown(std::chrono::seconds{10});
+
+    if (!this->tryShutdown(std::chrono::seconds{10}))
+    {
+        this->ioc.stop();
+        this->ioThread->join();
+    }
 }
 
 bool WebSocketPoolImpl::tryShutdown(std::chrono::milliseconds timeout)

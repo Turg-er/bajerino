@@ -14,29 +14,36 @@
 #include "mocks/BaseApplication.hpp"
 #include "mocks/Channel.hpp"
 #include "mocks/EmoteController.hpp"
+#include "mocks/Helix.hpp"
 #include "mocks/TwitchIrcServer.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "Test.hpp"
+#include "util/Crypto.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/Notebook.hpp"
+#include "widgets/splits/PinnedMessageWidget.hpp"
 #include "widgets/splits/Split.hpp"
 
 #include <QApplication>
 #include <QCompleter>
 #include <QDebug>
+#include <QLabel>
 #include <QString>
 
+#include <algorithm>
 #include <tuple>
 
 using namespace chatterino;
+using namespace chatterino::literals;
 using ::testing::Exactly;
 
 namespace {
@@ -163,6 +170,59 @@ public:
 
 }  // namespace
 
+TEST(PinnedMessageWidget, PreservesEncryptedPinsAndManualVisibility)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    app.settings.encryptionKey = u"pin-regression-key"_s;
+    app.settings.alwaysShowPinnedMessage = true;
+    // Exercise expansion with a top-level widget as well as a split child.
+    app.settings.alwaysExpandPinnedMessages = true;
+    auto channel = std::make_shared<TwitchChannel>(u"pajlada"_s);
+    PinnedMessageWidget banner;
+    banner.resize(400, 180);
+    banner.setChannel(channel.get());
+    EXPECT_TRUE(banner.isHidden());
+
+    TwitchChannel::PinnedMessage pin;
+    pin.messageID = u"pin-1"_s;
+    pin.messageText =
+        encryptMessage(u"private pinned message", u"pin-regression-key");
+    pin.startsAt = QDateTime::currentDateTimeUtc();
+    pin.sender.login = u"sender"_s;
+    pin.pinnedBy.login = u"moderator"_s;
+    channel->setPinnedMessage(pin);
+    EXPECT_TRUE(banner.hasPinnedMessage());
+    EXPECT_FALSE(banner.isHidden());
+    const auto labels = banner.findChildren<QLabel *>();
+    EXPECT_TRUE(
+        std::any_of(labels.begin(), labels.end(), [](const auto *label) {
+            return label->text() == u"private pinned message";
+        }));
+    EXPECT_TRUE(
+        std::any_of(labels.begin(), labels.end(), [](const auto *label) {
+            return label->toolTip() == u"Encrypted" && !label->isHidden();
+        }));
+
+    banner.toggleUserPinned();
+    banner.refreshLayout();
+    EXPECT_TRUE(banner.isHidden());
+    EXPECT_FALSE(banner.hasPinnedMessage());
+
+    pin.messageID = u"pin-2"_s;
+    channel->setPinnedMessage(pin);
+    EXPECT_FALSE(banner.isHidden());
+    EXPECT_TRUE(banner.hasPinnedMessage());
+
+    pin.messageID = u"expired-pin"_s;
+    pin.endsAt = QDateTime::currentDateTimeUtc().addSecs(-1);
+    channel->setPinnedMessage(pin);
+    EXPECT_TRUE(banner.isHidden());
+    EXPECT_FALSE(banner.hasPinnedMessage());
+    EXPECT_EQ(channel->getPinnedMessage(), nullptr);
+}
+
 TEST_F(SplitInputCompletionTest, EmoteCompletionPreservesUndoHistory)
 {
     this->input.insertText("don't ping him :paja");
@@ -236,7 +296,7 @@ TEST(SplitInput, ReplyCommandCompletion)
     auto *edit = dynamic_cast<ResizingTextEdit *>(textEdit);
     ASSERT_NE(edit, nullptr);
     mock::MockChannel channel("forsen");
-    edit->setCompleter(new QCompleter(channel.completionModel, edit));
+    edit->setCompleter(new QCompleter(channel.getCompletionModel(), edit));
 
     // Slash and dot commands can be completed in replies
     for (const auto &trigger :
@@ -289,7 +349,7 @@ TEST(SplitInput, EmptyReplyUsernameCompletion)
     auto *edit = dynamic_cast<ResizingTextEdit *>(textEdit);
     ASSERT_NE(edit, nullptr);
     TwitchChannel channel("forsen");
-    edit->setCompleter(new QCompleter(channel.completionModel, edit));
+    edit->setCompleter(new QCompleter(channel.getCompletionModel(), edit));
 
     auto message = std::make_shared<Message>();
     message->displayName = "forsen";
@@ -317,7 +377,7 @@ TEST(SplitInput, ReplyBodyUsernameCompletion)
     ASSERT_NE(edit, nullptr);
     TwitchChannel channel("forsen");
     channel.addRecentChatter("pajlada");
-    edit->setCompleter(new QCompleter(channel.completionModel, edit));
+    edit->setCompleter(new QCompleter(channel.getCompletionModel(), edit));
 
     auto message = std::make_shared<Message>();
     message->displayName = "forsen";

@@ -89,6 +89,15 @@ public:
         return this->getChannelOrEmpty(dirtyChannelName);
     }
 
+    void reconnectChannel(const std::shared_ptr<TwitchChannel> &) override
+    {
+    }
+    bool sendInvisibleMessage(const std::shared_ptr<TwitchChannel> &,
+                              const QString &, const QString &) override
+    {
+        return false;
+    }
+
     void reconnectAnonymousChannels() override
     {
     }

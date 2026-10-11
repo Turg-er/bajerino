@@ -104,7 +104,12 @@ void FfzBadges::load()
                                             .value(badgeIDString)
                                             .toArray())
                 {
-                    auto userIDString = QString::number(user.toInt());
+                    const auto userID = user.toInteger(-1);
+                    if (userID <= 0)
+                    {
+                        continue;
+                    }
+                    auto userIDString = QString::number(userID);
 
                     auto [userBadges, created] = this->userBadges.emplace(
                         std::move(userIDString),

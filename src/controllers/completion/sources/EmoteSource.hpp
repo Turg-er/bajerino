@@ -15,12 +15,19 @@
 #include <memory>
 #include <vector>
 
+namespace chatterino {
+class Emojis;
+struct EmojiData;
+}  // namespace chatterino
+
 namespace chatterino::completion {
 
 struct EmoteItem {
     /// Emote image to show in input popup
     EmotePtr emote{};
-    /// Name to check completion queries against
+    EmojiData *emoji{};
+    const Emojis *emojiProvider{};
+
     QString searchName{};
     /// Name to insert into split input upon tab completing
     QString tabCompletionName{};
@@ -30,6 +37,10 @@ struct EmoteItem {
     QString providerName{};
     /// Whether emote is emoji
     bool isEmoji{};
+
+    bool hasRenderableEmote() const;
+    bool isZeroWidth() const;
+    EmotePtr getEmote() const;
 };
 
 class EmoteSource : public Source
@@ -51,6 +62,9 @@ public:
                         size_t maxCount = 0) const override;
     void addToStringList(QStringList &list, size_t maxCount = 0,
                          bool isFirstWord = false) const override;
+
+    qsizetype tabCompletionCount() const override;
+    const EmoteItem *emoteAtTabCompletionIndex(qsizetype index) const override;
 
     const std::vector<EmoteItem> &output() const;
 

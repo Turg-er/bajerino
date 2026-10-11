@@ -52,6 +52,8 @@ public:
 
     void setSelectedChannel(std::optional<IndirectChannel> channel_);
     IndirectChannel getSelectedChannel() const;
+    void setAutoModChannelFilter(QString channel);
+    QString getAutoModChannelFilter() const;
     bool hasSeletedChannel() const;
 
     void setModeOverrideUi(std::optional<TwitchChannelMode> modeOverride) const;
@@ -94,8 +96,12 @@ private:
 
         detail::AutoCheckedRadioButton *automod;
         QLabel *automodLabel;
+        QLineEdit *automodChannel;
 
         QLineEdit *kickName;
+        QLineEdit *youtubeSource;
+        QLineEdit *tiktokSource;
+        QLabel *tiktokError;
 
         QListWidget *multiView;
         QComboBox *multiIndicatorMode;
@@ -103,6 +109,8 @@ private:
         MicroNotebook *notebook;
         QWidget *twitchPage;
         QWidget *kickPage;
+        QWidget *youtubePage;
+        QWidget *tiktokPage;
         QWidget *multiPage;
     } ui_{};
 
@@ -113,8 +121,6 @@ private:
     ChannelPtr selectedChannel_;
     bool hasSelectedChannel_ = false;
     bool shouldApplyModeOverride_ = false;
-
-    size_t mcChannelIndex = 0;
 
     void ok();
     friend class EventFilter;

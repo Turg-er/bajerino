@@ -15,8 +15,9 @@ class GIFTimer
 {
 public:
     void initialize();
-
     pajlada::Signals::NoArgSignal signal;
+
+    bool shouldAnimate() const;
     long unsigned position()
     {
         return this->position_;

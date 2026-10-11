@@ -15,10 +15,12 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <vector>
 
 namespace chatterino {
@@ -29,6 +31,9 @@ class ImageExpirationPool;
 }  // namespace chatterino
 
 namespace chatterino::detail {
+
+class StreamingGif;
+class PickerImageReservation;
 
 struct Frame {
     QPixmap image;
@@ -52,10 +57,12 @@ public:
     bool empty() const;
     bool animated() const;
     std::optional<QPixmap> current() const;
+    std::optional<QPixmap> first() const;
     /// Returns the size of the first frame, if one has been loaded.
     std::optional<QSize> frameSize() const;
 
 private:
+    friend class chatterino::Image;
     friend class chatterino::ImageExpirationPool;
     struct Storage;
     struct CachedFrames;
@@ -65,8 +72,11 @@ private:
 };
 
 QList<Frame> readFrames(QImageReader &reader, const Url &url,
-                        std::optional<QSize> rescale = std::nullopt);
-void assignFrames(std::weak_ptr<Image> weak, QList<Frame> parsed);
+                        bool firstFrameOnly = false, int maxFrameDimension = 0,
+                        int minimumFrameDuration = 0);
+void assignFrames(std::weak_ptr<Image> weak, QList<Frame> parsed,
+                  std::uint64_t loadGeneration,
+                  std::shared_ptr<PickerImageReservation> reservation = {});
 
 }  // namespace chatterino::detail
 
@@ -75,11 +85,9 @@ namespace chatterino {
 class Image;
 using ImagePtr = std::shared_ptr<Image>;
 
-/// This class is thread safe.
 class Image : public std::enable_shared_from_this<Image>
 {
 public:
-    // Maximum amount of RAM used by the image in bytes.
     static constexpr int maxBytesRam = 20 * 1024 * 1024;
 
     ~Image();
@@ -92,68 +100,126 @@ public:
 
     static ImagePtr fromUrl(const Url &url, qreal scale = 1,
                             QSize expectedSize = {});
+
+    static ImagePtr fromUrlWithMaxFrameDimension(const Url &url,
+                                                 int maxFrameDimension,
+                                                 qreal scale = 1,
+                                                 QSize expectedSize = {});
+
+    static ImagePtr fromStreamingGifUrl(const Url &url, int maxFrameDimension,
+                                        qreal scale = 1,
+                                        QSize expectedSize = {});
+
+    static bool takeStreamingGifRepaint(unsigned long position);
     static ImagePtr fromResourcePixmap(const QPixmap &pixmap, qreal scale = 1);
     static ImagePtr getEmpty();
 
     static ImagePtr fromAutoscaledUrl(const Url &url, uint16_t autoScale);
 
+    static void releaseUnusedCacheEntries();
+
+    ImagePtr getFirstFramePreview() const;
+
+    ImagePtr getPickerAnimation() const;
+
+    ImagePtr getEmotePickerImage(bool still = false, bool smooth = false) const;
+
+    void setPickerUrl(Url url);
+
+    void releasePickerFrames();
+
     const Url &url() const;
     bool loaded() const;
-    // either returns the current pixmap, or triggers loading it (lazy loading)
+
+    bool isLoading() const;
     std::optional<QPixmap> pixmapOrLoad() const;
+
+    std::optional<QPixmap> firstPixmapOrLoad() const;
     void load() const;
+
+    void retryLoad() const;
     qreal scale() const;
     bool isEmpty() const;
+    const QString &failureReason() const;
     int width() const;
     int height() const;
     QSizeF size() const;
     bool animated() const;
     void setFrameCacheLifetime(std::chrono::milliseconds lifetime);
 
+    bool usesOwnAnimationTimer() const;
     bool operator==(const Image &image) = delete;
+    bool operator!=(const Image &image) = delete;
 
 private:
+    static ImagePtr fromUrlCached(const Url &url, qreal scale,
+                                  QSize expectedSize,
+                                  std::optional<uint16_t> autoScale,
+                                  bool firstFrameOnly = false,
+                                  int maxFrameDimension = 0,
+                                  bool streamingGif = false);
+
     Image();
-    Image(const Url &url, qreal scale, QSize expectedSize);
+    Image(const Url &url, qreal scale, QSize expectedSize,
+          bool firstFrameOnly = false, bool pickerCopy = false,
+          int maxFrameDimension = 0, bool streamingGif = false);
     Image(qreal scale);
 
     void setPixmap(const QPixmap &pixmap);
-    void actuallyLoad();
+    void actuallyLoad(bool gifFallback = false);
     void expireFrames();
+    void initializeStreamingGif(QByteArray data, std::uint64_t loadGeneration,
+                                bool gifFallback = false);
+    QString streamingGifFallbackUrl() const;
+    void clearStreamingGif();
+    void updateStreamingGifAccounting();
+    void advanceStreamingGif(unsigned long position);
+    void failStreamingGif(QString reason, std::uint64_t loadGeneration);
+    bool shouldPlayStreamingGif() const;
+    bool hasResidentData() const;
+    int64_t residentMemoryUsage() const;
 
     const Url url_{};
+
+    Url pickerUrl_{};
     qreal scale_{1};
-    /// @brief The expected size of this image once its loaded.
-    ///
-    /// This doesn't represent the actual size (it can be different) - it's
-    /// just an estimation and provided to avoid (large) layout shifts when
-    /// loading images.
-    const QSize expectedSize_{16, 16};
+
+    const qreal cacheScale_{1};
+    const QSize cacheExpectedSize_{16, 16};
+
+    QSize expectedSize_{16, 16};
     std::atomic_bool empty_{false};
 
     bool shouldLoad_{false};
+    bool animated_{false};
 
-    /// Size this image should take when loaded (in both dimensions).
-    ///
-    /// This is used for images that have an unknown scale when they're created
-    /// (i.e. the scale is only known after the image is loaded).
-    ///
-    /// Upon creation, only `expectedSize_` is set to `(autoScale, autoScale)`.
-    /// When the image is loaded, `scale_` is set to `autoScale / actualSize`.
     std::optional<uint16_t> autoScale_;
+    const bool firstFrameOnly_{false};
+    const bool pickerCopy_{false};
+    const int maxFrameDimension_{0};
+    const bool streamingGif_{false};
+    bool emotePicker_ = false;
+    bool smoothPicker_ = false;
+    std::shared_ptr<detail::PickerImageReservation> pickerReservation_;
+    std::stop_source pickerRequest_{std::nostopstate};
 
-    mutable std::chrono::time_point<std::chrono::steady_clock> lastUsed_;
+    bool useGifFallback_{false};
     std::atomic<int64_t> frameCacheLifetimeMs_{0};
+    std::atomic<std::uint64_t> loadGeneration_{0};
+    std::atomic<int> retryCount_{0};
+    mutable std::chrono::time_point<std::chrono::steady_clock> lastUsed_;
 
-    // gui thread only
+    QString failureReason_;
     std::unique_ptr<detail::Frames> frames_;
+    std::unique_ptr<detail::StreamingGif> streamingGifPlayer_;
+    int64_t streamingGifResidentBytesEstimate_ = 0;
 
     friend class ImageExpirationPool;
-    friend void detail::assignFrames(std::weak_ptr<Image>,
-                                     QList<detail::Frame>);
+    friend void detail::assignFrames(
+        std::weak_ptr<Image>, QList<detail::Frame>, std::uint64_t,
+        std::shared_ptr<detail::PickerImageReservation>);
 };
 
-// forward-declarable function that calls Image::getEmpty() under the hood.
 ImagePtr getEmptyImagePtr();
 
 #ifndef DISABLE_IMAGE_EXPIRATION_POOL
@@ -174,28 +240,31 @@ public:
     void addImagePtr(ImagePtr imgPtr);
     void removeImagePtr(Image *rawPtr);
 
-    /**
-     * @brief Frees frame data for all images that ImagePool deems to have expired.
-     *
-     * Expiration is based on last accessed time of the Image, stored in Image::lastUsed_.
-     * Must be ran in the GUI thread.
-     */
     void freeOld();
+
+    void requestBudgetCheck(bool force = false);
+
+    void trackStreamingGif(const ImagePtr &image);
+    void untrackStreamingGif(Image *image);
+    void freeInactiveStreamingGifs();
 
     std::vector<ProviderUsage> getProviderUsageSnapshot();
 
-    /*
-     * Debug function that unloads all images in the pool. This is intended to
-     * test for possible memory leaks from tracked images.
-     */
     void freeAll();
 
-    // Timer to periodically run freeOld()
     QTimer *freeTimer_;
     std::map<Image *, std::weak_ptr<Image>> allImages_;
     std::mutex mutex_;
+
+private:
+    void runBudgetCheck();
+
+    bool enforceBudget(int64_t maxBytes, int64_t targetBytes);
+
+    bool budgetCheckQueued_ = false;
+    QTimer *streamingGifTimer_ = nullptr;
+    std::map<Image *, std::weak_ptr<Image>> streamingGifs_;
 };
 
 #endif
-
 }  // namespace chatterino

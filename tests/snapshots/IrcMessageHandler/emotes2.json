@@ -182,6 +182,9 @@
                     "textElementColor": "Text",
                     "tooltip": "7TVEmote 7TVEmote0w 7TVEmote0w",
                     "tooltips": [
+                        "7TVEmote Tooltip",
+                        "7TVEmote0w Tooltip",
+                        "7TVEmote0w Tooltip"
                     ],
                     "trailingSpace": true,
                     "type": "LayeredEmoteElement"

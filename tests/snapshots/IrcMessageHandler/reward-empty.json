@@ -9,7 +9,7 @@
                 {
                     "element": {
                         "color": "System",
-                        "flags": "Timestamp",
+                        "flags": "Timestamp|ChannelPointRewardHeader",
                         "link": {
                             "type": "None",
                             "value": ""
@@ -22,7 +22,7 @@
                             "0:00"
                         ]
                     },
-                    "flags": "Timestamp",
+                    "flags": "Timestamp|ChannelPointRewardHeader",
                     "format": "",
                     "link": {
                         "type": "None",

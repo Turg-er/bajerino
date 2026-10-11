@@ -12,16 +12,8 @@ class GenericListModel;
 
 namespace chatterino::completion {
 
-/// @brief A Source represents a source for generating completion suggestions.
-///
-/// The source can be queried to update its suggestions and then write the completion
-/// suggestions to a GenericListModel or QStringList depending on the consumer's
-/// requirements.
-///
-/// For example, consider providing emotes for completion. The Source instance
-/// initialized with every available emote in the channel (including  global
-/// emotes). As the user updates their query by typing, the suggestions are
-/// refined and the output model is updated.
+struct EmoteItem;
+
 class Source
 {
 public:
@@ -43,6 +35,9 @@ public:
     /// @param isFirstWord Whether the completion is the first word in the input
     virtual void addToStringList(QStringList &list, size_t maxCount = 0,
                                  bool isFirstWord = false) const = 0;
+    virtual qsizetype tabCompletionCount() const = 0;
+    virtual const EmoteItem *emoteAtTabCompletionIndex(
+        qsizetype index) const = 0;
 };
 
 };  // namespace chatterino::completion

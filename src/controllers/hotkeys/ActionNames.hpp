@@ -24,6 +24,33 @@ inline const std::vector<std::pair<QString, std::vector<QString>>>
         {"Yes", {"withSelection"}},
 };
 
+inline const std::vector<std::pair<QString, std::vector<QString>>>
+    HOTKEY_ARG_USERCARD_MODERATION = {
+        {"Ban", {"ban"}},
+        {"Unban", {"unban"}},
+        {"Timeout button 1", {"1"}},
+        {"Timeout button 2", {"2"}},
+        {"Timeout button 3", {"3"}},
+        {"Timeout button 4", {"4"}},
+        {"Timeout button 5", {"5"}},
+        {"Timeout button 6", {"6"}},
+        {"Timeout button 7", {"7"}},
+        {"Timeout button 8", {"8"}},
+};
+
+inline const std::vector<std::pair<QString, std::vector<QString>>>
+    HOTKEY_ARG_USERCARD_MODERATION_WITH_REASON = {
+        {"Ban", {"ban"}},
+        {"Timeout button 1", {"1"}},
+        {"Timeout button 2", {"2"}},
+        {"Timeout button 3", {"3"}},
+        {"Timeout button 4", {"4"}},
+        {"Timeout button 5", {"5"}},
+        {"Timeout button 6", {"6"}},
+        {"Timeout button 7", {"7"}},
+        {"Timeout button 8", {"8"}},
+};
+
 namespace chatterino {
 
 // ActionDefinition is an action that can be performed with a hotkey
@@ -90,7 +117,27 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
               .displayName = "Usercard: execute moderation action",
               .argumentDescription =
                   "<ban, unban or number of the timeout button to use>",
-              .minCountArguments = 1}},
+              .minCountArguments = 1,
+              .maxCountArguments = 1,
+              .possibleArguments = HOTKEY_ARG_USERCARD_MODERATION,
+              .argumentsPrompt = "Action:",
+              .argumentsPromptHover =
+                  "Uses the saved reason for the selected ban or timeout "
+                  "action.",
+          }},
+         {"execModeratorActionWithReason",
+          ActionDefinition{
+              .displayName = "Usercard: review reason before moderating",
+              .argumentDescription =
+                  "<ban or number of the timeout button to use>",
+              .minCountArguments = 1,
+              .maxCountArguments = 1,
+              .possibleArguments = HOTKEY_ARG_USERCARD_MODERATION_WITH_REASON,
+              .argumentsPrompt = "Action:",
+              .argumentsPromptHover =
+                  "Opens the usercard reason prompt before sending the "
+                  "action.",
+          }},
          {"openProfilePictureMenu",
           ActionDefinition{.displayName =
                                "Usercard: Open profile picture menu"}},
@@ -99,6 +146,7 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
      }},
     {HotkeyCategory::Split,
      {
+         {"toggleChatRecording", ActionDefinition{"Toggle tab recording"}},
          {"changeChannel", ActionDefinition{"Change channel"}},
          {"clearMessages", ActionDefinition{"Clear messages"}},
          {"createClip", ActionDefinition{"Create a clip"}},
@@ -242,6 +290,35 @@ inline const std::map<HotkeyCategory, ActionDefinitionMap> actionNames{
                   },
               .argumentsPrompt = "Action:",
               .argumentsPromptHover = "Direction or index to change context to",
+          }},
+         {"automodReviewApprove",
+          ActionDefinition{"AutoMod Review: Approve selected message"}},
+         {"automodReviewDeny",
+          ActionDefinition{"AutoMod Review: Deny selected message"}},
+         {"automodReviewRetry",
+          ActionDefinition{"AutoMod Review: Retry failed action"}},
+         {"automodReviewOpenUsercard",
+          ActionDefinition{"AutoMod Review: Open selected user's card"}},
+         {"automodReviewCopy",
+          ActionDefinition{"AutoMod Review: Copy selected review details"}},
+         {"automodReviewTimeout",
+          ActionDefinition{"AutoMod Review: Timeout selected user"}},
+         {"automodReviewBan",
+          ActionDefinition{"AutoMod Review: Ban selected user"}},
+         {"automodReviewSelect",
+          ActionDefinition{
+              .displayName = "AutoMod Review: Select message",
+              .argumentDescription = "<previous or next>",
+              .minCountArguments = 1,
+              .maxCountArguments = 1,
+              .possibleArguments =
+                  {
+                      {"Previous", {"previous"}},
+                      {"Next", {"next"}},
+                      {"Previous actionable", {"previous-actionable"}},
+                      {"Next actionable", {"next-actionable"}},
+                  },
+              .argumentsPrompt = "Direction:",
           }},
      }},
     {HotkeyCategory::SplitInput,

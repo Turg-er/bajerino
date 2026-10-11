@@ -31,6 +31,7 @@ using FfzChannelBadgeMap =
 
 namespace ffz::detail {
 
+EmoteMap parseGlobalEmotes(const QJsonObject &jsonRoot);
 EmoteMap parseChannelEmotes(const QJsonObject &jsonRoot);
 
 /// Parse the `user_badge_ids` into a map of User IDs -> Badge IDs

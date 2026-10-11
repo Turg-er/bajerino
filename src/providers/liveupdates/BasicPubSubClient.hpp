@@ -81,16 +81,21 @@ public:
     }
 
 protected:
+    void subscribeImpl(const Subscription &subscription)
+    {
+        this->ws_.sendText(
+            static_cast<Derived *>(this)->encodeSubscription(subscription));
+    }
+
+    void unsubscribeImpl(const Subscription &subscription)
+    {
+        this->ws_.sendText(
+            static_cast<Derived *>(this)->encodeUnsubscription(subscription));
+    }
+
     bool isSubscribed(const Subscription &subscription) const
     {
         return this->subscriptions_.contains(subscription);
-    }
-
-    void subscribeImpl(const Subscription &subscription)
-    {
-        QByteArray encoded =
-            static_cast<Derived *>(this)->encodeSubscription(subscription);
-        this->ws_.sendText(encoded);
     }
 
     /**
@@ -122,13 +127,6 @@ protected:
         static_cast<Derived *>(this)->subscribeImpl(subscription);
 
         return true;
-    }
-
-    void unsubscribeImpl(const Subscription &subscription)
-    {
-        QByteArray encoded =
-            static_cast<Derived *>(this)->encodeUnsubscription(subscription);
-        this->ws_.sendText(encoded);
     }
 
     /**

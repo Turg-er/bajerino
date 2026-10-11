@@ -9,6 +9,7 @@
 #include <QHttpMultiPart>
 
 #include <memory>
+#include <stop_token>
 
 class QJsonArray;
 class QJsonObject;
@@ -56,11 +57,9 @@ public:
     NetworkRequest hideRequestBody() &&;
 
     NetworkRequest payload(const QByteArray &payload) &&;
-    NetworkRequest cache() &&;
-    /// NetworkRequest makes sure that the `caller` object still exists when the
-    /// callbacks are executed. Cannot be used with concurrent() since we can't
-    /// make sure that the object doesn't get deleted while the callback is
-    /// running.
+    NetworkRequest cache(
+        std::function<bool(const QByteArray &)> validator = {}) &&;
+
     NetworkRequest caller(const QObject *caller) &&;
     NetworkRequest header(const char *headerName, const char *value) &&;
     NetworkRequest header(const char *headerName, const QByteArray &value) &&;
@@ -74,8 +73,11 @@ public:
     NetworkRequest headerList(
         const std::vector<std::pair<QByteArray, QByteArray>> &headers) &&;
     NetworkRequest timeout(int ms) &&;
+    NetworkRequest maximumResponseSize(qsizetype bytes) &&;
+    NetworkRequest maximumRedirectsAllowed(int maximum) &&;
     NetworkRequest concurrent() &&;
     NetworkRequest useProxy(bool on = true) &&;
+    NetworkRequest cancelWith(std::stop_token cancellation) &&;
     NetworkRequest multiPart(QHttpMultiPart *payload) &&;
     /**
      * This will change `RedirectPolicyAttribute`.

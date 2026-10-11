@@ -98,42 +98,56 @@ NotificationPage::NotificationPage()
                             auto fileName = QFileDialog::getOpenFileName(
                                 this, tr("Open Sound"), "",
                                 tr("Audio Files (*.mp3 *.wav)"));
-                            getSettings()->notificationPathSound = fileName;
+                            if (!fileName.isEmpty())
+                            {
+                                getSettings()->notificationPathSound = fileName;
+                            }
                         });
                 }
 
                 settings->addStretch(1);
             }
-            auto twitchChannels =
-                tabs.appendTab(new QVBoxLayout, "Selected Channels");
+            for (const auto platform : {Platform::Twitch, Platform::YouTube})
             {
-                twitchChannels.emplace<QLabel>(
-                    "These are the channels for which you will be informed "
-                    "when they go live:");
+                const bool youtube = platform == Platform::YouTube;
+                const QString title =
+                    youtube ? "YouTube channels" : "Twitch channels";
+                auto channels = tabs.appendTab(new QVBoxLayout, title);
+                channels
+                    .emplace<QLabel>(
+                        youtube
+                            ? "Enter a YouTube handle or channel URL. Keep its "
+                              "channel tab open to receive live notifications."
+                            : "These are the channels for which you will be "
+                              "informed when they go live:")
+                    ->setWordWrap(true);
 
                 EditableModelView *view =
-                    twitchChannels
+                    channels
                         .emplace<EditableModelView>(
-                            getApp()->getNotifications()->createModel(
-                                nullptr, Platform::Twitch))
+                            getApp()->getNotifications()->createModel(nullptr,
+                                                                      platform))
                         .getElement();
-                view->setTitles({"Twitch channels"});
-                view->setValidationRegexp(twitchUserNameRegexp());
+                view->setTitles({title});
+                if (!youtube)
+                {
+                    view->setValidationRegexp(twitchUserNameRegexp());
+                }
 
                 view->getTableView()->horizontalHeader()->setSectionResizeMode(
                     QHeaderView::Fixed);
                 view->getTableView()->horizontalHeader()->setSectionResizeMode(
                     0, QHeaderView::Stretch);
 
-                QTimer::singleShot(1, [view] {
+                QTimer::singleShot(1, view, [view] {
                     view->getTableView()->resizeColumnsToContents();
                     view->getTableView()->setColumnWidth(0, 200);
                 });
 
-                // We can safely ignore this signal connection since we own the view
-                std::ignore = view->addButtonPressed.connect([] {
+                std::ignore = view->addButtonPressed.connect([platform] {
                     getApp()->getNotifications()->addChannelNotification(
-                        "channel", Platform::Twitch);
+                        platform == Platform::YouTube ? "@channel" : "channel",
+                        platform);
                 });
             }
         }

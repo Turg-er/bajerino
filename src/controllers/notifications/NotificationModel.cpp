@@ -5,13 +5,16 @@
 #include "controllers/notifications/NotificationModel.hpp"
 
 #include "Application.hpp"
+#include "controllers/notifications/NotificationController.hpp"
+#include "providers/youtube/YouTubeApi.hpp"
 #include "singletons/Settings.hpp"
 #include "util/StandardItemHelper.hpp"
 
 namespace chatterino {
 
-NotificationModel::NotificationModel(QObject *parent)
+NotificationModel::NotificationModel(QObject *parent, Platform platform)
     : SignalVectorModel<QString>(1, parent)
+    , platform_(platform)
 {
 }
 
@@ -19,7 +22,10 @@ NotificationModel::NotificationModel(QObject *parent)
 QString NotificationModel::getItemFromRow(std::vector<QStandardItem *> &row,
                                           const QString &original)
 {
-    return QString(row[0]->data(Qt::DisplayRole).toString());
+    const auto name = row[0]->data(Qt::DisplayRole).toString();
+    return this->platform_ == Platform::YouTube
+               ? YouTubeApi::normalizeSource(name)
+               : name;
 }
 
 // turn a model

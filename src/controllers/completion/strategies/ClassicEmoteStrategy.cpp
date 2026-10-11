@@ -39,7 +39,7 @@ void ClassicEmoteStrategy::apply(const std::vector<EmoteItem> &items,
     // First pass: filter by zero-width only and contains match
     for (const auto &item : items)
     {
-        if (zeroWidthOnly && !item.emote->zeroWidth)
+        if (zeroWidthOnly && !item.isZeroWidth())
         {
             continue;
         }

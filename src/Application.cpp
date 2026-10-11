@@ -9,25 +9,34 @@
 #include "common/Modes.hpp"
 #include "common/Version.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/automod/AutoModReviewController.hpp"
+#include "controllers/chat/ChatAutomationController.hpp"
 #include "controllers/commands/Command.hpp"
 #include "controllers/commands/CommandController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
+#include "controllers/ignores/HiddenUserController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/notifications/NotificationController.hpp"
+#include "controllers/recording/ChatRecordingController.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "controllers/spellcheck/SpellChecker.hpp"
+#include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
+#include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/links/LinkResolver.hpp"
+#include "providers/potat/PotatCommands.hpp"
 #include "providers/pronouns/Pronouns.hpp"
 #include "providers/seventv/SeventvAPI.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/tiktok/TikTokChatServer.hpp"
 #include "providers/twitch/ChannelPointsFarm.hpp"
 #include "providers/twitch/eventsub/Controller.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
+#include "providers/youtube/YouTubeChatServer.hpp"
 #include "singletons/ImageUploader.hpp"
 #include "singletons/NativeMessaging.hpp"
 #ifdef CHATTERINO_HAVE_PLUGINS
@@ -48,6 +57,7 @@
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
+#include "providers/moltorino/MoltorinoDailyMessage.hpp"
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 #include "providers/repetitions/RepeatedMessageDetector.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
@@ -72,6 +82,7 @@
 #include "singletons/Updates.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Helpers.hpp"
+#include "util/MemoryReclaimer.hpp"
 #include "util/PostToThread.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/Split.hpp"
@@ -91,6 +102,7 @@ using namespace chatterino;
 
 const QString BTTV_LIVE_UPDATES_URL = "wss://sockets.betterttv.net/ws";
 const QString SEVENTV_EVENTAPI_URL = "wss://events.7tv.io/v3";
+constexpr int STARTUP_MEMORY_RELIEF_DELAY_MS = 30'000;
 
 std::atomic<bool> STOPPED{false};
 std::atomic<bool> ABOUT_TO_QUIT{false};
@@ -189,17 +201,24 @@ Application::Application(Settings &_settings, const Paths &paths,
     , crashHandler(new CrashHandler(paths))
 
     , commands(new CommandController(paths))
+    , chatAutomations(new ChatAutomationController(paths, this->commands.get()))
+    , chatRecordings(new ChatRecordingController(paths))
     , notifications(new NotificationController)
     , channelPointsFarm(new ChannelPointsFarm)
+    , seventvPaints(new SeventvPaints)
+    , hiddenUsers(new HiddenUserController(_settings.hiddenUsers))
     , highlights(new HighlightController(_settings, this->accounts.get()))
     , twitch(new TwitchIrcServer)
     , ffzBadges(new FfzBadges)
+    , ffzApBadges(new FfzApBadges)
+    , bluzyrinoBadges(new BluzyrinoBadges)
+    , potatCommands(new PotatCommands)
     , bttvBadges(new BttvBadges)
     , seventvBadges(new SeventvBadges)
     , homiesBadges(new HomiesBadges)
     , moltorinoSupporterBadges(new MoltorinoSupporterBadges)
     , repeatedMessageDetector(new RepeatedMessageDetector)
-    , seventvPaints(new SeventvPaints)
+    , autoModReview(new automod::AutoModReviewController)
     , seventvPersonalEmotes(new SeventvPersonalEmotes)
     , userData(new UserDataController(paths))
     , sound(makeSoundController(_settings))
@@ -218,6 +237,9 @@ Application::Application(Settings &_settings, const Paths &paths,
     , pronouns(new pronouns::Pronouns)
     , spellChecker(new SpellChecker)
     , kickChatServer(new KickChatServer)
+    , youtubeChatServer(new YouTubeChatServer)
+    , tiktokChatServer(new TikTokChatServer)
+    , dailyMessage(new MoltorinoDailyMessage)
 #ifdef CHATTERINO_HAVE_PLUGINS
     , plugins(new PluginController(paths))
 #endif
@@ -254,15 +276,18 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
     if (!this->args_.isFramelessEmbed)
     {
-        getSettings()->currentVersion.setValue(CHATTERINO_VERSION);
+        getSettings()->currentVersion.setValue(Version::instance().version());
     }
     this->emotes->initialize();
 
     this->accounts->load();
+    this->autoModReview->initialize();
 
     this->windows->initialize();
 
     this->ffzBadges->load();
+    this->ffzApBadges->initialize();
+    this->bluzyrinoBadges->initialize();
     this->moltorinoSupporterBadges->initialize();
 
     // Load global emotes
@@ -272,6 +297,8 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
     this->twitch->initialize();
     this->kickChatServer->initialize();
+    this->youtubeChatServer->initialize();
+    this->tiktokChatServer->initialize();
 
     // Load live status
     this->notifications->initialize();
@@ -351,12 +378,17 @@ void Application::initialize(Settings &settings, const Paths &paths)
                 tokenQuery.addQueryItem("client_id", clientId);
                 tokenQuery.addQueryItem("client_secret", clientSecret);
                 tokenQuery.addQueryItem("grant_type", "client_credentials");
-                tokenUrl.setQuery(tokenQuery);
-
                 NetworkRequest(tokenUrl, NetworkRequestType::Post)
                     .useProxy()
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .payload(tokenQuery.toString(QUrl::FullyEncoded).toUtf8())
+                    .hideRequestBody()
+                    .maximumResponseSize(1024 * 1024)
                     .timeout(15000)
-                    .onSuccess([](const NetworkResult &res) {
+                    .onSuccess([clientId, clientSecret,
+                                previousToken =
+                                    s.botBadgeAppAccessToken.getValue()](
+                                   const NetworkResult &res) {
                         auto json = res.parseJson();
                         auto token =
                             json.value("access_token").toString().trimmed();
@@ -365,6 +397,15 @@ void Application::initialize(Settings &settings, const Paths &paths)
                         if (!token.isEmpty())
                         {
                             auto &settings = *getSettings();
+                            if (settings.botBadgeClientID.getValue()
+                                        .trimmed() != clientId ||
+                                settings.botBadgeClientSecret.getValue()
+                                        .trimmed() != clientSecret ||
+                                settings.botBadgeAppAccessToken.getValue() !=
+                                    previousToken)
+                            {
+                                return;
+                            }
                             settings.botBadgeAppAccessToken = token;
                             settings.botBadgeAppTokenExpiry =
                                 QDateTime::currentDateTimeUtc()
@@ -391,6 +432,9 @@ void Application::initialize(Settings &settings, const Paths &paths)
 
 void Application::connect()
 {
+    QTimer::singleShot(0, this->chatRecordings.get(), [this] {
+        this->chatRecordings->checkRecovery();
+    });
     assert(this->initialized);
 
     this->twitch->connect();
@@ -405,6 +449,28 @@ int Application::run()
     {
         this->windows->getMainWindow().show();
     }
+
+    getSettings()->enableBTTVChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllBTTVChannelEmotes();
+        },
+        false);
+    getSettings()->enableFFZChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllFFZChannelEmotes();
+        },
+        false);
+    getSettings()->enableSevenTVChannelEmotes.connect(
+        [this] {
+            this->twitch->reloadAllSevenTVChannelEmotes();
+        },
+        false);
+
+    QTimer::singleShot(STARTUP_MEMORY_RELIEF_DELAY_MS, qApp, [] {
+        requestMemoryPressureRelief();
+    });
+
+    this->dailyMessage->start();
 
     return QApplication::exec();
 }
@@ -747,8 +813,68 @@ KickChatServer *Application::getKickChatServer()
     return this->kickChatServer.get();
 }
 
+ChatRecordingController *Application::getChatRecordings()
+{
+    return this->chatRecordings.get();
+}
+
+ChatAutomationController *Application::getChatAutomations()
+{
+    assertInGuiThread();
+    assert(this->chatAutomations);
+
+    return this->chatAutomations.get();
+}
+
+FfzApBadges *Application::getFfzApBadges()
+{
+    assert(this->ffzApBadges);
+    return this->ffzApBadges.get();
+}
+
+BluzyrinoBadges *Application::getBluzyrinoBadges()
+{
+    assert(this->bluzyrinoBadges);
+    return this->bluzyrinoBadges.get();
+}
+
+PotatCommands *Application::getPotatCommands()
+{
+    assertInGuiThread();
+    assert(this->potatCommands);
+    return this->potatCommands.get();
+}
+
+HiddenUserController *Application::getHiddenUsers()
+{
+    assert(this->hiddenUsers);
+    return this->hiddenUsers.get();
+}
+
+automod::AutoModReviewController *Application::getAutoModReview()
+{
+    assertInGuiThread();
+    assert(this->autoModReview);
+    return this->autoModReview.get();
+}
+
+YouTubeChatServer *Application::getYouTubeChatServer()
+{
+    assertInGuiThread();
+    assert(this->youtubeChatServer);
+
+    return this->youtubeChatServer.get();
+}
+
+TikTokChatServer *Application::getTikTokChatServer()
+{
+    assertInGuiThread();
+    return this->tiktokChatServer.get();
+}
+
 void Application::aboutToQuit()
 {
+    this->chatRecordings->shutdown();
     ABOUT_TO_QUIT.store(true);
 
     this->eventSub->setQuitting();
@@ -763,6 +889,11 @@ void Application::aboutToQuit()
 
 void Application::stop()
 {
+    this->nmServer.reset();
+    this->tiktokChatServer.reset();
+    this->dailyMessage.reset();
+    this->chatRecordings.reset();
+    this->youtubeChatServer.reset();
 #ifdef CHATTERINO_HAVE_PLUGINS
     this->plugins.reset();
 #endif
@@ -785,17 +916,21 @@ void Application::stop()
     this->ffzBadges.reset();
     this->moltorinoSupporterBadges.reset();
     this->repeatedMessageDetector.reset();
+    this->ffzApBadges.reset();
+    this->bluzyrinoBadges.reset();
+    this->potatCommands.reset();
     this->homiesBadges.reset();
     this->twitch.reset();
     this->highlights.reset();
     this->channelPointsFarm.reset();
     this->notifications.reset();
-    this->commands.reset();
     this->crashHandler.reset();
     this->seventvAPI.reset();
     this->imageUploader.reset();
     this->toasts.reset();
     this->windows.reset();
+    this->chatAutomations.reset();
+    this->commands.reset();
     this->hotkeys.reset();
     this->eventSub.reset();
     this->accounts.reset();
@@ -835,6 +970,21 @@ IApplication *tryGetApp()
 bool isAppAboutToQuit()
 {
     return ABOUT_TO_QUIT.load();
+}
+
+void requestApplicationQuit()
+{
+    if (auto *app = tryGetApp())
+    {
+        if (auto *recordings = app->getChatRecordings())
+        {
+            recordings->finishBeforeQuit([] {
+                QApplication::exit();
+            });
+            return;
+        }
+    }
+    QApplication::exit();
 }
 
 }  // namespace chatterino

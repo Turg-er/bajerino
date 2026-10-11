@@ -84,6 +84,9 @@ enum class MessageFlag : std::int64_t {
     UncategorizedNotification = (1LL << 47),
     /// The message was detected as ASCII art and has its layout width limited to the default web chat width.
     AsciiArt = (1LL << 48),
+    GigantifiedEmote = (1LL << 49),
+    TwitchGif = (1LL << 50),
+    ExtendedClientNonce = (1LL << 51),
     /// Message is possibly encrypted but could not be decrypted
     MaybeEncrypted = (1LL << 62),
     /// Message was encrypted and successfully decrypted

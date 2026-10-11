@@ -11,6 +11,9 @@
     "boost-interprocess",
     "boost-json",
     "libavif",
+    "libwebp",
+    "libvpx",
+    "libyuv",
     "hunspell",
     "pkgconf",
     {
@@ -23,6 +26,8 @@
         "network",
         "openssl",
         "png",
+        "sql",
+        "sql-sqlite",
         "widgets"
       ]
     },

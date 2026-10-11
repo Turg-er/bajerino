@@ -45,9 +45,7 @@ public:
      * Returns the Chatterino badge for the given user
      */
     std::optional<EmotePtr> getBadge(const UserId &id) override;
-
     EmotePtr getKickBadge(uint64_t kickID) override;
-
     void setKickMapping(const QString &twitchID, uint64_t kickID) override;
 
 private:
@@ -61,6 +59,7 @@ private:
      */
     std::unordered_map<QString, int> badgeMap;
 
+    std::unordered_map<uint64_t, QString> kickToTwitchMapping;
     std::unordered_map<uint64_t, int> kickMapping;
 
     /**

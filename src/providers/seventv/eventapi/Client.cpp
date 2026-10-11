@@ -392,6 +392,35 @@ void Client::onEntitlementCreate(
         }
     }
 
+    if (entitlement.connections.size() >= 2)
+    {
+        QString twitchID;
+        uint64_t kickID = 0;
+        for (const auto &conn : entitlement.connections)
+        {
+            std::visit(variant::Overloaded{
+                           [&](const KickUser &kick) {
+                               kickID = kick.id;
+                           },
+                           [&](const TwitchUser &twitch) {
+                               twitchID = twitch.id;
+                           },
+                       },
+                       conn);
+        }
+        if (!twitchID.isEmpty() && kickID != 0)
+        {
+            postToThread([twitchID, kickID] {
+                auto *app = tryGetApp();
+                if (app)
+                {
+                    app->getChatterinoBadges()->setKickMapping(twitchID,
+                                                               kickID);
+                }
+            });
+        }
+    }
+
     auto *badges = app->getSeventvBadges();
     switch (entitlement.kind)
     {
@@ -422,7 +451,7 @@ void Client::onEntitlementCreate(
                         LastPersonalEmoteAssignment{
                             .connections = entitlement.connections,
                             .emoteSetID = entitlement.refID,
-                        };
+                    };
                 }
                 else
                 {
@@ -460,6 +489,17 @@ void Client::onEntitlementDelete(
         case CosmeticKind::Paint: {
             app->getSeventvPaints()->clearPaintFromUsers(
                 entitlement.refID, entitlement.connections);
+        }
+        break;
+        case CosmeticKind::EmoteSet: {
+            app->getSeventvPersonalEmotes()->unassignUsersFromEmoteSet(
+                entitlement.refID, entitlement.connections);
+            if (this->lastPersonalEmoteAssignment_ &&
+                this->lastPersonalEmoteAssignment_->emoteSetID ==
+                    entitlement.refID)
+            {
+                this->lastPersonalEmoteAssignment_ = std::nullopt;
+            }
         }
         break;
         default:

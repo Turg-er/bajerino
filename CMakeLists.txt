@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22..4.3.2)
+cmake_minimum_required(VERSION 3.24...4.3.2)
 # CMake upgrade notes:
 #  - In CMake >= 3.29, we should deprecate USE_ALTERNATE_LINKER in favour of CMake's CMAKE_LINKER_TYPE
 set(CMAKE_EXPORT_NO_PACKAGE_REGISTRY On) # For rapidjson
@@ -9,6 +9,8 @@ if(POLICY CMP0207)
 endif()
 include(FeatureSummary)
 include(FetchContent)
+set(BAJERINO_LICENSES_DIR "${CMAKE_BINARY_DIR}/third-party-licenses")
+file(MAKE_DIRECTORY "${BAJERINO_LICENSES_DIR}")
 include(CMakeDependentOption)
 
 list(APPEND CMAKE_MODULE_PATH
@@ -35,6 +37,7 @@ option(CHATTERINO_LTO "Enable LTO for all targets" OFF)
 # CMake doesn't detect LTO for some compilers (e.g. clang-cl: https://gitlab.kitware.com/cmake/cmake/-/issues/21635),
 # so this skips the check and assumes LTO works.
 cmake_dependent_option(CHATTERINO_FORCE_LTO "Skip check if LTO is supported" OFF CHATTERINO_LTO OFF)
+option(MOLTORINO_RELEASE_HARDENING "Enable Windows release linker settings" OFF)
 option(CHATTERINO_NO_AVIF_PLUGIN "Disable AVIF plugin" OFF)
 option(CHATTERINO_PLUGINS "Enable ALPHA plugin support in Chatterino" ON)
 option(CHATTERINO_USE_GDI_FONTENGINE "Use the legacy GDI fontengine instead of the new DirectWrite one on Windows (Qt 6.8.0 and later)" ON)
@@ -50,6 +53,27 @@ option(CHATTERINO_UPDATER "Enable update checks" OFF)
 mark_as_advanced(CHATTERINO_UPDATER)
 
 set(CHATTERINO_EXTRA_BUILD_STRING "" CACHE STRING "Provide an extra string to show in the about page under the Bajerino version. This string allows the use of Qt's HTML subset.")
+option(MOLTORINO_YOUTUBE_ACCOUNTS "Enable YouTube accounts" ON)
+option(MOLTORINO_TIKTOK_ACCOUNTS "Enable TikTok accounts" ON)
+option(MOLTORINO_YOUTUBE_DIRECT_READ "Enable direct YouTube chat reading" ON)
+set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID "" CACHE STRING "YouTube OAuth client ID")
+set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET "" CACHE STRING "YouTube OAuth client secret")
+set(MOLTORINO_YOUTUBE_READ_ROOT "" CACHE STRING "YouTube read relay URL")
+if(NOT MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID AND DEFINED ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID})
+    set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID "$ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID}"
+        CACHE STRING "YouTube OAuth client ID" FORCE)
+endif()
+if(NOT MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET AND DEFINED ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET})
+    set(MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET "$ENV{MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET}"
+        CACHE STRING "YouTube OAuth client secret" FORCE)
+endif()
+mark_as_advanced(
+    MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID
+    MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET
+    MOLTORINO_YOUTUBE_READ_ROOT
+    MOLTORINO_YOUTUBE_DIRECT_READ
+)
+
 
 set(USE_ALTERNATE_LINKER "" CACHE STRING "Use alternate linker. Leave empty for system default. CMake 3.29 users can use CMAKE_LINKER_TYPE instead.")
 
@@ -74,6 +98,9 @@ project(bajerino
     HOMEPAGE_URL "https://chatterino.com/"
 )
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
 if(CHATTERINO_GENERATE_COVERAGE)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
@@ -95,6 +122,22 @@ if(CHATTERINO_LTO)
     endif()
 else()
     message(STATUS "LTO: Disabled")
+endif()
+
+if(MOLTORINO_RELEASE_HARDENING)
+    if(NOT WIN32 OR NOT MSVC)
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires the Windows MSVC toolchain")
+    endif()
+    if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires a Release build")
+    endif()
+    if(NOT CHATTERINO_LTO OR NOT CHATTERINO_ENABLE_LTO)
+        message(FATAL_ERROR "MOLTORINO_RELEASE_HARDENING requires supported CHATTERINO_LTO=ON")
+    endif()
+    set(CMAKE_PDB_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/private-symbols/$<CONFIG>")
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS moltorino_release_link=1)
+    set(CMAKE_JOB_POOL_LINK moltorino_release_link)
+    add_link_options("$<$<CONFIG:Release>:/DEBUG:FULL;/OPT:REF,ICF;/INCREMENTAL:NO;/CGTHREADS:1>")
 endif()
 
 if(BUILD_WITH_QT6)
@@ -150,7 +193,9 @@ find_package(Qt${MAJOR_QT_VERSION} REQUIRED
     Gui
     Network
     Svg
+    SvgWidgets
     Concurrent
+    Sql
 )
 
 find_package(Qt${MAJOR_QT_VERSION} COMPONENTS WidgetsPrivate)
@@ -162,9 +207,18 @@ endif()
 
 message(STATUS "Qt version: ${Qt${MAJOR_QT_VERSION}_VERSION}")
 
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_qt_opengl_libraries WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    list(FILTER _qt_opengl_libraries EXCLUDE REGEX "(^-framework AGL$|/AGL[.]framework(/AGL)?$)")
+    set_property(TARGET WrapOpenGL::WrapOpenGL PROPERTY INTERFACE_LINK_LIBRARIES "${_qt_opengl_libraries}")
+    unset(_qt_opengl_libraries)
+endif()
+
 if(WIN32)
     add_subdirectory(lib/WinToast EXCLUDE_FROM_ALL)
+    include(${CMAKE_CURRENT_LIST_DIR}/cmake/WinToast.cmake)
 endif()
+
 
 # Find boost on the system
 set(BOOST_REQUIRED_COMPONENTS "")
@@ -175,8 +229,22 @@ find_package(Boost REQUIRED CONFIG COMPONENTS ${BOOST_REQUIRED_COMPONENTS} OPTIO
 
 # Find OpenSSL on the system
 find_package(OpenSSL REQUIRED)
-
+if(MOLTORINO_YOUTUBE_ACCOUNTS OR MOLTORINO_TIKTOK_ACCOUNTS)
+    include(Keychain)
+endif()
+if(WIN32 AND MOLTORINO_TIKTOK_ACCOUNTS)
+    include(WebView2)
+endif()
 find_package(Threads REQUIRED)
+
+find_package(WebP QUIET CONFIG)
+if(TARGET WebP::webpdemux AND TARGET WebP::webp)
+    set(CHATTERINO_WEBP_TARGETS WebP::webpdemux WebP::webp)
+else()
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(WebP REQUIRED IMPORTED_TARGET libwebpdemux libwebp)
+    set(CHATTERINO_WEBP_TARGETS PkgConfig::WebP)
+endif()
 
 if(CHATTERINO_SPELLCHECK)
     # Find from package manager
@@ -186,6 +254,32 @@ if(CHATTERINO_SPELLCHECK)
         pkg_check_modules(hunspell REQUIRED IMPORTED_TARGET hunspell)
         add_library(hunspell::hunspell ALIAS PkgConfig::hunspell)
     endif()
+endif()
+
+find_package(libvpx QUIET CONFIG)
+include(WebM)
+find_package(libyuv QUIET CONFIG)
+if(NOT TARGET libvpx::libvpx)
+    find_path(VPX_INCLUDE_DIR vpx/vpx_decoder.h REQUIRED)
+    find_library(VPX_LIBRARY NAMES vpx REQUIRED)
+    add_library(libvpx::libvpx UNKNOWN IMPORTED)
+    set_target_properties(libvpx::libvpx PROPERTIES
+        IMPORTED_LOCATION "${VPX_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${VPX_INCLUDE_DIR}"
+    )
+endif()
+
+if(TARGET yuv AND NOT TARGET libyuv::libyuv)
+    add_library(libyuv::libyuv ALIAS yuv)
+endif()
+if(NOT TARGET libyuv::libyuv)
+    find_path(YUV_INCLUDE_DIR libyuv/convert_argb.h REQUIRED)
+    find_library(YUV_LIBRARY NAMES yuv REQUIRED)
+    add_library(libyuv::libyuv UNKNOWN IMPORTED)
+    set_target_properties(libyuv::libyuv PROPERTIES
+        IMPORTED_LOCATION "${YUV_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${YUV_INCLUDE_DIR}"
+    )
 endif()
 
 find_library(LIBRT rt)

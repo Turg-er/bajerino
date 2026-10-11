@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include "providers/twitch/TwitchChannel.hpp"
 #include "widgets/BaseWidget.hpp"
 
 #include <pajlada/signals/signalholder.hpp>
@@ -20,6 +21,8 @@ namespace chatterino {
 
 class TwitchChannel;
 class DrawnButton;
+class LabelButton;
+class ChannelView;
 
 /**
  * Banner shown between the split header and the chat view that
@@ -37,6 +40,14 @@ public:
 
     // Called by the header pin button to toggle manual visibility.
     void toggleUserPinned();
+    void setPinnedMessage(
+        const std::optional<TwitchChannel::PinnedMessage> &pin,
+        TwitchChannel *channel);
+    bool hasPinnedMessage() const;
+    void setToggleButtonVisible(bool visible);
+    void refreshLayout();
+    pajlada::Signals::NoArgSignal toggleBannerRequested;
+    pajlada::Signals::NoArgSignal dismissed;
 
     /// Emitted whenever this widget becomes shown or hidden.
     pajlada::Signals::NoArgSignal visibilityChanged;
@@ -66,6 +77,16 @@ private:
 
     TwitchChannel *channel_ = nullptr;
     pajlada::Signals::SignalHolder signalHolder_;
+    pajlada::Signals::SignalHolder settingsConnections_;
+    LabelButton *toggleButton_ = nullptr;
+    LabelButton *closeButton_ = nullptr;
+    LabelButton *expandButton_ = nullptr;
+    ChannelView *messageView_ = nullptr;
+    ChannelPtr displayChannel_;
+    QString pinIdentity_;
+    bool expanded_ = false;
+    QDateTime pinnedAt_;
+    QString pinnedByText_;
 
     // Header row
     QLabel *pinnedByLabel_ = nullptr;

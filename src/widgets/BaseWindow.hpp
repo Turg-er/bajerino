@@ -49,6 +49,8 @@ public:
 
         /// Override the default stylesheet & user-specificed theme with our settings.qss stylesheet
         UseSettingsStylesheet = 1 << 11,
+        CloseOnMinimize = 1 << 12,
+        DisableMaximize = 1 << 13,
     };
 
     explicit BaseWindow(FlagsEnum<Flags> flags_ = None,
@@ -165,6 +167,8 @@ protected:
     std::optional<QColor> overrideBackgroundColor_;
 
 private:
+    bool closesOnMinimize() const;
+    void applySettingsStylesheet();
     void init();
 
     void calcButtonsSizes();

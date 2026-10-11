@@ -30,6 +30,8 @@
 #include "util/Helpers.hpp"
 #include "util/PostToThread.hpp"
 
+#include <algorithm>
+
 using namespace Qt::Literals;
 using namespace std::chrono_literals;
 
@@ -40,6 +42,7 @@ KickChannel::KickChannel(const QString &name)
     , ChannelChatters(static_cast<Channel &>(*this))
     , displayName_(name)
     , slug_(this->getName())
+    , channelAvatar_(std::make_shared<ChannelAvatarSource>())
     , seventvEmotes_(std::make_shared<const EmoteMap>())
 {
     this->setMentionFlag(MessageElementFlag::KickUsername);
@@ -93,6 +96,7 @@ std::pair<std::shared_ptr<MessageThread>, MessagePtr>
         {
             return {existing, existing->root()};
         }
+        this->threads_.erase(existingIt);
     }
 
     auto msg = this->findMessageByID(messageID);
@@ -108,6 +112,16 @@ std::pair<std::shared_ptr<MessageThread>, MessagePtr>
 
     auto thread = std::make_shared<MessageThread>(msg);
     this->threads_[messageID] = thread;
+
+    constexpr size_t THREAD_SWEEP_MIN_SIZE = 512;
+    constexpr size_t THREAD_SWEEP_INTERVAL = 256;
+    if (this->threads_.size() >= THREAD_SWEEP_MIN_SIZE &&
+        this->threads_.size() % THREAD_SWEEP_INTERVAL == 0)
+    {
+        std::erase_if(this->threads_, [](const auto &entry) {
+            return entry.second.expired();
+        });
+    }
     return {thread, msg};
 }
 
@@ -369,15 +383,14 @@ bool KickChannel::isLive() const
     return this->streamData_.isLive;
 }
 
-void KickChannel::updateStreamData(const KickChannelInfo &info)
+bool KickChannel::updateLiveStatus(bool live, const QString &title)
 {
-    assert(info.userID == this->userID());
-
-    bool changed = false;
-    if (this->streamData_.isLive != info.stream.isLive)
+    const bool titleChanged = this->streamData_.title != title;
+    const bool liveChanged = this->streamData_.isLive != live;
+    this->streamData_.title = title;
+    if (liveChanged)
     {
-        changed = true;
-        this->streamData_.isLive = info.stream.isLive;
+        this->streamData_.isLive = live;
 
         if (this->streamData_.isLive)
         {
@@ -387,7 +400,7 @@ void KickChannel::updateStreamData(const KickChannelInfo &info)
                                      .login = this->getDisplayName(),
                                      .displayName = this->getDisplayName(),
                                  },
-                                 info.streamTitle,
+                                 title,
                                  {MessageFlag::System,
                                   MessageFlag::DoNotTriggerNotification}),
                              MessageContext::Original);
@@ -404,11 +417,17 @@ void KickChannel::updateStreamData(const KickChannelInfo &info)
         }
         this->liveStatusChanged.invoke();
     }
-    if (this->streamData_.title != info.streamTitle)
+    if (titleChanged || liveChanged)
     {
-        changed = true;
-        this->streamData_.title = info.streamTitle;
+        this->streamDataChanged.invoke();
     }
+    return liveChanged;
+}
+
+void KickChannel::updateStreamData(const KickChannelInfo &info)
+{
+    assert(info.userID == this->userID());
+    bool changed = this->updateLiveStatus(info.stream.isLive, info.streamTitle);
     if (this->streamData_.category != info.category.name)
     {
         changed = true;
@@ -485,37 +504,25 @@ EmotePtr KickChannel::getSubBadge(unsigned months)
     {
         return cIt->second;
     }
-
-    auto baseIt = this->subBadgeImages_.lower_bound(months);
-    if (this->subBadgeImages_.empty())
+    auto baseIt = this->subBadgeImages_.upper_bound(months);
+    if (baseIt == this->subBadgeImages_.begin())
     {
         return {};
     }
+    --baseIt;
 
-    if (baseIt == this->subBadgeImages_.begin())
-    {
-        if (baseIt->first != months)
-        {
-            return {};
-        }
-    }
-    else if (baseIt == this->subBadgeImages_.end() || baseIt->first != months)
-    {
-        --baseIt;
-    }
-
-    auto name = [&]() -> QString {
-        if (months == 1)
-        {
-            return u"1-Month Subscriber"_s;
-        }
-        return QString::number(months) % u"-Months Subscriber";
-    }();
+    const auto name =
+        months == 1 ? QStringLiteral("Subscriber for 1 month")
+                    : QStringLiteral("Subscriber for %1 months").arg(months);
     auto emote = std::make_shared<const Emote>(Emote{
         .name = {name},
         .images = ImageSet{baseIt->second},
         .tooltip = Tooltip{name},
     });
+    if (this->subBadges_.size() >= 512)
+    {
+        this->subBadges_.clear();
+    }
     this->subBadges_.emplace(months, emote);
     return emote;
 }
@@ -555,6 +562,8 @@ void KickChannel::resolveChannelInfo()
 
             self->initSubBadges(res->subBadges);
             self->slug_ = res->slug;
+            self->channelAvatar_->setAvatarUrl(
+                res->user.profilePictureURL.value_or(QString{}));
             self->setUserInfo(UserInit{
                 .roomID = res->chatroom.roomID,
                 .userID = res->user.userID,
@@ -565,6 +574,10 @@ void KickChannel::resolveChannelInfo()
             if (oldDisplayName != self->displayName_)
             {
                 self->displayNameChanged.invoke();
+            }
+            if (res->isLive)
+            {
+                self->updateLiveStatus(*res->isLive, res->streamTitle);
             }
 
             self->updateRoomModes(RoomModes{
@@ -746,8 +759,8 @@ void KickChannel::updateSevenTVActivity()
     {
         return;
     }
-    // Make sure to not send activity again before receiving the response
-    this->nextSeventvActivity_ = this->nextSeventvActivity_.addSecs(300);
+
+    this->nextSeventvActivity_ = QDateTime::currentDateTimeUtc().addSecs(300);
 
     qCDebug(chatterinoSeventv) << "Sending activity in" << this->getName();
 
@@ -776,8 +789,8 @@ void KickChannel::addLoginMessage()
 
     builder.emplace<TimestampElement>();
     builder.emplace<TextElement>(
-        u"You need to log in to send messages. You can link your "_s
-        "Kick account",
+        QStringLiteral("You need to log in to send messages. You can link "
+                       "your Kick account"),
         MessageElementFlag::Text, MessageColor::System);
     builder
         .emplace<TextElement>(u"in the settings."_s, MessageElementFlag::Text,
@@ -938,6 +951,10 @@ void KickChannel::initSubBadges(
 
 void KickChannel::loadChannelHistory()
 {
+    if (!getSettings()->loadTwitchMessageHistoryOnConnect)
+    {
+        return;
+    }
     KickApi::privateChannelHistory(
         this->channelID_, [weak = this->weakFromThis()](const auto &res) {
             auto self = weak.lock();
@@ -970,7 +987,6 @@ void KickChannel::loadChannelHistory()
                 messages.emplace_back(std::move(ptr));
             }
 
-            // Just use the Twitch setting here.
             if (getSettings()->loadTwitchMessageHistoryOnConnect)
             {
                 self->fillInMissingMessages(messages);

@@ -234,7 +234,7 @@ void TrayController::ensureTrayIcon()
     this->menu_->addSeparator();
     this->quitAction_ = this->menu_->addAction(u"Quit Bajerino"_s);
     QObject::connect(this->quitAction_, &QAction::triggered, qApp, [] {
-        QApplication::exit(0);
+        requestApplicationQuit();
     });
 
     QObject::connect(this->menu_, &QMenu::aboutToShow, this, [this] {

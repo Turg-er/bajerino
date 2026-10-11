@@ -46,25 +46,10 @@ namespace chatterino {
 // Channel
 //
 Channel::Channel(const QString &name, Type type)
-    : completionModel(new TabCompletionModel(*this, nullptr))
-    , lastDate_(QDate::currentDate())
-    , name_(name)
-    , messages_(getSettings()->scrollbackSplitLimit)
-    , type_(type)
+    : Channel(name, type,
+              sanitizeScrollbackLimit(
+                  getSettings()->scrollbackSplitLimit.getValue()))
 {
-    if (this->isTwitchChannel())
-    {
-        this->platform_ = "twitch";
-    }
-
-    if (this->isKickChannel())
-    {
-        this->messagePlatform_ = MessagePlatform::Kick;
-    }
-    else
-    {
-        this->messagePlatform_ = MessagePlatform::AnyOrTwitch;
-    }
 }
 
 Channel::~Channel()
@@ -193,8 +178,18 @@ void Channel::addMessage(MessagePtr message, MessageContext context,
 
 void Channel::addSystemMessage(const QString &contents)
 {
-    auto msg = makeSystemMessage(contents);
-    this->addMessage(msg, MessageContext::Original);
+    MessageBuilder builder(systemMessage, contents);
+    if (this->isTikTokChannel())
+    {
+        builder->platform = MessagePlatform::TikTok;
+        builder->channelName = this->getName();
+        auto channel =
+            std::make_unique<ChannelNameElement>(u'#' + this->getDisplayName());
+        channel->setLink({Link::JumpToChannel,
+                          QStringLiteral(":tiktok:") + this->getName()});
+        builder->elements.insert(builder->elements.begin(), std::move(channel));
+    }
+    this->addMessage(builder.release(), MessageContext::Original);
 }
 
 void Channel::addOrReplaceTimeout(MessagePtr message, const QDateTime &now)
@@ -276,83 +271,77 @@ void Channel::fillInMissingMessages(const std::vector<MessagePtr> &messages)
         msg->freeze();
     }
 
-    auto snapshot = this->getMessageSnapshot();
-    if (snapshot.size() == 0)
+    while (true)
     {
-        // There are no messages in this channel yet so we can just insert them
-        // at the front in order
-        this->messages_.pushFront(messages);
-        this->filledInMessages.invoke(messages);
-        return;
-    }
-
-    std::unordered_set<QString> existingMessageIds;
-    existingMessageIds.reserve(snapshot.size());
-
-    // First, collect the ids of every message already present in the channel
-    for (const auto &msg : snapshot)
-    {
-        if (msg->flags.has(MessageFlag::System) || msg->id.isEmpty())
+        auto snapshot = this->getMessageSnapshot();
+        if (snapshot.empty())
         {
-            continue;
+            // There are no messages in this channel yet so we can just insert them
+            // at the front in order
+            this->messages_.pushFront(messages);
+            this->filledInMessages.invoke(messages);
+            return;
         }
 
-        existingMessageIds.insert(msg->id);
-    }
-
-    bool anyInserted = false;
-
-    // Keep track of the last message in the channel. We need this value
-    // to allow concurrent appends to the end of the channel while still
-    // being able to insert just-loaded historical messages at the end
-    // in the correct place.
-    auto lastMsg = snapshot[snapshot.size() - 1];
-    for (const auto &msg : messages)
-    {
-        // check if message already exists
-        if (existingMessageIds.count(msg->id) != 0)
+        std::unordered_set<QString> existingMessageIds;
+        existingMessageIds.reserve(snapshot.size());
+        // First, collect the ids of every message already present in the channel
+        for (const auto &msg : snapshot)
         {
-            continue;
-        }
-
-        // If we get to this point, we know we'll be inserting a message
-        anyInserted = true;
-
-        bool insertedFlag = false;
-        for (const auto &snapshotMsg : snapshot)
-        {
-            if (snapshotMsg->flags.has(MessageFlag::System))
+            if (!msg->flags.has(MessageFlag::System) && !msg->id.isEmpty())
             {
-                continue;
-            }
-
-            if (msg->serverReceivedTime < snapshotMsg->serverReceivedTime)
-            {
-                // We found the first message that comes after the current message.
-                // Therefore, we can put the current message directly before. We
-                // assume that the messages we are filling in are in ascending
-                // order by serverReceivedTime.
-                this->messages_.insertBefore(snapshotMsg, msg);
-                insertedFlag = true;
-                break;
+                existingMessageIds.insert(msg->id);
             }
         }
 
-        if (!insertedFlag)
+        std::vector<MessagePtr> missing;
+        missing.reserve(messages.size());
+        for (const auto &msg : messages)
         {
-            // We never found a message already in the channel that came after
-            // the current message. Put it at the end and make sure to update
-            // which message is considered "the end".
-            this->messages_.insertAfter(lastMsg, msg);
-            lastMsg = msg;
+            if (existingMessageIds.count(msg->id) == 0)
+            {
+                missing.push_back(msg);
+            }
         }
-    }
+        if (missing.empty())
+        {
+            return;
+        }
 
-    if (anyInserted)
-    {
-        // We only invoke a signal once at the end of filling all messages to
-        // prevent doing any unnecessary repaints.
-        this->filledInMessages.invoke(messages);
+        std::vector<MessagePtr> merged;
+        merged.reserve(snapshot.size() + missing.size());
+        auto nextMissing = missing.begin();
+        for (const auto &current : snapshot)
+        {
+            if (!current->flags.has(MessageFlag::System))
+            {
+                while (nextMissing != missing.end() &&
+                       (*nextMissing)->serverReceivedTime <
+                           current->serverReceivedTime)
+                {
+                    merged.push_back(*nextMissing++);
+                }
+            }
+            merged.push_back(current);
+        }
+        merged.insert(merged.end(), nextMissing, missing.end());
+
+        const auto retained = std::min(merged.size(), this->messages_.limit());
+        const auto retainedBegin = merged.end() - retained;
+        if (retained == snapshot.size() &&
+            std::equal(retainedBegin, merged.end(), snapshot.begin()))
+        {
+            return;
+        }
+
+        if (this->messages_.replaceContentsIfUnchanged(snapshot,
+                                                       std::move(merged)))
+        {
+            // We only invoke a signal once at the end of filling all messages to
+            // prevent doing any unnecessary repaints.
+            this->filledInMessages.invoke(messages);
+            return;
+        }
     }
 }
 
@@ -391,13 +380,13 @@ void Channel::replaceMessage(size_t index, const MessagePtr &replacement)
     }
 }
 
-void Channel::replaceMessage(size_t hint, const MessagePtr &message,
+bool Channel::replaceMessage(size_t hint, const MessagePtr &message,
                              const MessagePtr &replacement)
 {
     RecursionGuard g{&this->recursionCount_};
     if (!this->canRecurse())
     {
-        return;
+        return false;
     }
 
     replacement->freeze();
@@ -405,8 +394,11 @@ void Channel::replaceMessage(size_t hint, const MessagePtr &message,
     auto index = this->messages_.replaceItem(hint, message, replacement);
     if (index >= 0)
     {
-        this->messageReplaced.invoke(hint, message, replacement);
+        this->messageReplaced.invoke(static_cast<size_t>(index), message,
+                                     replacement);
+        return true;
     }
+    return false;
 }
 
 void Channel::decryptMessages(const QString &encryptionPassword)
@@ -828,6 +820,84 @@ void Channel::upsertPersonalSeventvEmotes(
 MessagePlatform Channel::messagePlatform() const
 {
     return this->messagePlatform_;
+}
+
+Channel::Channel(const QString &name, Type type, size_t messagesLimit)
+    : lastDate_(QDate::currentDate())
+    , name_(name)
+    , prefixedName_(QStringLiteral("#") + name)
+    , messages_(messagesLimit)
+    , type_(type)
+{
+    if (this->isTwitchChannel())
+    {
+        this->platform_ = "twitch";
+    }
+    else if (this->isYouTubeChannel())
+    {
+        this->platform_ = "youtube";
+    }
+    else if (this->isTikTokChannel())
+    {
+        this->platform_ = "tiktok";
+    }
+
+    if (this->isKickChannel())
+    {
+        this->messagePlatform_ = MessagePlatform::Kick;
+    }
+    else if (this->isYouTubeChannel())
+    {
+        this->messagePlatform_ = MessagePlatform::YouTube;
+    }
+    else if (this->isTikTokChannel())
+    {
+        this->messagePlatform_ = MessagePlatform::TikTok;
+    }
+    else
+    {
+        this->messagePlatform_ = MessagePlatform::AnyOrTwitch;
+    }
+}
+
+TabCompletionModel *Channel::getCompletionModel()
+{
+    if (!this->completionModel)
+    {
+        this->completionModel =
+            std::make_unique<TabCompletionModel>(*this, nullptr);
+    }
+    return this->completionModel.get();
+}
+
+const QString &Channel::getPrefixedName() const
+{
+    return this->prefixedName_;
+}
+
+bool Channel::isYouTubeChannel() const
+{
+    return this->type_ == Type::YouTube;
+}
+
+bool Channel::isTikTokChannel() const
+{
+    return this->type_ == Type::TikTok;
+}
+
+void Channel::prependMessage(MessagePtr message)
+{
+    RecursionGuard g{&this->recursionCount_};
+    if (!this->canRecurse())
+    {
+        return;
+    }
+
+    message->freeze();
+
+    MessagePtr deleted;
+    this->messages_.pushFront(message, deleted);
+    this->messagePrepended.invoke(message, deleted);
 }
 
 //

@@ -46,6 +46,7 @@ enum class DebugObject : size_t {
 
     // Messages
     MessageDrawingBuffer,
+    BytesMessageDrawingBufferCurrent,
     MessageElement,
     MessageLayout,
     MessageLayoutElement,
@@ -64,6 +65,7 @@ enum class DebugObject : size_t {
 class DebugCount
 {
 public:
+    static int64_t get(DebugObject target);
     static void set(DebugObject target, int64_t amount);
 
     static void increase(DebugObject target, int64_t amount);
@@ -137,6 +139,8 @@ constexpr magic_enum::customize::customize_t
             return "lua::api::HTTPRequest";
         case chatterino::DebugObject::MessageDrawingBuffer:
             return "message drawing buffers";
+        case chatterino::DebugObject::BytesMessageDrawingBufferCurrent:
+            return "message drawing buffer bytes";
         case chatterino::DebugObject::SeventvPersonalEmoteSets:
             return "7TV Personal Emote Sets";
         case chatterino::DebugObject::SeventvPersonalEmoteAssignments:

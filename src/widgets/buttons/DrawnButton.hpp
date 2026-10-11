@@ -28,6 +28,7 @@ public:
 
         /// kebab menu (3 dots underneath eachother)
         Kebab,
+        FolderPlus,
     };
 
     struct Options {

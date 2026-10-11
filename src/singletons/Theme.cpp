@@ -9,8 +9,12 @@
 #include "common/QLogging.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Resources.hpp"
+#include "singletons/Settings.hpp"
+#include "singletons/ThemeWallpaper.hpp"
 #include "singletons/WindowManager.hpp"
+#include "util/RapidjsonHelpers.hpp"
 
+#include <pajlada/settings/settingmanager.hpp>
 #include <QApplication>
 #include <QColor>
 #include <QDir>
@@ -18,6 +22,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QSet>
 #include <QStyleHints>
 
@@ -129,6 +134,13 @@ void parseTextColors(const QJsonObject &textColors,
     parseColor(messages, textColors, caret);
     parseColor(messages, textColors, link);
     parseColor(messages, textColors, system);
+
+    messages.textColors.timestamp = messages.textColors.system;
+    if (textColors.contains("timestamp"_L1) ||
+        textColorsFallback.contains("timestamp"_L1))
+    {
+        parseColor(messages, textColors, timestamp);
+    }
     parseColor(messages, textColors, chatPlaceholder);
 }
 
@@ -249,8 +261,15 @@ std::optional<QJsonObject> loadThemeFromPath(const QString &path)
         return std::nullopt;
     }
 
+    constexpr qint64 maxBytes = 32 * 1024 * 1024;
+    const auto bytes = file.read(maxBytes + 1);
+    if (bytes.size() > maxBytes || !file.atEnd() ||
+        file.error() != QFile::NoError)
+    {
+        return std::nullopt;
+    }
     QJsonParseError error{};
-    auto json = QJsonDocument::fromJson(file.readAll(), &error);
+    auto json = QJsonDocument::fromJson(bytes, &error);
     if (!json.isObject())
     {
         qCWarning(chatterinoTheme) << "Failed to parse" << file.fileName()
@@ -272,6 +291,15 @@ std::optional<QJsonObject> loadThemeFromPath(const QString &path)
  **/
 std::optional<QJsonObject> loadTheme(const ThemeDescriptor &theme)
 {
+    if (theme.path.startsWith(QStringLiteral("builtin:")))
+    {
+        if (auto profile =
+                builtInCustomizationProfile(QStringView(theme.path).sliced(8)))
+        {
+            return buildCustomizedTheme(*profile);
+        }
+        return std::nullopt;
+    }
     return loadThemeFromPath(theme.path);
 }
 
@@ -300,6 +328,31 @@ const std::vector<ThemeDescriptor> Theme::builtInThemes{
         .path = ":/themes/Black.json",
         .name = "Black",
     },
+    {
+        .key = "Moltorino Midnight",
+        .path = "builtin:moltorino-midnight",
+        .name = "Moltorino",
+    },
+    {
+        .key = "Sakura Dream",
+        .path = "builtin:sakura-dream",
+        .name = "Sakura",
+    },
+    {
+        .key = "Aurora Calm",
+        .path = "builtin:aurora-calm",
+        .name = "Garden",
+    },
+    {
+        .key = "Ember Arcade",
+        .path = "builtin:ember-arcade",
+        .name = "Arcade",
+    },
+    {
+        .key = "Violet Dusk",
+        .path = "builtin:violet-dusk",
+        .name = "Afterhours",
+    },
 };
 
 // Dark is our default & fallback theme
@@ -316,9 +369,65 @@ bool Theme::isSystemTheme() const
 }
 
 Theme::Theme(const Paths &paths)
+    : themesDirectory_(paths.themesDirectory)
 {
+    const auto settings = pajlada::Settings::SettingManager::getInstance();
+    constexpr auto oldMarker =
+        "/appearance/theme/moltorinoDefaultMigrationDone";
+    if (const auto *old = settings->get(oldMarker))
+    {
+        if (settings->get(this->defaultApplied.getPath()) == nullptr)
+        {
+            this->defaultApplied.setValue(old->IsBool() && old->GetBool());
+        }
+        settings->removeSetting(oldMarker);
+    }
+    this->loadAvailableThemes(paths);
+    const auto savedSelection = this->moltorinoSelection.getValue();
+    bool preserveSelection = !savedSelection.isEmpty() &&
+                             (savedSelection == u"System" ||
+                              this->findThemeByKey(savedSelection).has_value());
+    if (preserveSelection)
+    {
+        this->themeName = savedSelection;
+    }
+    else if (const auto selected = this->findThemeByKey(this->themeName))
+    {
+        const auto json =
+            selected->custom ? loadTheme(*selected) : std::nullopt;
+        preserveSelection =
+            (selected->path.startsWith(u"builtin:") &&
+             selected->key != u"Moltorino Midnight") ||
+            (json && customizationProfileFromTheme(*json).has_value());
+        if (preserveSelection && getSettings()->isSaveEnabled())
+        {
+            this->moltorinoSelection = this->themeName.getValue();
+        }
+    }
+
+    const bool alreadyMigrated = this->bluzyrinoMigrated.getValue();
+    this->migrateBluzyrinoTheme(paths, preserveSelection);
+    if (!alreadyMigrated && this->bluzyrinoMigrated.getValue())
+    {
+        this->reloadAvailableThemes();
+    }
+
+    const auto *sharedPalette = settings->get("/bluzyrino/theme");
+    const bool pendingMigration = sharedPalette != nullptr &&
+                                  sharedPalette->IsObject() &&
+                                  !this->bluzyrinoMigrated.getValue();
+    if (getSettings()->isSaveEnabled() && !pendingMigration &&
+        (this->isSystemTheme() || this->findThemeByKey(this->themeName)))
+    {
+        this->moltorinoSelection = this->themeName.getValue();
+    }
+
     this->themeName.connect(
         [this](auto themeName) {
+            if (getSettings()->isSaveEnabled())
+            {
+                this->moltorinoSelection = themeName;
+            }
             qCInfo(chatterinoTheme) << "Theme updated to" << themeName;
             this->update();
         },
@@ -332,8 +441,6 @@ Theme::Theme(const Paths &paths)
     this->darkSystemThemeName.connect(updateIfSystem, false);
     this->lightSystemThemeName.connect(updateIfSystem, false);
 
-    this->loadAvailableThemes(paths);
-
     QObject::connect(QApplication::styleHints(),
                      &QStyleHints::colorSchemeChanged, &this->lifetime_,
                      [this] {
@@ -345,6 +452,179 @@ Theme::Theme(const Paths &paths)
                      });
 
     this->update();
+}
+
+void Theme::selectTheme(const QString &key)
+{
+    if (getSettings()->isSaveEnabled())
+    {
+        this->moltorinoSelection = key;
+    }
+    this->themeName = key;
+}
+
+void Theme::migrateBluzyrinoTheme(const Paths &paths, bool preserveSelection)
+{
+    if (this->bluzyrinoMigrated.getValue() || !getSettings()->isSaveEnabled())
+    {
+        return;
+    }
+    const auto settings = pajlada::Settings::SettingManager::getInstance();
+
+    const auto readObject = [&settings](const char *path) {
+        const auto *value = settings->get(path);
+        return value != nullptr && value->IsObject()
+                   ? QJsonDocument::fromJson(rj::stringify(*value).toUtf8())
+                         .object()
+                   : QJsonObject{};
+    };
+    const auto *source = settings->get("/bluzyrino/theme");
+    const bool sharedProfile = source != nullptr && source->IsObject();
+    QJsonObject palette = readObject("/bluzyrino/theme");
+    QJsonObject appearance{
+        {QStringLiteral("backgroundImage"),
+         readObject("/appearance/backgroundImage")},
+        {QStringLiteral("messages"), readObject("/appearance/messages")}};
+    auto background =
+        QDir(this->themesDirectory_).filePath(QStringLiteral("background.png"));
+    if (!sharedProfile)
+    {
+        bool found = false;
+        const QFileInfo activeSettings(
+            QDir(paths.settingsDirectory)
+                .filePath(QStringLiteral("settings.json")));
+        for (const auto &root : paths.bluzyrinoDataDirectories)
+        {
+            const auto fileName =
+                QDir(root).filePath(QStringLiteral("Settings/settings.json"));
+            if (QFileInfo(fileName) == activeSettings)
+            {
+                continue;
+            }
+            QFile file(fileName);
+            if (!file.open(QIODevice::ReadOnly) ||
+                file.size() > 32 * 1024 * 1024)
+            {
+                continue;
+            }
+            const auto bytes = file.read(32 * 1024 * 1024 + 1);
+            if (bytes.size() > 32 * 1024 * 1024)
+            {
+                continue;
+            }
+            const auto document = QJsonDocument::fromJson(bytes).object();
+            const auto theme =
+                document[QStringLiteral("bluzyrino")][QStringLiteral("theme")];
+            if (!theme.isObject() ||
+                !customizationProfileFromBluzyrinoSettings(document))
+            {
+                continue;
+            }
+            palette = theme.toObject();
+            const auto otherAppearance =
+                document[QStringLiteral("appearance")].toObject();
+            appearance = QJsonObject{
+                {QStringLiteral("backgroundImage"),
+                 otherAppearance[QStringLiteral("backgroundImage")]},
+                {QStringLiteral("messages"),
+                 otherAppearance[QStringLiteral("messages")]}};
+            background =
+                QDir(root).filePath(QStringLiteral("Themes/background.png"));
+            found = true;
+            break;
+        }
+        if (!found)
+        {
+            return;
+        }
+    }
+    const QJsonObject input{{QStringLiteral("bluzyrino"),
+                             QJsonObject{{QStringLiteral("theme"), palette}}},
+                            {QStringLiteral("appearance"), appearance}};
+    auto profile = customizationProfileFromBluzyrinoSettings(input);
+    if (!profile)
+    {
+        qCWarning(chatterinoTheme) << "Cannot migrate invalid Bluzyrino colors";
+        return;
+    }
+
+    const QDir directory(this->themesDirectory_);
+    QString key;
+    bool alreadyWritten = false;
+
+    for (int suffix = 1; suffix <= 1000; ++suffix)
+    {
+        const auto candidate =
+            suffix == 1 ? QStringLiteral("bluzyrino.json")
+                        : QStringLiteral("bluzyrino-%1.json").arg(suffix);
+        const auto path = directory.filePath(candidate);
+        const QFileInfo info(path);
+        if (info.isSymLink())
+        {
+            continue;
+        }
+        if (!info.exists())
+        {
+            key = candidate;
+            break;
+        }
+        const auto existing =
+            loadTheme({candidate, path, QStringLiteral("Bluzyrino"), true});
+        if (existing &&
+            (*existing)[QStringLiteral("metadata")]
+                       [QStringLiteral("bluzyrinoMigration")]
+                           .toInt() == 1 &&
+            customizationProfileFromTheme(*existing))
+        {
+            key = candidate;
+            alreadyWritten = true;
+            break;
+        }
+    }
+    if (key.isEmpty())
+    {
+        qCWarning(chatterinoTheme) << "No free filename for Bluzyrino theme";
+        return;
+    }
+    if (!alreadyWritten)
+    {
+        if (QFileInfo::exists(background))
+        {
+            auto data = prepareThemeWallpaper(background);
+            if (data.error.isEmpty())
+            {
+                profile->wallpaperSource = storeThemeWallpaper(
+                    data, this->themesDirectory_, &data.error);
+            }
+            if (!data.error.isEmpty() || profile->wallpaperSource.isEmpty())
+            {
+                qCWarning(chatterinoTheme)
+                    << "Cannot migrate Bluzyrino background:" << data.error;
+                return;
+            }
+        }
+        auto theme = buildCustomizedTheme(*profile);
+        auto metadata = theme[QStringLiteral("metadata")].toObject();
+        metadata.insert(QStringLiteral("bluzyrinoMigration"), 1);
+        theme.insert(QStringLiteral("metadata"), metadata);
+        const auto bytes = QJsonDocument(theme).toJson();
+        QSaveFile file(directory.filePath(key));
+        if (!directory.mkpath(QStringLiteral(".")) ||
+            !file.open(QIODevice::WriteOnly) ||
+            file.write(bytes) != bytes.size() || !file.commit())
+        {
+            qCWarning(chatterinoTheme)
+                << "Cannot save Bluzyrino theme:" << file.errorString();
+            return;
+        }
+    }
+    if (sharedProfile && !preserveSelection &&
+        palette[QStringLiteral("customEnabled")].toBool(false))
+    {
+        this->selectTheme(key);
+    }
+    this->bluzyrinoMigrated = true;
+    qCInfo(chatterinoTheme) << "Migrated Bluzyrino appearance to" << key;
 }
 
 void Theme::update()
@@ -413,13 +693,46 @@ void Theme::update()
         return;
     }
 
-    if (this->isAutoReloading() && this->currentThemeJson_ == *themeJSON)
+    const auto loadedTheme = *themeJSON;
+    if (this->isAutoReloading() && this->currentThemeJson_ == loadedTheme)
     {
         return;
     }
 
-    this->parseFrom(*themeJSON, isCustomTheme);
+    auto runtimeTheme = loadedTheme;
+    const auto metadata =
+        loadedTheme.value(QStringLiteral("metadata")).toObject();
+    const auto profileColors = metadata.value(QStringLiteral("moltorino"))
+                                   .toObject()
+                                   .value(QStringLiteral("colors"))
+                                   .toObject();
+    const auto hasValidSemanticColor = [&profileColors](QStringView key) {
+        const auto value = profileColors.value(key);
+        return value.isString() && QColor(value.toString()).isValid();
+    };
+    const bool hasSemanticPalette =
+        hasValidSemanticColor(QStringLiteral("background")) &&
+        hasValidSemanticColor(QStringLiteral("chatBackground")) &&
+        hasValidSemanticColor(QStringLiteral("surface")) &&
+        hasValidSemanticColor(QStringLiteral("raisedSurface")) &&
+        hasValidSemanticColor(QStringLiteral("text")) &&
+        hasValidSemanticColor(QStringLiteral("mutedText")) &&
+        hasValidSemanticColor(QStringLiteral("accent"));
+    if (hasSemanticPalette)
+    {
+        if (const auto profile = customizationProfileFromTheme(loadedTheme))
+        {
+            const auto canonical = buildCustomizedTheme(*profile);
+
+            runtimeTheme.insert(QStringLiteral("colors"),
+                                canonical.value(QStringLiteral("colors")));
+        }
+    }
+
+    this->parseFrom(runtimeTheme, isCustomTheme);
     this->currentThemePath_ = themePath;
+
+    this->currentThemeJson_ = loadedTheme;
 
     auto parseTs = double(timer.nsecsElapsed()) * nsToMs;
 
@@ -431,11 +744,6 @@ void Theme::update()
         << "ms, parse: " << QString::number(parseTs - loadTs, 'f', 2)
         << "ms, update: " << QString::number(updateTs - parseTs, 'f', 2)
         << "ms)";
-
-    if (this->isAutoReloading())
-    {
-        this->currentThemeJson_ = *themeJSON;
-    }
 }
 
 std::vector<std::pair<QString, QVariant>> Theme::availableThemes() const
@@ -462,38 +770,73 @@ std::vector<std::pair<QString, QVariant>> Theme::availableThemes() const
     return packagedThemes;
 }
 
-void Theme::loadAvailableThemes(const Paths &paths)
+const std::vector<ThemeDescriptor> &Theme::availableThemeDescriptors() const
 {
-    this->availableThemes_ = Theme::builtInThemes;
+    return this->availableThemes_;
+}
 
-    auto dir = QDir(paths.themesDirectory);
+void Theme::reloadAvailableThemes()
+{
+    auto availableThemes = Theme::builtInThemes;
+
+    auto dir = QDir(this->themesDirectory_);
     for (const auto &info :
          dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot, QDir::Name))
     {
-        if (!info.isFile())
+        if (!info.isFile() || !info.fileName().endsWith(QStringLiteral(".json"),
+                                                        Qt::CaseInsensitive))
         {
             continue;
         }
-
-        if (!info.fileName().endsWith(".json"))
-        {
-            continue;
-        }
-
-        auto themeName = info.baseName();
-
-        auto themeDescriptor = ThemeDescriptor{
-            info.fileName(), info.absoluteFilePath(), themeName, true};
-
-        auto theme = loadTheme(themeDescriptor);
+        ThemeDescriptor descriptor{info.fileName(), info.absoluteFilePath(),
+                                   info.baseName(), true};
+        const auto theme = loadTheme(descriptor);
         if (!theme)
         {
             qCWarning(chatterinoTheme) << "Failed to parse theme at" << info;
             continue;
         }
-
-        this->availableThemes_.emplace_back(std::move(themeDescriptor));
+        const auto displayName =
+            (*theme)[QStringLiteral("metadata")][QStringLiteral("name")]
+                .toString()
+                .trimmed();
+        if (!displayName.isEmpty())
+        {
+            descriptor.name = displayName;
+        }
+        availableThemes.emplace_back(std::move(descriptor));
     }
+
+    if (availableThemes == this->availableThemes_)
+    {
+        return;
+    }
+
+    this->availableThemes_ = std::move(availableThemes);
+    this->availableThemesChanged.invoke();
+}
+
+std::optional<QJsonObject> Theme::themeJson(const QString &key) const
+{
+    for (const auto &descriptor : this->availableThemes_)
+    {
+        if (descriptor.key == key)
+        {
+            return loadTheme(descriptor);
+        }
+    }
+    return std::nullopt;
+}
+
+const QString &Theme::themesDirectory() const
+{
+    return this->themesDirectory_;
+}
+
+void Theme::loadAvailableThemes(const Paths &paths)
+{
+    this->themesDirectory_ = paths.themesDirectory;
+    this->reloadAvailableThemes();
 }
 
 std::optional<ThemeDescriptor> Theme::findThemeByKey(const QString &key)
@@ -533,6 +876,37 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
 
     parseColors(root, fallbackTheme.value_or(QJsonObject()), *this);
 
+    if (auto customization = customizationProfileFromTheme(root))
+    {
+        this->customization = std::move(*customization);
+        this->customization.clearDisabledFontOverrides();
+    }
+    else
+    {
+        this->customization = ThemeCustomizationProfile{};
+        this->customization.useThemeFonts = false;
+        this->customization.useThemeFontSizes = false;
+        this->customization.name = QStringLiteral("Classic Chatterino");
+        this->customization.background = this->window.background;
+        this->customization.chatBackground = this->splits.background;
+        this->customization.surface = this->tabs.regular.backgrounds.regular;
+        this->customization.raisedSurface =
+            this->tabs.selected.backgrounds.regular;
+        this->customization.text = this->window.text;
+        this->customization.chatText = this->messages.textColors.regular;
+        this->customization.separateChatText =
+            this->customization.chatText != this->customization.text;
+        this->customization.mutedText = this->tabs.regular.text;
+        this->customization.systemText = this->messages.textColors.system;
+        this->customization.timestampText = this->messages.textColors.timestamp;
+        this->customization.accent = this->accent;
+        this->customization.foundation = ThemeFoundation::ChatterinoClassic;
+        this->customization.useThemeMessageRows = false;
+        this->customization.cornerStyle = ThemeCornerStyle::Classic;
+        this->customization.tabCornerRadius = 0;
+        this->customization.chatCornerRadius = 0;
+    }
+
     this->splits.input.styleSheet = uR"(
         background: %1;
         border: %2;
@@ -541,7 +915,7 @@ void Theme::parseFrom(const QJsonObject &root, bool isCustomTheme)
     )"_s.arg(
         this->splits.input.background.name(QColor::HexArgb),
         this->tabs.selected.backgrounds.regular.name(QColor::HexArgb),
-        this->messages.textColors.regular.name(QColor::HexArgb),
+        this->splits.input.text.name(QColor::HexArgb),
         this->isLightTheme()
             ? u"#68B1FF"_s
             : this->tabs.selected.backgrounds.regular.name(QColor::HexArgb));
@@ -595,7 +969,6 @@ void Theme::setAutoReload(bool autoReload)
     if (!autoReload)
     {
         this->themeReloadTimer_.reset();
-        this->currentThemeJson_ = {};
         return;
     }
 

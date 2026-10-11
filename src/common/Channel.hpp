@@ -62,14 +62,18 @@ public:
         /// Misc
         Misc,
         Multi,
+        YouTube,
+        TikTok,
     };
 
     explicit Channel(const QString &name, Type type);
+    Channel(const QString &name, Type type, size_t messagesLimit);
     ~Channel() override;
 
     // SIGNALS
     pajlada::Signals::Signal<MessagePtr &, std::optional<MessageFlags>>
         messageAppended;
+    pajlada::Signals::Signal<MessagePtr &, const MessagePtr &> messagePrepended;
     pajlada::Signals::Signal<std::vector<MessagePtr> &> messagesAddedAtStart;
     /// (index, prev-message, replacement)
     pajlada::Signals::Signal<size_t, const MessagePtr &, const MessagePtr &>
@@ -81,10 +85,13 @@ public:
 
     Type getType() const;
     const QString &getName() const;
+    const QString &getPrefixedName() const;
     virtual const QString &getDisplayName() const;
     virtual const QString &getLocalizedName() const;
     bool isTwitchChannel() const;
     bool isKickChannel() const;
+    bool isYouTubeChannel() const;
+    bool isTikTokChannel() const;
     bool isTwitchOrKickChannel() const;
     virtual bool isEmpty() const;
 
@@ -108,6 +115,7 @@ public:
     void addMessage(
         MessagePtr message, MessageContext context,
         std::optional<MessageFlags> overridingFlags = std::nullopt) final;
+    void prependMessage(MessagePtr message);
     void addMessagesAtStart(const std::vector<MessagePtr> &messages_);
 
     void addSystemMessage(const QString &contents);
@@ -121,7 +129,7 @@ public:
     void replaceMessage(const MessagePtr &message,
                         const MessagePtr &replacement);
     void replaceMessage(size_t index, const MessagePtr &replacement);
-    void replaceMessage(size_t hint, const MessagePtr &message,
+    bool replaceMessage(size_t hint, const MessagePtr &message,
                         const MessagePtr &replacement);
     void decryptMessages(const QString &encryptionPassword);
     void disableMessage(const QString &messageID);
@@ -165,7 +173,8 @@ public:
 
     MessagePlatform messagePlatform() const;
 
-    TabCompletionModel *completionModel;
+    TabCompletionModel *getCompletionModel();
+    std::unique_ptr<TabCompletionModel> completionModel;
     QDate lastDate_;
 
 protected:
@@ -177,6 +186,7 @@ private:
     bool canRecurse() const noexcept;
 
     const QString name_;
+    const QString prefixedName_;
     LimitedQueue<MessagePtr> messages_;
     Type type_;
     bool anythingLogged_ = false;
@@ -229,8 +239,6 @@ constexpr magic_enum::customize::customize_t
 {
     using Type = chatterino::Channel::Type;
 
-    // These names are used for encoding channels in the window layout settings.
-    // They need to be stable across Chatterino versions.
     switch (value)
     {
         case Type::Twitch:
@@ -251,11 +259,15 @@ constexpr magic_enum::customize::customize_t
             return "kick";
         case Type::Multi:
             return "multi";
+        case Type::YouTube:
+            return "youtube";
+        case Type::TikTok:
+            return "tiktok";
 
         case Type::None:
         case Type::Direct:
         case Type::TwitchEnd:
-            return default_tag;  // FIXME: Remove these (#5703)
+            return default_tag;
     }
     return default_tag;
 }

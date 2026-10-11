@@ -121,6 +121,39 @@ Paths::Paths(const Args &args, const Modes &modes)
 
     this->initRootDirectory(args, modes);
     this->initSubDirectories();
+
+    QStringList bases{
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation),
+        QStandardPaths::writableLocation(
+            QStandardPaths::GenericConfigLocation)};
+    const auto standardData =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!standardData.isEmpty())
+    {
+        bases.append(QFileInfo(standardData).dir().absolutePath());
+    }
+    bases.removeDuplicates();
+    for (const auto &base : bases)
+    {
+        if (base.isEmpty())
+        {
+            continue;
+        }
+        this->bluzyrinoDataDirectories.append(combinePath(base, "Bluzyrino"));
+#ifndef Q_OS_WIN
+        this->bluzyrinoDataDirectories.append(combinePath(base, "bluzyrino"));
+#endif
+    }
+    if (!standardData.isEmpty())
+    {
+#ifdef Q_OS_WIN
+        this->bluzyrinoDataDirectories.append(
+            QFileInfo(standardData).dir().filePath("Chatterino2"));
+#else
+        this->bluzyrinoDataDirectories.append(standardData);
+#endif
+    }
+    this->bluzyrinoDataDirectories.removeDuplicates();
 }
 
 bool Paths::createFolder(const QString &folderPath)

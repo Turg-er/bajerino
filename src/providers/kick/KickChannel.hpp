@@ -9,6 +9,7 @@
 #include <chrono>
 #include <map>
 #include <queue>
+#include <span>
 #include <unordered_map>
 
 namespace chatterino {
@@ -22,6 +23,7 @@ struct UserConnectionUpdateDispatch;
 
 class MessageThread;
 class EmoteMap;
+class ChannelAvatarSource;
 
 struct Emote;
 using EmotePtr = std::shared_ptr<const Emote>;
@@ -65,6 +67,11 @@ public:
     const QString &slug() const
     {
         return this->slug_;
+    }
+
+    std::shared_ptr<ChannelAvatarSource> channelAvatar() const
+    {
+        return this->channelAvatar_;
     }
 
     uint64_t roomID() const
@@ -129,6 +136,7 @@ public:
         QString uptime;
         uint64_t viewerCount = 0;
     };
+    bool updateLiveStatus(bool live, const QString &title);
     void updateStreamData(const KickChannelInfo &info);
     const StreamData &streamData() const;
     pajlada::Signals::NoArgSignal streamDataChanged;
@@ -179,15 +187,14 @@ private:
                                           const QString &emoteName);
 
     void emitSendWait();
-
     void initSubBadges(std::span<const KickPrivateChannelSubBadge> infos);
-
     void loadChannelHistory();
 
     // Kick usually calls this username
     QString displayName_;
     // The name in the URL (replaces non-alphanumeric characters with dashes)
     QString slug_;
+    std::shared_ptr<ChannelAvatarSource> channelAvatar_;
 
     Atomic<std::shared_ptr<const EmoteMap>> seventvEmotes_;
 

@@ -29,6 +29,8 @@ const QColor &MessageColor::getColor(const MessageColors &colors) const
             return colors.regularText;
         case Type::System:
             return colors.systemText;
+        case Type::Timestamp:
+            return colors.timestampText;
         case Type::Link:
             return colors.linkText;
     }
@@ -47,6 +49,8 @@ QString MessageColor::toString() const
             return QStringLiteral("Text");
         case Type::System:
             return QStringLiteral("System");
+        case Type::Timestamp:
+            return QStringLiteral("Timestamp");
         case Type::Link:
             return QStringLiteral("Link");
         default:
@@ -64,6 +68,8 @@ QString MessageColor::toLua() const
             return QStringLiteral("text");
         case Type::System:
             return QStringLiteral("system");
+        case Type::Timestamp:
+            return QStringLiteral("timestamp");
         case Type::Link:
             return QStringLiteral("link");
         default:
@@ -89,7 +95,12 @@ MessageColor MessageColor::fromLua(const QString &spec, Type fallback)
     {
         return MessageColor::System;
     }
-    // custom
+
+    if (spec == u"timestamp")
+    {
+        return MessageColor::Timestamp;
+    }
+
     return QColor(spec);
 }
 

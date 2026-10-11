@@ -52,6 +52,8 @@ struct KickPrivateChannelInfo {
     KickPrivateUserInfo user;
     KickPrivateChatroomInfo chatroom;
     std::vector<KickPrivateChannelSubBadge> subBadges;
+    std::optional<bool> isLive;
+    QString streamTitle;
 };
 
 struct KickPrivateChannelInfoSmall {
@@ -128,6 +130,9 @@ public:
     static void privateChannelInfoSmall(
         const QString &slug, Callback<KickPrivateChannelInfoSmall> cb);
 
+    static void privateChannelHistory(uint64_t channelID,
+                                      Callback<BoostJsonObject> cb);
+
     static void privateUserInChannelInfo(
         const QString &userUsername, const QString &channelUsername,
         Callback<KickPrivateUserInChannelInfo> cb);
@@ -135,9 +140,6 @@ public:
     static void privateEmotesInChannel(
         const QString &username,
         Callback<std::vector<KickPrivateEmoteSetInfo>> cb);
-
-    static void privateChannelHistory(uint64_t channelID,
-                                      Callback<BoostJsonObject> cb);
 
     void sendMessage(uint64_t broadcasterUserID, const QString &message,
                      const QString &replyToMessageID, Callback<void> cb);

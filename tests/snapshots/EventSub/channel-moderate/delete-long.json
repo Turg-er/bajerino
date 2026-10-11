@@ -102,6 +102,7 @@
                     "type": "TextElement",
                     "words": [
                         "deleted",
+                        "a",
                         "message",
                         "from"
                     ]
@@ -116,7 +117,7 @@
                     },
                     "style": "ChatMedium",
                     "tooltip": "",
-                    "trailingSpace": true,
+                    "trailingSpace": false,
                     "type": "MentionElement",
                     "userColor": "System",
                     "userLoginName": "testaccount_420",
@@ -136,7 +137,7 @@
                     "trailingSpace": true,
                     "type": "TextElement",
                     "words": [
-                        "saying:"
+                        ":"
                     ]
                 },
                 {
@@ -162,8 +163,8 @@
             "id": "",
             "localizedName": "",
             "loginName": "testaccount_420",
-            "messageText": "testaccount_420 deleted message from testaccount_420 saying: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
-            "searchText": "testaccount_420 deleted message from testaccount_420 saying: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
+            "messageText": "testaccount_420 deleted a message from testaccount_420: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
+            "searchText": "testaccount_420 deleted a message from testaccount_420: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa…",
             "serverReceivedTime": "2024-05-14T12:31:47Z",
             "timeoutUser": "testaccount_420",
             "twitchBadgeInfos": {

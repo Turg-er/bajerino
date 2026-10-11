@@ -38,7 +38,8 @@ public:
     WebSocketHandle &operator=(const WebSocketHandle &) = delete;
     WebSocketHandle &operator=(WebSocketHandle &&) = default;
 
-    void sendText(const QByteArray &data);
+    [[nodiscard]] bool isValid() const;
+    bool sendText(const QByteArray &data);
     void sendBinary(const QByteArray &data);
     void close();
 
@@ -87,6 +88,7 @@ struct WebSocketOptions {
     QUrl url;
     std::vector<std::pair<std::string, std::string>> headers;
     std::optional<WebSocketProxyOptions> proxy;
+    std::size_t maxMessageBytes = 0;
 };
 
 class WebSocketPool

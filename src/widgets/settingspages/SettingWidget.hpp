@@ -124,6 +124,10 @@ public:
         conditionallyEnabledBy(QStringSetting &setting,
                                const QString &expectedValue);
 
+    void setDropdownItems(
+        const std::vector<std::pair<QString, QVariant>> &items,
+        const QVariant &selectedValue);
+
     void addTo(GeneralPageView &view);
     void addTo(GeneralPageView &view, QFormLayout *formLayout);
 

@@ -35,7 +35,7 @@ jobs:
         with:
           cache: true
           cache-key-prefix: ${{ runner.os }}-QtCache-${{ matrix.qt-version }}-v2
-          modules: qtimageformats
+          modules: qtimageformats qtsvg
           version: ${{ matrix.qt-version }}
           dir: ${{ github.workspace }}/.qtinstall
           set-env: false
@@ -54,7 +54,8 @@ jobs:
           cmake_command: >-
             ./.CI/setup-clang-tidy.sh
           apt_packages: >-
-            libsecret-1-dev,
+            libsecret-1-dev, libwebp-dev, libvpx-dev, libyuv-dev,
+            libwebkit2gtk-4.1-dev, libjson-glib-dev,
             libboost-dev, libboost-system-dev, libboost-filesystem-dev,
             libssl-dev,
             rapidjson-dev,

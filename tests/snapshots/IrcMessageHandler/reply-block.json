@@ -49,21 +49,6 @@
                 },
                 {
                     "color": "Text",
-                    "flags": "RepliedMessage",
-                    "link": {
-                        "type": "UserInfo",
-                        "value": "nerixyz"
-                    },
-                    "style": "ChatMediumSmall",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "@nerixyz:"
-                    ]
-                },
-                {
-                    "color": "Text",
                     "flags": "Text|RepliedMessage",
                     "link": {
                         "type": "None",
@@ -74,7 +59,8 @@
                     "trailingSpace": true,
                     "type": "SingleLineTextElement",
                     "words": [
-                        "BLOCK"
+                        "[Blocked",
+                        "user]"
                     ]
                 },
                 {

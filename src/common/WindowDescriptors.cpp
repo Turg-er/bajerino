@@ -8,8 +8,10 @@
 #include "common/QLogging.hpp"
 #include "debug/AssertInGuiThread.hpp"
 #include "providers/kick/KickChatServer.hpp"
+#include "providers/tiktok/TikTokChatServer.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
+#include "providers/youtube/YouTubeChatServer.hpp"
 #include "util/MultiChannel.hpp"
 #include "util/QMagicEnum.hpp"
 #include "widgets/Window.hpp"
@@ -18,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonParseError>
+#include <QSet>
 
 #include <algorithm>
 #include <limits>
@@ -42,7 +45,16 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
         return makeUnexpected(u"Failed to open file: " % file.errorString());
     }
 
-    QByteArray data = file.readAll();
+    constexpr qint64 MAX_LAYOUT_BYTES = 8 * 1024 * 1024;
+    if (file.size() > MAX_LAYOUT_BYTES)
+    {
+        return makeUnexpected(u"Window layout is too large"_s);
+    }
+    const auto data = file.read(MAX_LAYOUT_BYTES + 1);
+    if (data.size() > MAX_LAYOUT_BYTES)
+    {
+        return makeUnexpected(u"Window layout is too large"_s);
+    }
     QJsonParseError error;
     QJsonDocument document = QJsonDocument::fromJson(data, &error);
     if (error.error != QJsonParseError::NoError)
@@ -67,6 +79,32 @@ ExpectedStr<QJsonArray> loadWindowArray(const QString &settingsPath)
     if (windows.isEmpty())
     {
         return makeUnexpected(u"Window layout does not contain any windows"_s);
+    }
+
+    for (const auto &windowValue : windows)
+    {
+        if (!windowValue.isObject())
+        {
+            return makeUnexpected(
+                QStringLiteral("Window layout contains an invalid window"));
+        }
+
+        const auto tabsValue = windowValue.toObject().value("tabs");
+        if (!tabsValue.isArray())
+        {
+            return makeUnexpected(
+                QStringLiteral("Window layout contains a window without a "
+                               "valid tabs array"));
+        }
+
+        for (const auto &tabValue : tabsValue.toArray())
+        {
+            if (!tabValue.isObject())
+            {
+                return makeUnexpected(
+                    QStringLiteral("Window layout contains an invalid tab"));
+            }
+        }
     }
 
     return windows;
@@ -160,6 +198,8 @@ SplitDescriptor SplitDescriptor::loadFromJSON(const QJsonObject &root)
     descriptor.server_ = data.value("server").toInt(-1);
     descriptor.twitchChannelMode_ = decodeTwitchChannelMode(data);
     descriptor.moderationMode_ = root.value("moderationMode").toBool();
+    descriptor.autoModChannelFilter_ =
+        data.value("autoModChannel").toString().trimmed().toLower();
     if (data.contains("channel"))
     {
         descriptor.channelName_ = data.value("channel").toString();
@@ -178,10 +218,12 @@ SplitDescriptor SplitDescriptor::loadFromJSON(const QJsonObject &root)
 
     if (descriptor.type_ == u"kick")
     {
-        descriptor.kickChannelID =
-            static_cast<uint64_t>(data["channelID"].toInt());
-        descriptor.kickUserID = static_cast<uint64_t>(data["userID"].toInt());
-        descriptor.kickRoomID = static_cast<uint64_t>(data["roomID"].toInt());
+        descriptor.kickChannelID = static_cast<uint64_t>(
+            std::max<qint64>(0, data["channelID"].toInteger()));
+        descriptor.kickUserID = static_cast<uint64_t>(
+            std::max<qint64>(0, data["userID"].toInteger()));
+        descriptor.kickRoomID = static_cast<uint64_t>(
+            std::max<qint64>(0, data["roomID"].toInteger()));
     }
     else if (descriptor.type_ == u"multi")
     {
@@ -217,6 +259,10 @@ QJsonObject SplitDescriptor::toJson() const
     if (!this->channelName_.isEmpty())
     {
         data.insert("name"_L1, this->channelName_);
+    }
+    if (!this->autoModChannelFilter_.isEmpty())
+    {
+        data.insert("autoModChannel", this->autoModChannelFilter_);
     }
     if (this->twitchChannelMode_.has_value())
     {
@@ -291,6 +337,12 @@ IndirectChannel SplitDescriptor::decodeChannel() const
                                         .userID = this->kickUserID,
                                         .channelID = this->kickChannelID,
                                     });
+        case Channel::Type::YouTube:
+            return getApp()->getYouTubeChatServer()->getOrCreate(
+                this->channelName_);
+        case Channel::Type::TikTok:
+            return getApp()->getTikTokChatServer()->getOrCreate(
+                this->channelName_);
         case Channel::Type::Multi: {
             QVarLengthArray<MultiChannel::Spec, 4> specs;
             QVarLengthArray<std::optional<TwitchChannelMode>, 4> modeOverrides;
@@ -356,9 +408,13 @@ QJsonObject SplitNodeDescriptor::toJson() const
 }
 
 ContainerNodeDescriptor ContainerNodeDescriptor::loadFromJSON(
-    const QJsonObject &root)
+    const QJsonObject &root, unsigned depth)
 {
     ContainerNodeDescriptor descriptor;
+    if (depth >= 64)
+    {
+        return descriptor;
+    }
 
     descriptor.flexH_ = root.value("flexh").toDouble(1.0);
     descriptor.flexV_ = root.value("flexv").toDouble(1.0);
@@ -375,10 +431,10 @@ ContainerNodeDescriptor ContainerNodeDescriptor::loadFromJSON(
             descriptor.items_.emplace_back(
                 SplitNodeDescriptor::loadFromJSON(obj));
         }
-        else
+        else if (type == "horizontal" || type == "vertical")
         {
             descriptor.items_.emplace_back(
-                ContainerNodeDescriptor::loadFromJSON(obj));
+                ContainerNodeDescriptor::loadFromJSON(obj, depth + 1));
         }
     }
 
@@ -421,11 +477,21 @@ TabDescriptor TabDescriptor::loadFromJSON(const QJsonObject &tabObj)
         tab.customTabColor_ = colorVal.toString();
     }
 
+    QJsonValue groupVal = tabObj.value("groupId");
+    if (groupVal.isString())
+    {
+        tab.groupId_ = groupVal.toString().left(64);
+    }
+    tab.ungroupedIndex_ =
+        std::clamp(tabObj.value("ungroupedIndex").toInt(-1), -1, 100000);
+
     // Load tab selected state
     tab.selected_ = tabObj.value("selected").toBool(false);
 
     // Load tab "highlightsEnabled" state
     tab.highlightsEnabled_ = tabObj.value("highlightsEnabled").toBool(true);
+
+    tab.alwaysVisible_ = tabObj.value("alwaysVisible").toBool(false);
 
     QJsonObject splitRoot = tabObj.value("splits2").toObject();
 
@@ -510,6 +576,66 @@ ExpectedStr<WindowLayout> WindowLayout::loadFromFile(const QString &path)
         }
 
         bool hasSetASelectedTab = false;
+
+        QSet<QString> groupIds;
+        const QJsonArray groups = windowObj.value("tabGroups").toArray();
+        constexpr auto MAX_GROUPS = 128;
+        for (const auto &groupVal : groups)
+        {
+            if (window.tabGroups_.size() >= MAX_GROUPS)
+            {
+                break;
+            }
+
+            const auto groupObj = groupVal.toObject();
+            const auto id = groupObj.value("id").toString().left(64);
+            if (id.isEmpty() || groupIds.contains(id))
+            {
+                continue;
+            }
+            groupIds.insert(id);
+
+            const auto storedColor =
+                groupObj.value("color").toString().left(32);
+            auto colorMode = groupObj.value("colorMode").toString().toLower();
+            if (colorMode != "theme" && colorMode != "none" &&
+                colorMode != "custom")
+            {
+                colorMode = storedColor.isEmpty() ? QStringLiteral("theme")
+                                                  : QStringLiteral("custom");
+            }
+
+            auto icon = groupObj.value("icon").toString().toLower();
+            static const QSet<QString> validIcons = {
+                QStringLiteral("folder"), QStringLiteral("star"),
+                QStringLiteral("heart"),  QStringLiteral("bell"),
+                QStringLiteral("shield"), QStringLiteral("none"),
+                QStringLiteral("custom"),
+            };
+            if (!validIcons.contains(icon))
+            {
+                icon = QStringLiteral("folder");
+            }
+            auto customIconPath =
+                groupObj.value("customIconPath").toString().left(1024);
+            if (icon != "custom")
+            {
+                customIconPath.clear();
+            }
+
+            window.tabGroups_.push_back({
+                .id_ = id,
+                .name_ = groupObj.value("name").toString().left(64),
+                .colorMode_ = colorMode,
+                .color_ = storedColor,
+                .icon_ = icon,
+                .customIconPath_ = customIconPath,
+                .collapsed_ = groupObj.value("collapsed").toBool(false),
+                .muted_ = groupObj.value("muted").toBool(false),
+                .openMenuOnClick_ =
+                    groupObj.value("openMenuOnClick").toBool(false),
+            });
+        }
 
         // Load window tabs
         QJsonArray tabs = windowObj.value("tabs").toArray();

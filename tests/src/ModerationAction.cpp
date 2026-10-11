@@ -57,7 +57,7 @@ TEST_F(ModerationActionTest, Parse)
         {
             .action = "/ban forsen",
             .expectedImage =
-                Image::fromResourcePixmap(getResources().buttons.ban),
+                Image::fromResourcePixmap(getResources().buttons.inlineBan),
             .expectedType = ModerationAction::Type::Ban,
         },
         {

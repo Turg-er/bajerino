@@ -61,6 +61,10 @@ public:
         const std::unordered_set<SubscriptionRequest> &subs) = 0;
 
     virtual void debug() = 0;
+    virtual void subscriptionRevoked(const QString &subscriptionID,
+                                     const QString &status)
+    {
+    }
 };
 
 class Controller : public IController
@@ -82,6 +86,8 @@ public:
         const std::unordered_set<SubscriptionRequest> &subs) override;
 
     void debug() override;
+    void subscriptionRevoked(const QString &subscriptionID,
+                             const QString &status) override;
 
 private:
     using SubscriptionGeneration = uint64_t;
@@ -89,6 +95,8 @@ private:
     void subscribe(const SubscriptionRequest &request, bool isRetry,
                    SubscriptionGeneration generation);
 
+    void checkModeratorAccess(const SubscriptionRequest &request,
+                              uint64_t generation);
     void createConnection();
     void createConnection(std::string host, std::string port, std::string path,
                           std::unique_ptr<lib::Listener> listener);
@@ -156,6 +164,8 @@ private:
             Unsubscribing,
         } state = State::Unsubscribed;
 
+        QString revocationStatus;
+        bool moderatorRecoveryAttempted = false;
         int32_t refCount = 0;
         SubscriptionGeneration generation = 0;
         std::weak_ptr<lib::Session> connection;
@@ -175,8 +185,45 @@ private:
 
     std::atomic<bool> quitting = false;
     OnceFlag stoppedFlag;
+    std::shared_ptr<std::atomic<bool>> alive =
+        std::make_shared<std::atomic<bool>>(true);
 
     friend class ControllerTestAccess;
+};
+
+class DummyController : public IController
+{
+public:
+    ~DummyController() override = default;
+
+    void removeRef(const SubscriptionRequest &request) override
+    {
+        (void)request;
+    }
+
+    void setQuitting() override
+    {
+    }
+
+    [[nodiscard]] SubscriptionHandle subscribe(
+        const SubscriptionRequest &request) override
+    {
+        (void)request;
+        return {};
+    }
+
+    void reconnectConnection(
+        std::unique_ptr<lib::Listener> connection,
+        const std::optional<std::string> &reconnectURL,
+        const std::unordered_set<SubscriptionRequest> &subs) override;
+
+    void subscriptionRevoked(const QString &, const QString &) override
+    {
+    }
+
+    void debug() override
+    {
+    }
 };
 
 }  // namespace chatterino::eventsub

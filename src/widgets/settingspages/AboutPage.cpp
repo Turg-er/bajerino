@@ -169,9 +169,20 @@ AboutPage::AboutPage()
             addLicense(form.getElement(), "Unicode",
                        "https://www.unicode.org/copyright.html",
                        ":/licenses/unicode.txt");
+            addLicense(form.getElement(), "Gabarito",
+                       "https://github.com/naipefoundry/gabarito",
+                       ":/fonts/Gabarito/OFL.txt");
+#if MOLTORINO_HAVE_YOUTUBE_ACCOUNTS
+            addLicense(form.getElement(), "keychain",
+                       "https://github.com/hrantzsch/keychain",
+                       ":/licenses/keychain.txt");
+#endif
 #ifdef CHATTERINO_WITH_SPELLCHECK
             addLicense(form.getElement(), "Hunspell",
                        "https://hunspell.github.io", ":/licenses/hunspell.txt");
+            addLicense(form.getElement(), "English spelling dictionary",
+                       "http://wordlist.aspell.net/",
+                       ":/licenses/english-dictionary.txt");
 #endif
         }
 

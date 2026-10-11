@@ -7,6 +7,8 @@
 #include "ForwardDecl.hpp"
 #include "widgets/BasePopup.hpp"
 
+#include <QPointer>
+
 #include <memory>
 
 class QLineEdit;
@@ -23,12 +25,10 @@ public:
 
     virtual void addChannel(ChannelView &channel);
     void goToMessage(const MessagePtr &message);
-    /**
-     * This method should only be used for searches that
-     * don't include a mentions channel,
-     * since it will only search in the opened channels (not globally).
-     * @param messageId
-     */
+    bool canReplyToMessage(const MessagePtr &message) const;
+    bool replyToMessage(const MessagePtr &message);
+    ChannelPtr sourceChannelForMessage(const MessagePtr &message) const;
+
     void goToMessageId(const QString &messageId);
 
 protected:
@@ -42,6 +42,7 @@ private:
     void search();
     void addShortcuts() override;
     std::vector<MessagePtr> buildSnapshot();
+    ChannelView *sourceViewForMessage(const MessagePtr &message) const;
 
     /**
      * @brief Only retains those message from a list of messages that satisfy a
@@ -73,7 +74,7 @@ private:
     ChannelView *channelView_{};
     QString channelName_{};
     Split *split_ = nullptr;
-    QList<std::reference_wrapper<ChannelView>> searchChannels_;
+    QList<QPointer<ChannelView>> searchChannels_;
 };
 
 }  // namespace chatterino

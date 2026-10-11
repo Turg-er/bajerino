@@ -7,6 +7,7 @@
 #include "pajlada/settings/settinglistener.hpp"
 
 #include <pajlada/signals/signal.hpp>
+#include <pajlada/signals/signalholder.hpp>
 #include <QFont>
 #include <QFontMetrics>
 
@@ -18,7 +19,12 @@ namespace chatterino {
 class Settings;
 class Paths;
 
-/** @exposeenum c2.FontStyle */
+bool registerBundledFonts();
+int getUsernameBoldness();
+QFont makeResolvedFont(const QString &family, qreal pointSize, int weight,
+                       bool italic = false);
+QFont makeResolvedFont(const QFont &base, int weight);
+
 enum class FontStyle : uint8_t {
     Tiny,
     ChatSmall,
@@ -35,12 +41,17 @@ enum class FontStyle : uint8_t {
     UiMediumBold,
     UiTabs,
 
-    // don't remove this value
+    ChatUsername,
     EndType,
 
     // make sure to update these values accordingly!
     ChatStart = ChatSmall,
     ChatEnd = ChatVeryLarge,
+};
+
+struct FontAlignmentMetrics {
+    qreal uppercaseCenterAboveBottom = 0;
+    qreal lowercaseCenterAboveBottom = 0;
 };
 
 class Fonts final
@@ -52,6 +63,8 @@ public:
 
     QFont getFont(FontStyle type, float scale);
     QFontMetricsF getFontMetrics(FontStyle type, float scale);
+
+    const FontAlignmentMetrics &getUsernameAlignmentMetrics(float scale);
 
     pajlada::Signals::NoArgSignal fontChanged;
 
@@ -84,7 +97,9 @@ private:
 
     std::vector<std::unordered_map<float, FontData>> fontsByType_;
 
+    std::unordered_map<float, FontAlignmentMetrics> usernameAlignmentsByScale_;
     pajlada::SettingListener fontChangedListener;
+    pajlada::Signals::SignalHolder themeConnections_;
 };
 
 }  // namespace chatterino

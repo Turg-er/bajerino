@@ -14,6 +14,7 @@
 #include <pajlada/settings/settinglistener.hpp>
 #include <pajlada/signals/signalholder.hpp>
 #include <QColor>
+#include <QObject>
 #include <QUrl>
 
 #include <cstdint>
@@ -40,7 +41,9 @@ public:
         const MessageParseArgs &args,
         const std::vector<TwitchBadge> &twitchBadges, const QString &senderName,
         const QString &originalMessage, const MessageFlags &messageFlags,
-        MessagePlatform platform = MessagePlatform::AnyOrTwitch) const;
+        MessagePlatform platform = MessagePlatform::AnyOrTwitch,
+        const QString &senderID = {}, const QString &channelName = {},
+        bool forceMatchRanges = false) const;
 
 private:
     /**
@@ -52,6 +55,7 @@ private:
 
     UniqueAccess<std::vector<HighlightCheck>> checks_;
 
+    QObject lifetimeGuard_;
     pajlada::SettingListener rebuildListener_;
     pajlada::Signals::SignalHolder signalHolder_;
 };

@@ -26,6 +26,7 @@
 #include "providers/seventv/SeventvEventAPI.hpp"
 #include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/api/Helix.hpp"
+#include "providers/twitch/api/TwitchGql.hpp"
 #include "providers/twitch/IrcMessageHandler.hpp"
 #include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
@@ -90,20 +91,6 @@ QString getUserPointsChannelId(const QJsonObject &payload)
     return channelId;
 }
 
-QString makeWebClientNonce()
-{
-    QString nonce;
-    nonce.reserve(32);
-
-    auto *random = QRandomGenerator::global();
-    for (int i = 0; i < 4; ++i)
-    {
-        nonce += u"%1"_s.arg(random->generate(), 8, 16, QLatin1Char('0'));
-    }
-
-    return nonce.toLower();
-}
-
 thread_local bool PREFER_ANONYMOUS_TWITCH_CHANNELS = false;
 
 class ScopedAnonymousTwitchLookup
@@ -128,7 +115,7 @@ QStringList makeIrcTags(QStringList tags = {})
 {
     if (getSettings()->spoofIrcMessagesAsWeb)
     {
-        tags.prepend(u"client-nonce="_s + makeWebClientNonce());
+        tags.prepend(u"client-nonce="_s + makeTwitchClientNonce());
     }
 
     return tags;
@@ -328,7 +315,14 @@ void TwitchIrcServer::initialize()
     this->signalHolder.managedConnect(
         getApp()->getAccounts()->twitch.currentUserChanged, [this]() {
             postToThread([this] {
-                this->connect();
+                if (this->clearAnonymousReadFallbacks())
+                {
+                    this->reevaluateChannelRouting();
+                }
+                else
+                {
+                    this->connect();
+                }
             });
         });
 
@@ -723,6 +717,98 @@ void TwitchIrcServer::privateMessageReceived(
     IrcMessageHandler::instance().handlePrivMessage(message, *this);
 }
 
+bool TwitchIrcServer::clearAnonymousReadFallbacks()
+{
+    std::vector<std::shared_ptr<TwitchChannel>> resetChannels;
+    this->forEachChannel([&](const ChannelPtr &channel) {
+        if (auto tc = std::dynamic_pointer_cast<TwitchChannel>(channel);
+            tc && tc->anonymousReadFallback_)
+        {
+            tc->anonymousReadFallback_ = false;
+            resetChannels.push_back(std::move(tc));
+        }
+    });
+    for (const auto &channel : resetChannels)
+    {
+        channel->channelModeChanged.invoke();
+    }
+    return !resetChannels.empty();
+}
+
+void TwitchIrcServer::handleReadBlock(Communi::IrcMessage *message)
+{
+    const auto tags = message->tags();
+    if (tags.has("historical"))
+    {
+        return;
+    }
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (!account || account->isAnon())
+    {
+        return;
+    }
+    const auto notice = tags.getOrEmpty("msg-id");
+    const bool blockedNotice =
+        message->command() == "NOTICE" &&
+        (notice == "msg_banned" || notice == "msg_channel_blocked");
+    const auto targetID = tags.getOrEmpty("target-user-id");
+    const bool selfBan =
+        message->command() == "CLEARCHAT" && !tags.has("ban-duration") &&
+        (!targetID.isEmpty()
+             ? targetID == account->getUserId()
+             : message->parameter(1).compare(account->getUserName(),
+                                             Qt::CaseInsensitive) == 0);
+    if ((!blockedNotice && !selfBan) || !message->parameter(0).startsWith('#'))
+    {
+        return;
+    }
+    const auto name = cleanChannelName(message->parameter(0));
+    std::shared_ptr<TwitchChannel> channel;
+    bool authenticatedReadEmpty = false;
+    {
+        std::scoped_lock lock(this->channelMutex);
+        channel = std::dynamic_pointer_cast<TwitchChannel>(
+            this->channels.value(name).lock());
+        if (!channel || channel->usesAnonymousReadConnection())
+        {
+            return;
+        }
+        channel->anonymousReadFallback_ = true;
+        this->channels.remove(name);
+        this->anonymousChannels.insert(name, channel);
+        authenticatedReadEmpty = this->channels.isEmpty();
+    }
+    this->joinBucket_->removePending(name);
+    const auto generation = channel->expectReconnectPart();
+    this->readConnection_->sendRaw("PART #" + name);
+    QTimer::singleShot(10000, this,
+                       [weak = channel->weakFromThis(), generation] {
+                           if (auto current = weak.lock())
+                           {
+                               current->clearExpectedReconnectPart(generation);
+                           }
+                       });
+    if (authenticatedReadEmpty)
+    {
+        this->readConnectionStarted_ = false;
+        this->readConnection_->close();
+    }
+    channel->channelModeChanged.invoke();
+    channel->addSystemMessage(
+        "You are banned from this channel. Connecting anonymously to keep "
+        "reading. Reconnect after an unban to restore your configured read "
+        "mode.");
+    if (this->anonymousReadConnection_)
+    {
+        this->anonymousReadConnection_->onChannelCreated(*channel);
+        if (!this->anonymousReadConnectionStarted_)
+        {
+            this->anonymousReadConnectionStarted_ = true;
+            this->anonymousReadConnection_->reconnect();
+        }
+    }
+}
+
 void TwitchIrcServer::readConnectionMessageReceived(
     Communi::IrcMessage *message, bool anonymous)
 {
@@ -791,6 +877,10 @@ void TwitchIrcServer::readConnectionMessageReceived(
         this->markChannelsConnected();
         this->connect();
     }
+    if (!anonymous && (command == "NOTICE" || command == "CLEARCHAT"))
+    {
+        this->handleReadBlock(message);
+    }
 }
 
 void TwitchIrcServer::writeConnectionMessageReceived(
@@ -821,6 +911,10 @@ void TwitchIrcServer::writeConnectionMessageReceived(
     else if (command == "WHISPER")
     {
         handler.handleWhisperMessage(message);
+    }
+    if (command == "NOTICE")
+    {
+        this->handleReadBlock(message);
     }
 }
 
@@ -1812,6 +1906,73 @@ void TwitchIrcServer::sendMessage(const QString &channelName,
     this->sendRawMessage(makePrivmsg(channelName, message, makeIrcTags()));
 }
 
+bool TwitchIrcServer::sendInvisibleMessage(
+    const std::shared_ptr<TwitchChannel> &channel, const QString &message,
+    const QString &oauthToken)
+{
+    if (!channel)
+    {
+        return false;
+    }
+    if (oauthToken.trimmed().isEmpty())
+    {
+        channel->addSystemMessage(
+            MoltorinoAuth::authRequiredMessage("sending invisible messages"));
+        return false;
+    }
+
+    const auto channelId = channel->roomId();
+    if (channelId.isEmpty())
+    {
+        channel->addSystemMessage(
+            "Sending messages in this channel isn't possible yet.");
+        return false;
+    }
+
+    const auto parsedMessage = channel->prepareMessage(message);
+    if (parsedMessage.isEmpty())
+    {
+        return false;
+    }
+    if (parsedMessage.size() > TWITCH_MESSAGE_LIMIT)
+    {
+        channel->addSystemMessage("Your message was too long.");
+        return false;
+    }
+    if (!this->prepareToSend(channel))
+    {
+        return false;
+    }
+
+    const auto nonce = makeInvisibleTwitchClientNonce(parsedMessage);
+    const auto weak = std::weak_ptr<TwitchChannel>(channel);
+    TwitchGql::sendChatMessageWithNonce(
+        channelId, parsedMessage, nonce, oauthToken,
+        [weak, parsedMessage] {
+            auto shared = weak.lock();
+            if (!shared)
+            {
+                return;
+            }
+
+            shared->updateBttvActivity();
+            shared->updateSevenTVActivity();
+            shared->lastSentMessage_ = parsedMessage;
+        },
+        [weak](const QString &error) {
+            auto shared = weak.lock();
+            if (!shared)
+            {
+                return;
+            }
+
+            shared->addSystemMessage("Failed to send invisible message: " +
+                                     MoltorinoAuth::normalizeAuthError(
+                                         "sending invisible messages", error));
+        });
+    return true;
+}
+
 void TwitchIrcServer::sendRawMessage(const QString &rawMessage)
 {
     std::lock_guard<std::mutex> locker(this->connectionMutex_);
@@ -2062,6 +2223,99 @@ ChannelPtr TwitchIrcServer::getAnonymousChannelOrEmpty(
     }
 
     return Channel::getEmpty();
+}
+
+void TwitchIrcServer::reconnectChannel(
+    const std::shared_ptr<TwitchChannel> &channel)
+{
+    assertInGuiThread();
+    if (!channel || channel->hasExpectedReconnectPart())
+    {
+        return;
+    }
+    const auto name = channel->getName();
+    if (name.isEmpty() || name.startsWith('/'))
+    {
+        return;
+    }
+    const bool restoringFallback = channel->anonymousReadFallback_;
+    if (restoringFallback)
+    {
+        {
+            std::scoped_lock lock(this->channelMutex);
+            if (this->anonymousChannels.value(name).lock() != channel)
+            {
+                return;
+            }
+            channel->anonymousReadFallback_ = false;
+            this->anonymousChannels.remove(name);
+            this->channels.insert(name, channel);
+        }
+        if (this->anonymousReadConnection_)
+        {
+            const auto generation = channel->expectReconnectPart();
+            this->anonymousReadConnection_->removeChannel(name);
+            QTimer::singleShot(
+                10000, this, [weak = channel->weakFromThis(), generation] {
+                    if (auto current = weak.lock())
+                    {
+                        current->clearExpectedReconnectPart(generation);
+                    }
+                });
+        }
+        channel->channelModeChanged.invoke();
+    }
+    if (channel->usesAnonymousReadConnection())
+    {
+        if (this->anonymousReadConnection_)
+        {
+            this->anonymousReadConnection_->reconnectChannel(*channel);
+        }
+        return;
+    }
+    {
+        std::scoped_lock lock(this->channelMutex);
+        if (this->channels.value(name).lock() != channel)
+        {
+            return;
+        }
+    }
+    if (!this->readConnection_->isConnected())
+    {
+        this->ensureReadConnection();
+        return;
+    }
+    this->joinBucket_->removePending(name);
+    if (restoringFallback)
+    {
+        this->joinBucket_->send(name);
+        return;
+    }
+    const auto generation = channel->expectReconnectPart();
+    this->readConnection_->sendRaw("PART #" + name);
+    QTimer::singleShot(250, this, [this, weak = channel->weakFromThis(), name] {
+        auto current = weak.lock();
+        if (!current || current->usesAnonymousReadConnection())
+        {
+            return;
+        }
+        {
+            std::scoped_lock lock(this->channelMutex);
+            if (this->channels.value(name).lock() != current)
+            {
+                return;
+            }
+        }
+        // The bucket rechecks channel membership before sending the JOIN.
+        this->joinBucket_->send(name);
+    });
+    QTimer::singleShot(10000, this,
+                       [weak = channel->weakFromThis(), generation] {
+                           if (auto current = weak.lock())
+                           {
+                               current->clearExpectedReconnectPart(generation);
+                           }
+                       });
 }
 
 void TwitchIrcServer::reconnectAnonymousChannels()

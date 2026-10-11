@@ -5,13 +5,53 @@
 #pragma once
 
 #include <QColor>
+#include <QString>
 #include <QUrl>
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <ostream>
+#include <vector>
 
 namespace chatterino {
+
+enum class HighlightMatchSource : std::uint8_t {
+    Phrase,
+    WordList,
+    AutoMod,
+};
+
+enum class HighlightMatchStyle : std::uint8_t {
+    None,
+    Outline,
+    Fill,
+    OutlineAndFill,
+    Underline,
+};
+
+QString highlightMatchStyleName(HighlightMatchStyle style);
+QString highlightMatchAppearanceName(HighlightMatchStyle style, bool hasPaint);
+QString highlightMatchAppearanceTooltip(const QColor &color,
+                                        HighlightMatchStyle style,
+                                        const QString &paintID);
+HighlightMatchStyle highlightMatchStyleFromName(const QString &name);
+QColor defaultHighlightMatchColor(QColor messageHighlightColor);
+QColor defaultNewHighlightMatchColor();
+QColor defaultAutoModMatchColor();
+
+struct HighlightMatch {
+    qsizetype start{};
+    qsizetype length{};
+    QColor color;
+    QString ruleName;
+    QString pattern;
+    HighlightMatchSource source{HighlightMatchSource::Phrase};
+    HighlightMatchStyle style{HighlightMatchStyle::Outline};
+    QString paintID;
+
+    bool operator==(const HighlightMatch &other) const = default;
+};
 
 struct HighlightResult {
     HighlightResult(bool _alert, bool _playSound,
@@ -49,6 +89,8 @@ struct HighlightResult {
      * @brief true if highlight should show message in the /mentions split
      **/
     bool showInMentions{false};
+
+    std::vector<HighlightMatch> matches;
 
     bool operator==(const HighlightResult &other) const;
     bool operator!=(const HighlightResult &other) const;

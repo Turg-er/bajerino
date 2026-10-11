@@ -12,6 +12,7 @@
 #include "controllers/emotes/EmoteController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
+#include "controllers/ignores/HiddenUserController.hpp"
 #include "controllers/ignores/IgnoreController.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
 #include "controllers/userdata/UserDataController.hpp"
@@ -22,6 +23,7 @@
 #include "messages/MessageColor.hpp"
 #include "messages/MessageElement.hpp"
 #include "messages/MessageThread.hpp"
+#include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
@@ -29,9 +31,11 @@
 #include "providers/emoji/Emojis.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
+#include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
 #include "providers/links/LinkResolver.hpp"
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
+#include "providers/pronouns/Pronouns.hpp"
 #include "providers/repetitions/RepeatedMessageDetector.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
@@ -42,6 +46,7 @@
 #include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
+#include "providers/twitch/TwitchHelpers.hpp"
 #include "providers/twitch/TwitchIrc.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "providers/twitch/TwitchUsers.hpp"
@@ -56,20 +61,25 @@
 #include "util/FormatTime.hpp"
 #include "util/Helpers.hpp"
 #include "util/IrcHelpers.hpp"
+#include "util/PostToThread.hpp"
 #include "util/QStringHash.hpp"
 #include "util/Variant.hpp"
 #include "widgets/Window.hpp"
 
 #include <QApplication>
+#include <QCache>
 #include <QColor>
 #include <QDateTime>
 #include <QDebug>
 #include <QFileInfo>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QSet>
 #include <QStringBuilder>
 #include <QTimeZone>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <unordered_set>
 
@@ -87,116 +97,112 @@ const QString regexHelpString("(\\w+)[.,!?;:]*?$");
 // matches a mention with punctuation at the end, like "@username," or "@username!!!" where capture group would return "username"
 const QRegularExpression mentionRegex("^@" + regexHelpString);
 
+const QRegularExpression tiktokMentionRegex(
+    QStringLiteral(R"(^@([A-Za-z0-9_.]{0,23}[A-Za-z0-9_])[.,!?;:]*?$)"));
+
+const QRegularExpression youtubeMentionRegex(
+    QStringLiteral(
+        R"(^@([\p{L}\p{N}_](?:[\p{L}\p{N}_.\-\x{00B7}]*[\p{L}\p{N}_])?)[.,!?;:]*?$)"),
+    QRegularExpression::UseUnicodePropertiesOption);
+
 // if findAllUsernames setting is enabled, matches strings like in the examples above, but without @ symbol at the beginning
 const QRegularExpression allUsernamesMentionRegex("^" + regexHelpString);
 
 const QRegularExpression SPACE_REGEX("\\s");
 
-bool isDigit(QChar c)
+bool isFirstMessage(Communi::TagsRef tags)
 {
-    const auto value = c.unicode();
-    return value >= '0' && value <= '9';
-}
-
-bool isLowerHexLetter(QChar c)
-{
-    const auto value = c.unicode();
-    return value >= 'a' && value <= 'f';
-}
-
-bool isUpperHexLetter(QChar c)
-{
-    const auto value = c.unicode();
-    return value >= 'A' && value <= 'F';
-}
-
-Message::ClientDetectionStatus performClientDetection(const QString &nonce)
-{
-    using Status = Message::ClientDetectionStatus;
-
-    if (nonce.isEmpty())
+    const bool directlyMarked =
+        tags.getOrEmpty(QStringLiteral("first-msg")) == QStringLiteral("1");
+    auto sourceID = tags.getOrEmpty(QStringLiteral("source-id"));
+    if (sourceID.isEmpty() && directlyMarked)
     {
-        return Status::Abnormal;
+        sourceID = tags.getOrEmpty(QStringLiteral("id"));
+    }
+    if (sourceID.isEmpty())
+    {
+        return directlyMarked;
     }
 
-    if (nonce.size() == 32)
+    static QMutex mutex;
+    static QCache<QString, bool> firstSharedMessages(256);
+    const QMutexLocker lock(&mutex);
+
+    if (directlyMarked)
     {
-        const bool web = std::ranges::all_of(nonce, [](QChar c) {
-            return isDigit(c) || isLowerHexLetter(c);
-        });
-        return web ? Status::Web : Status::Abnormal;
+        firstSharedMessages.insert(sourceID, new bool(true));
+        return true;
     }
 
-    if (nonce.size() == 36)
+    return !tags.getOrEmpty(QStringLiteral("source-room-id")).isEmpty() &&
+           firstSharedMessages.contains(sourceID);
+}
+
+void finalizeMessageMetadata(Message &message)
+{
+    message.emoteOnly = false;
+    if (message.flags.hasAny(MessageFlag::System, MessageFlag::Timeout,
+                             MessageFlag::ModerationAction))
     {
-        if (nonce.at(8) != QLatin1Char('-') ||
-            nonce.at(13) != QLatin1Char('-') ||
-            nonce.at(18) != QLatin1Char('-') ||
-            nonce.at(23) != QLatin1Char('-') ||
-            nonce.at(14) != QLatin1Char('4'))
-        {
-            return Status::Abnormal;
-        }
-
-        bool sawLower = false;
-        bool sawUpper = false;
-        for (const auto c : nonce)
-        {
-            if (c == QLatin1Char('-'))
-            {
-                continue;
-            }
-            if (isDigit(c))
-            {
-                continue;
-            }
-            if (isLowerHexLetter(c))
-            {
-                sawLower = true;
-                continue;
-            }
-            if (isUpperHexLetter(c))
-            {
-                sawUpper = true;
-                continue;
-            }
-
-            return Status::Abnormal;
-        }
-
-        if (sawLower && sawUpper)
-        {
-            return Status::Abnormal;
-        }
-        if (sawUpper)
-        {
-            return Status::IOS;
-        }
-        return Status::Android;
+        return;
     }
 
-    return Status::Abnormal;
+    bool hasEmote = false;
+    bool hasOtherBodyContent = false;
+    for (const auto &element : message.elements)
+    {
+        const auto flags = element->getFlags();
+        if (flags.hasAny(MessageElementFlag::RepliedMessage,
+                         MessageElementFlag::ModeratorTools,
+                         MessageElementFlag::ReplyButton,
+                         MessageElementFlag::AutoModReviewExpanded,
+                         MessageElementFlag::AutoModReviewCompact,
+                         MessageElementFlag::AbnormalClientNonce,
+                         MessageElementFlag::RepeatedMessageCounter))
+        {
+            continue;
+        }
+
+        if (flags.hasAny(MessageElementFlag::Text,
+                         MessageElementFlag::BitsStatic,
+                         MessageElementFlag::BitsAnimated,
+                         MessageElementFlag::BitsAmount,
+                         MessageElementFlag::ChannelPointReward))
+        {
+            if (flags.has(MessageElementFlag::Text))
+            {
+                if (auto *text = dynamic_cast<TextElement *>(element.get()))
+                {
+                    text->shareTextStorageWith(message.messageText);
+                }
+            }
+            hasOtherBodyContent = true;
+            break;
+        }
+
+        if (flags.hasAny(MessageElementFlag::Emote,
+                         MessageElementFlag::EmojiAll))
+        {
+            hasEmote = true;
+            continue;
+        }
+
+        if (!flags.hasAny(
+                MessageElementFlag::Timestamp, MessageElementFlag::Badges,
+                MessageElementFlag::Username, MessageElementFlag::ChannelName,
+                MessageElementFlag::Pronouns,
+                MessageElementFlag::PlatformBadgeAlways,
+                MessageElementFlag::PlatformBadgeIfUnselected))
+        {
+            hasOtherBodyContent = true;
+            break;
+        }
+    }
+
+    message.emoteOnly = hasEmote && !hasOtherBodyContent;
 }
 
 constexpr QStringView ANONYMOUS_GIFTER_ID = u"274598607";
-
-struct HypeChatPaidLevel {
-    std::chrono::seconds duration;
-    uint8_t numeric;
-};
-
-const std::unordered_map<QString, HypeChatPaidLevel> HYPE_CHAT_PAID_LEVEL{
-    {u"ONE"_s, {.duration = 30s, .numeric = 1}},
-    {u"TWO"_s, {.duration = 2min + 30s, .numeric = 2}},
-    {u"THREE"_s, {.duration = 5min, .numeric = 3}},
-    {u"FOUR"_s, {.duration = 10min, .numeric = 4}},
-    {u"FIVE"_s, {.duration = 30min, .numeric = 5}},
-    {u"SIX"_s, {.duration = 1h, .numeric = 6}},
-    {u"SEVEN"_s, {.duration = 2h, .numeric = 7}},
-    {u"EIGHT"_s, {.duration = 3h, .numeric = 8}},
-    {u"NINE"_s, {.duration = 4h, .numeric = 9}},
-    {u"TEN"_s, {.duration = 5h, .numeric = 10}},
-};
 
 bool hasBadge(const QString &badges, const QString &badgeName)
 {
@@ -398,8 +404,15 @@ void actuallyTriggerHighlights(const QString & /*channelName*/, bool playSound,
     }
 }
 
-bool shouldSuppressHighlightAlert(const QString &channelName)
+bool shouldSuppressHighlightAlert(const Channel *channel)
 {
+    if (channel == nullptr)
+    {
+        return false;
+    }
+
+    const auto &channelName = channel->getName();
+
     if (getApp()->getStreamerMode()->isEnabled() &&
         getSettings()->streamerModeMuteMentions)
     {
@@ -410,6 +423,12 @@ bool shouldSuppressHighlightAlert(const QString &channelName)
     if (getSettings()->isMutedChannel(channelName))
     {
         // Do nothing. Pings are muted in this channel.
+        return true;
+    }
+
+    if (auto *windows = getApp()->getWindows();
+        windows && windows->shouldSuppressTabGroupAlerts(channel))
+    {
         return true;
     }
 
@@ -517,11 +536,10 @@ void appendBadges(MessageBuilder *builder,
         {
             if (auto customModBadge = twitchChannel->ffzCustomModBadge())
             {
-                builder
-                    ->emplace<ModBadgeElement>(
-                        *customModBadge,
-                        MessageElementFlag::BadgeChannelAuthority)
-                    ->setTooltip((*customModBadge)->tooltip.string);
+                auto *badgeElement = builder->emplace<ModBadgeElement>(
+                    *customModBadge, MessageElementFlag::BadgeChannelAuthority);
+                badgeElement->setTooltip((*customModBadge)->tooltip.string);
+                badgeElement->setTwitchBadge(badge.key_, badge.value_);
                 // early out, since we have to add a custom badge element here
                 continue;
             }
@@ -530,11 +548,10 @@ void appendBadges(MessageBuilder *builder,
         {
             if (auto customVipBadge = twitchChannel->ffzCustomVipBadge())
             {
-                builder
-                    ->emplace<VipBadgeElement>(
-                        *customVipBadge,
-                        MessageElementFlag::BadgeChannelAuthority)
-                    ->setTooltip((*customVipBadge)->tooltip.string);
+                auto *badgeElement = builder->emplace<VipBadgeElement>(
+                    *customVipBadge, MessageElementFlag::BadgeChannelAuthority);
+                badgeElement->setTooltip((*customVipBadge)->tooltip.string);
+                badgeElement->setTwitchBadge(badge.key_, badge.value_);
                 // early out, since we have to add a custom badge element here
                 continue;
             }
@@ -571,12 +588,14 @@ void appendBadges(MessageBuilder *builder,
             }
         }
 
-        builder->emplace<BadgeElement>(*badgeEmote, badge.flag_)
-            ->setTooltip(tooltip);
+        auto *badgeElement =
+            builder->emplace<BadgeElement>(*badgeEmote, badge.flag_);
+        badgeElement->setTooltip(tooltip);
+        badgeElement->setTwitchBadge(badge.key_, badge.value_);
     }
 
     builder->message().twitchBadges = badges;
-    builder->message().twitchBadgeInfos = badgeInfos;
+    builder->message().twitchBadgeInfos = std::move(badgeInfos);
 }
 
 std::vector<TwitchBadge> appendSharedChatBadges(
@@ -604,8 +623,10 @@ std::vector<TwitchBadge> appendSharedChatBadges(
             tooltip = QString("%1 (%2)").arg(tooltip, sharedChannelName);
         }
 
-        builder->emplace<BadgeElement>(*badgeEmote, badge.flag_)
-            ->setTooltip(tooltip);
+        auto *badgeElement =
+            builder->emplace<BadgeElement>(*badgeEmote, badge.flag_);
+        badgeElement->setTooltip(tooltip);
+        badgeElement->setTwitchBadge(badge.key_, badge.value_);
         appendedBadges.push_back(badge);
     }
 
@@ -769,12 +790,14 @@ struct TokenizedText {
 };
 struct TokenizedEmote {
     EmotePtr emote;
+    qsizetype start = -1;
     bool trailingSpace = true;
 };
 struct TokenizedGif {
     QString id;
     QStringView originalText;
 };
+struct TokenizedBreak {};
 struct TokenizedEmoji {
     EmotePtr emote;
 };
@@ -826,6 +849,7 @@ void tokenizeWords(QStringView text,
                 variant::Overloaded{[&](const TwitchEmoteOccurrence &emote) {
                                         visitor(TokenizedEmote{
                                             .emote = emote.ptr,
+                                            .start = special.start,
                                             .trailingSpace = trailingSpace,
                                         });
                                     },
@@ -839,6 +863,11 @@ void tokenizeWords(QStringView text,
 
             specials = specials.subspan(1);
             continue;
+        }
+
+        if (isSpace && current != start && *(current - 1) == u' ')
+        {
+            visitor(TokenizedBreak{});
         }
 
         if (!isSpace && !wordBegin)
@@ -891,6 +920,9 @@ void tokenizeWordsWithEmoji(QStringView text,
             },
             [&](const TokenizedGif &gif) {
                 visitor(gif);
+            },
+            [&](TokenizedBreak tok) {
+                visitor(tok);
             }});
 }
 
@@ -1412,6 +1444,11 @@ Message &MessageBuilder::message()
 
 MessagePtrMut MessageBuilder::release()
 {
+    if (this->message_ != nullptr)
+    {
+        this->flushPendingModifiers();
+        finalizeMessageMetadata(*this->message_);
+    }
     std::shared_ptr<Message> ptr;
     this->message_.swap(ptr);
     return ptr;
@@ -1536,8 +1573,21 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
         return;
     }
 
+    if (message)
+    {
+        if (message->isHiddenByClientNonce())
+        {
+            return;
+        }
+        if (auto *hiddenUsers = getApp()->getHiddenUsers();
+            hiddenUsers && hiddenUsers->shouldHideMessage(*message))
+        {
+            return;
+        }
+    }
+
     const auto &channelName = channel->getName();
-    if (shouldSuppressHighlightAlert(channelName))
+    if (shouldSuppressHighlightAlert(channel))
     {
         return;
     }
@@ -1567,7 +1617,8 @@ void MessageBuilder::appendChannelPointRewardMessage(
         return;
     }
 
-    this->emplace<TimestampElement>();
+    this->emplace<TimestampElement>(
+        MessageElementFlag::ChannelPointRewardHeader);
     QString redeemed = "Redeemed";
     QStringList textList;
     if (!reward.isUserInputRequired)
@@ -2107,6 +2158,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     }
 
     builder->flags.set(MessageFlag::Collapsed);
+    builder->flags.set(MessageFlag::GigantifiedEmote, args.isGigantifiedEmote);
 
     bool senderIsBroadcaster = builder->loginName == channel->getName();
     bool userIsStaffOrBroadcaster = channel->isBroadcaster();
@@ -2137,7 +2189,9 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (auto clientNonce = tags.get("client-nonce"))
     {
         builder.message().clientDetection =
-            performClientDetection(*clientNonce);
+            Message::classifyClientNonce(*clientNonce);
+        builder->flags.set(MessageFlag::ExtendedClientNonce,
+                           isExtendedTwitchClientNonce(*clientNonce));
     }
 
     if (tags.has("rm-deleted"))
@@ -2150,7 +2204,7 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
     if (hasContent)
     {
         // Message has text contents
-        if (tags.getOrEmpty("first-msg") == "1")
+        if (isFirstMessage(tags))
         {
             builder->flags.set(MessageFlag::FirstMessage);
         }
@@ -2200,18 +2254,23 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
         if (canModerateUser || senderIsModOrBroadcaster || senderIsCurrentUser)
         {
             builder.emplace<TwitchModerationElement>(
-                canModerateUser, senderIsModOrBroadcaster, senderIsCurrentUser);
+                canModerateUser, senderIsModOrBroadcaster, senderIsCurrentUser,
+                channel->weak_from_this());
         }
 
+        const auto firstVanityBadge = builder.message().elements.size();
         builder.appendTwitchBadges(tags, twitchChannel);
 
         builder.appendTomasBadge(userID);
         builder.appendChatterinoBadges(userID);
         builder.appendFfzBadges(twitchChannel, userID);
+        builder.appendFfzApBadge(userID);
+        builder.appendBluzyrinoBadges(userID);
         builder.appendBttvBadges(userID);
         builder.appendMoltorinoBadges(userID);
         builder.appendSeventvBadges(userID);
-        builder.appendHomiesBadges(userID);
+        builder.appendHomiesBadges(userID, senderIsCurrentUser);
+        builder.applyVanityBadgeLayout(userID, firstVanityBadge);
 
         if (decrypted)
         {
@@ -2219,6 +2278,10 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
                                             MessageElementFlag::BadgeDecrypted);
         }
 
+        if (getSettings()->showPronounsInChat)
+        {
+            builder.appendPronoun(channel, tags.has("historical"));
+        }
         builder.appendUsername(tags, args);
 
         TextState textState{.twitchChannel = twitchChannel, .userID = userID};
@@ -2252,7 +2315,23 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
         }
 
         // Add the content.
-        builder.addWords(content, twitchSpecials, textState);
+        builder->flags.set(
+            MessageFlag::TwitchGif,
+            std::ranges::any_of(twitchSpecials, [](const auto &special) {
+                return std::holds_alternative<TwitchGifOccurrence>(
+                    special.data);
+            }));
+        qsizetype gigantifiedStart = -1;
+        if (args.isGigantifiedEmote && !twitchSpecials.empty())
+        {
+            const auto &last = twitchSpecials.back();
+            if (std::holds_alternative<TwitchEmoteOccurrence>(last.data) &&
+                last.start + last.length == content.size())
+            {
+                gigantifiedStart = last.start;
+            }
+        }
+        builder.addWords(content, twitchSpecials, textState, gigantifiedStart);
         appendRepeatedMessageCounter(builder, channel, tags, content,
                                      senderIsBroadcaster);
 
@@ -2441,11 +2520,59 @@ MessagePtrMut MessageBuilder::tryUpdateReplyPreview(
 
 void MessageBuilder::addEmoji(const EmotePtr &emote)
 {
+    this->flushPendingModifiers();
     this->emplace<EmoteElement>(emote, MessageElementFlag::EmojiAll);
 }
 
 void MessageBuilder::addTextOrEmote(TextState &state, QString string)
 {
+    if (string.size() > 2)
+    {
+        QStringView remainder{string};
+        std::vector<EmotePtr> directModifiers;
+        constexpr size_t MAX_MODIFIERS = 16;
+        while (remainder.size() > 2 && remainder.at(1) == u'!' &&
+               directModifiers.size() < MAX_MODIFIERS)
+        {
+            const auto modifier =
+                parseEmote(state.twitchChannel, state.userID,
+                           EmoteName{remainder.first(2).toString()});
+            if (modifier == nullptr ||
+                modifier->modifierPlacement != EmoteModifierPlacement::Prefix)
+            {
+                break;
+            }
+            directModifiers.push_back(modifier);
+            remainder = remainder.sliced(2);
+        }
+
+        if (!directModifiers.empty())
+        {
+            const auto base = parseEmote(state.twitchChannel, state.userID,
+                                         EmoteName{remainder.toString()});
+            if (base != nullptr &&
+                base->modifierPlacement == EmoteModifierPlacement::None)
+            {
+                for (const auto &modifier : directModifiers)
+                {
+                    this->appendModifier(modifier);
+                }
+                this->appendParsedEmote(base);
+                return;
+            }
+        }
+    }
+
+    if (!this->pendingPrefixModifiers_.empty())
+    {
+        if (this->tryAppendEmote(state.twitchChannel, state.userID,
+                                 EmoteNameView{string}))
+        {
+            return;
+        }
+        this->flushPendingModifiers();
+    }
+
     if (state.hasBits && this->tryAppendCheermote(state, string))
     {
         // This string was parsed as a cheermote
@@ -2467,7 +2594,8 @@ void MessageBuilder::addTextOrEmote(TextState &state, QString string)
 }
 
 void MessageBuilder::addWordFromUserMessage(QStringView string,
-                                            ChannelChatters *chatters)
+                                            ChannelChatters *chatters,
+                                            bool allowYouTubeHandle)
 {
     // Actually just text
     auto link = linkparser::parse(string);
@@ -2481,7 +2609,12 @@ void MessageBuilder::addWordFromUserMessage(QStringView string,
 
     if (string.startsWith('@'))
     {
-        auto match = mentionRegex.match(string);
+        const auto &expression =
+            this->message_->platform == MessagePlatform::TikTok
+                ? tiktokMentionRegex
+            : allowYouTubeHandle ? youtubeMentionRegex
+                                 : mentionRegex;
+        auto match = expression.match(string);
         // Only treat as @mention if valid username
         if (match.hasMatch())
         {
@@ -2513,6 +2646,30 @@ void MessageBuilder::addWordFromUserMessage(QStringView string,
                                            originalTextColor);
             }
 
+            return;
+        }
+    }
+
+    if (getSettings()->linkChannelNames &&
+        this->message_->platform == MessagePlatform::AnyOrTwitch &&
+        string.startsWith(u'#'))
+    {
+        static const QRegularExpression channelName(
+            QStringLiteral(R"(^#([A-Za-z0-9_]{1,25})([.,!?;:]*)$)"));
+        const auto match = channelName.match(string);
+        if (match.hasMatch())
+        {
+            const auto name = match.captured(1);
+            const auto punctuation = match.captured(2);
+            this->emplace<TextElement>(u'#' + name, MessageElementFlag::Text,
+                                       MessageColor::Link)
+                ->setLink({Link::OpenChannel, name.toLower()})
+                ->setTrailingSpace(punctuation.isEmpty());
+            if (!punctuation.isEmpty())
+            {
+                this->emplace<TextElement>(punctuation,
+                                           MessageElementFlag::Text, textColor);
+            }
             return;
         }
     }
@@ -2558,19 +2715,28 @@ void MessageBuilder::addTwitchGif(const QString &id, QStringView originalText)
     QString original = originalText.toString();
     if (getSettings()->showTwitchGifs)
     {
-        ImageSet set{
-            Image::fromUrl(
-                Url{u"https://media4.giphy.com/media/" % id % u"/100.webp"},
-                1.0, {100, 100}),
-            Image::fromUrl(
-                Url{u"https://media4.giphy.com/media/" % id % u"/200.webp"},
-                0.5, {200, 200}),
-        };
-        this->emplace<LinebreakElement>(MessageElementFlag::TwitchGif);
-        this->emplace<ScalingImageElement>(set, MessageElementFlag::TwitchGif,
-                                           original)
-            ->setLink(Link{Link::Url, link})
-            ->setTooltip(original.toHtmlEscaped());
+        auto low = Image::fromStreamingGifUrl(
+            Url{u"https://media.giphy.com/media/" % id % u"/200w.webp"}, 200,
+            1.0, {200, 200});
+        auto high = Image::fromStreamingGifUrl(
+            Url{u"https://media.giphy.com/media/" % id % u"/giphy.webp"}, 400,
+            0.5, {400, 400});
+        low->setFrameCacheLifetime(std::chrono::seconds(5));
+        high->setFrameCacheLifetime(std::chrono::seconds(5));
+        auto emote = std::make_shared<Emote>(Emote{
+            .name = EmoteName{original},
+            .images = ImageSet{std::move(low), std::move(high)},
+            .tooltip = Tooltip{original.toHtmlEscaped() + "<br>Twitch GIF"},
+            .homePage = Url{link},
+            .id = EmoteId{id},
+        });
+        this->flushPendingModifiers();
+        this->emplace<EmoteElement>(
+                emote,
+                MessageElementFlags{MessageElementFlag::Emote,
+                                    MessageElementFlag::TwitchGif},
+                this->textColor_, false, 0.0, true)
+            ->setLink(Link{Link::Url, link});
     }
     else
     {
@@ -2985,6 +3151,10 @@ TwitchChannel *MessageBuilder::parseSharedChatInfo(Communi::TagsRef tags,
         return twitchChannel;
     }
 
+    this->message().sharedChatSourceId = tags.getOrEmpty("source-room-id");
+    if (this->message().sharedChatSourceId.isEmpty() && twitchChannel)
+        this->message().sharedChatSourceId = twitchChannel->roomId();
+
     if (auto optSourceRoom = tags.get("source-room-id"))
     {
         const auto &sourceRoom = *optSourceRoom;
@@ -3011,7 +3181,7 @@ TwitchChannel *MessageBuilder::parseSharedChatInfo(Communi::TagsRef tags,
     return twitchChannel;
 }
 
-void MessageBuilder::parseThread(const QString &messageContent,
+void MessageBuilder::parseThread(const QString & /*messageContent*/,
                                  Communi::TagsRef tags, const Channel *channel,
                                  const std::shared_ptr<MessageThread> &thread,
                                  const MessagePtr &parent)
@@ -3091,43 +3261,48 @@ void MessageBuilder::parseThread(const QString &messageContent,
 
         if (replyDisplayName && replyBody)
         {
-            QString body;
+            auto body = parseTagString(*replyBody);
+            const auto login = tags.getOrEmpty("reply-parent-user-login");
+            const bool decrypted =
+                isMaybeEncrypted(body) &&
+                decryptMessage(body, getSettings()->encryptionKey.getValue());
 
             this->emplace<ReplyCurveElement>();
             this->emplace<TextElement>(
                 "Replying to", MessageElementFlag::RepliedMessage,
                 MessageColor::System, FontStyle::ChatMediumSmall);
 
-            bool ignored = MessageBuilder::isIgnored(
-                messageContent, tags.getOrEmpty("reply-parent-user-id"),
-                channel);
+            const bool ignored = isIgnoredMessage({
+                .message = body,
+                .twitchUserID = tags.getOrEmpty("reply-parent-user-id"),
+                .twitchUserLogin = login,
+                .isMod = channel->isMod(),
+                .isBroadcaster = channel->isBroadcaster(),
+            });
             if (ignored)
             {
                 body = QString("[Blocked user]");
             }
             else
             {
-                const auto &name = *replyDisplayName;
-                body = parseTagString(*replyBody);
-
-                if (isMaybeEncrypted(body))
+                const auto name = parseTagString(*replyDisplayName);
+                if (decrypted)
                 {
-                    if (decryptMessage(body,
-                                       getSettings()->encryptionKey.getValue()))
-                    {
-                        this->emplace<DecryptedBadge>(
-                                makeDecryptBadge(),
-                                MessageElementFlags(
-                                    {MessageElementFlag::BadgeDecrypted,
-                                     MessageElementFlag::RepliedMessage}))
-                            ->setScale(0.7);
-                    }
+                    this->emplace<DecryptedBadge>(
+                            makeDecryptBadge(),
+                            MessageElementFlags(
+                                {MessageElementFlag::BadgeDecrypted,
+                                 MessageElementFlag::RepliedMessage}))
+                        ->setScale(0.7);
                 }
+                std::vector<TwitchSpecialOccurrence> specials;
+                processIgnorePhrases(*getSettings()->ignoredMessages.readOnly(),
+                                     body, specials);
 
                 this->emplace<TextElement>(
                         "@" + name + ":", MessageElementFlag::RepliedMessage,
                         this->textColor_, FontStyle::ChatMediumSmall)
-                    ->setLink({Link::UserInfo, name});
+                    ->setLink({Link::UserInfo, login.isEmpty() ? name : login});
             }
 
             this->emplace<SingleLineTextElement>(
@@ -3152,7 +3327,8 @@ HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
     auto badges = parseBadgeTag(tags);
     auto [highlighted, highlightResult] = getApp()->getHighlights()->check(
         args, badges, this->message().loginName, originalMessage,
-        this->message().flags, this->message().platform);
+        this->message().flags, this->message().platform, this->message().userID,
+        this->message().channelName);
 
     if (!highlighted)
     {
@@ -3164,6 +3340,12 @@ HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
     this->message().flags.set(MessageFlag::Highlighted);
 
     this->message().highlightColor = highlightResult.color;
+    if (!highlightResult.matches.empty())
+    {
+        this->message().highlightMatches =
+            std::make_shared<const std::vector<HighlightMatch>>(
+                std::move(highlightResult.matches));
+    }
 
     if (highlightResult.showInMentions)
     {
@@ -3186,12 +3368,58 @@ HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
 
 void MessageBuilder::appendChannelName(const Channel *channel)
 {
-    QString channelName("#" + channel->getName());
     Link link(Link::JumpToChannel, channel->getName());
 
-    this->emplace<TextElement>(channelName, MessageElementFlag::ChannelName,
-                               MessageColor::System)
+    std::shared_ptr<ChannelAvatarSource> channelAvatar;
+    if (const auto *twitchChannel =
+            dynamic_cast<const TwitchChannel *>(channel);
+        twitchChannel != nullptr && !twitchChannel->roomId().isEmpty())
+    {
+        channelAvatar = twitchChannel->channelAvatar();
+    }
+
+    this->emplace<ChannelNameElement>(channel->getPrefixedName(),
+                                      std::move(channelAvatar))
         ->setLink(link);
+}
+
+void MessageBuilder::appendPronoun(Channel *channel, bool historical)
+{
+    const auto username = this->message_->loginName.trimmed().toLower();
+    if (channel == nullptr || username.isEmpty())
+    {
+        return;
+    }
+
+    this->emplace<PronounElement>(username);
+
+    auto *pronouns = getApp()->getPronouns();
+    if (historical || pronouns->getCachedUserPronoun(username).has_value())
+    {
+        return;
+    }
+
+    auto weakChannel = channel->weak_from_this();
+    std::weak_ptr<const Message> weakMessage = this->message_;
+    pronouns->getUserPronoun(
+        username,
+        [weakChannel, weakMessage](const auto &pronoun) {
+            if (pronoun.isUnspecified())
+            {
+                return;
+            }
+            runInGuiThread([weakChannel, weakMessage] {
+                auto channel = weakChannel.lock();
+                auto message = weakMessage.lock();
+                if (!channel || !message || !getSettings()->showPronounsInChat)
+                {
+                    return;
+                }
+
+                channel->replaceMessage(message, message);
+            });
+        },
+        [] {});
 }
 
 void MessageBuilder::appendUsername(Communi::TagsRef tags,
@@ -3277,8 +3505,130 @@ Outcome MessageBuilder::tryAppendEmote(TwitchChannel *twitchChannel,
         return Failure;
     }
 
-    this->appendEmote(emote);
+    if (emote->modifierPlacement != EmoteModifierPlacement::None)
+    {
+        if (this->appendModifier(emote))
+        {
+            return Success;
+        }
+        return Failure;
+    }
+
+    this->appendParsedEmote(emote);
     return Success;
+}
+
+bool MessageBuilder::appendModifier(const EmotePtr &modifier)
+{
+    constexpr size_t MAX_MODIFIERS = 16;
+
+    if (modifier->modifierPlacement == EmoteModifierPlacement::Prefix)
+    {
+        if (this->pendingPrefixModifiers_.size() >= MAX_MODIFIERS)
+        {
+            this->flushPendingModifiers();
+            this->emplace<TextElement>(modifier->getCopyString(),
+                                       MessageElementFlag::Text,
+                                       this->textColor_);
+            return true;
+        }
+        this->pendingPrefixModifiers_.push_back(modifier);
+        return true;
+    }
+
+    if (modifier->modifierPlacement != EmoteModifierPlacement::Suffix ||
+        this->isEmpty())
+    {
+        return false;
+    }
+
+    if (!this->pendingPrefixModifiers_.empty())
+    {
+        this->flushPendingModifiers();
+        this->emplace<TextElement>(modifier->getCopyString(),
+                                   MessageElementFlag::Text, this->textColor_);
+        return true;
+    }
+
+    if (auto *layered = dynamic_cast<LayeredEmoteElement *>(&this->back()))
+    {
+        if (layered->getModifiers().size() >= MAX_MODIFIERS)
+        {
+            this->emplace<TextElement>(modifier->getCopyString(),
+                                       MessageElementFlag::Text,
+                                       this->textColor_);
+            return true;
+        }
+        layered->addModifier(modifier);
+        return true;
+    }
+
+    auto *base = dynamic_cast<EmoteElement *>(&this->back());
+    if (base == nullptr ||
+        !base->getFlags().has(MessageElementFlag::EmoteImage) ||
+        base->isGigantified() || base->isTwitchGif())
+    {
+        return false;
+    }
+
+    const auto baseEmote = base->getEmote();
+    const auto baseFlags = base->getFlags();
+    const auto trailingSpace = base->hasTrailingSpace();
+    auto oldBase = this->releaseBack();
+    (void)oldBase;
+
+    std::vector<LayeredEmoteElement::Emote> layers{
+        {baseEmote, baseFlags},
+    };
+    auto *layered = this->emplace<LayeredEmoteElement>(
+        std::move(layers), baseFlags | MessageElementFlag::Emote,
+        this->textColor_);
+    layered->setTrailingSpace(trailingSpace);
+    layered->addModifier(modifier);
+    return true;
+}
+
+void MessageBuilder::flushPendingModifiers()
+{
+    for (const auto &modifier : this->pendingPrefixModifiers_)
+    {
+        this->emplace<TextElement>(modifier->getCopyString(),
+                                   MessageElementFlag::Text, this->textColor_);
+    }
+    this->pendingPrefixModifiers_.clear();
+}
+
+void MessageBuilder::appendParsedEmote(const EmotePtr &emote, bool gigantified)
+{
+    if (emote->zeroWidth || gigantified ||
+        this->pendingPrefixModifiers_.empty())
+    {
+        if (!this->pendingPrefixModifiers_.empty())
+        {
+            this->flushPendingModifiers();
+        }
+        if (gigantified)
+        {
+            this->emplace<EmoteElement>(emote, MessageElementFlag::Emote,
+                                        this->textColor_, true);
+        }
+        else
+        {
+            this->appendEmote(emote);
+        }
+        return;
+    }
+
+    std::vector<LayeredEmoteElement::Emote> layers{
+        {emote, MessageElementFlag::Emote},
+    };
+    auto *layered = this->emplace<LayeredEmoteElement>(
+        std::move(layers), MessageElementFlag::Emote, this->textColor_);
+    for (const auto &modifier : this->pendingPrefixModifiers_)
+    {
+        layered->addModifier(modifier);
+    }
+    this->pendingPrefixModifiers_.clear();
 }
 
 void MessageBuilder::appendEmote(const EmotePtr &emote)
@@ -3324,7 +3674,7 @@ void MessageBuilder::appendEmote(const EmotePtr &emote)
 void MessageBuilder::addWords(
     QStringView text,
     const std::vector<TwitchSpecialOccurrence> &twitchSpecials,
-    TextState &state)
+    TextState &state, qsizetype gigantifiedStart)
 {
     tokenizeWordsWithEmoji(
         text, twitchSpecials,
@@ -3336,14 +3686,18 @@ void MessageBuilder::addWords(
                 this->addEmoji(tok.emote);
             },
             [&](const TokenizedEmote &tok) {
-                this->emplace<EmoteElement>(
-                        tok.emote, MessageElementFlag::Emote, this->textColor_)
-                    ->setTrailingSpace(tok.trailingSpace);
+                this->appendParsedEmote(tok.emote,
+                                        tok.start == gigantifiedStart);
+                this->back().setTrailingSpace(tok.trailingSpace);
             },
             [&](const TokenizedGif &gif) {
                 this->addTwitchGif(gif.id, gif.originalText);
             },
+            [&](TokenizedBreak) {
+                this->flushPendingModifiers();
+            },
         });
+    this->flushPendingModifiers();
 }
 
 void MessageBuilder::appendTwitchBadges(Communi::TagsRef tags,
@@ -3391,6 +3745,19 @@ void MessageBuilder::appendTwitchBadges(Communi::TagsRef tags,
             MessageElementFlag::BadgeSharedChannel);
 
         const auto sourceBadges = parseBadgeTag(tags, "source-badges");
+        auto sourceAuthorityBadges = std::vector<TwitchBadge>{};
+        std::ranges::copy_if(
+            sourceBadges, std::back_inserter(sourceAuthorityBadges),
+            [](const auto &badge) {
+                return badge.key_ == u"moderator" || badge.key_ == u"vip" ||
+                       badge.key_ == u"lead_moderator";
+            });
+        if (!sourceAuthorityBadges.empty())
+        {
+            this->message().sharedChatSourceBadges =
+                std::make_unique<const std::vector<TwitchBadge>>(
+                    std::move(sourceAuthorityBadges));
+        }
         const auto appendedBadges = appendSharedChatBadges(
             this, sourceBadges, sourceName, twitchChannel);
 
@@ -3431,6 +3798,138 @@ void MessageBuilder::appendChatterinoBadges(const QString &userID)
     }
 }
 
+void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
+                                            size_t firstBadge)
+{
+    if (!getSettings()->useCustomBadgeLayouts || userID.isEmpty())
+    {
+        return;
+    }
+
+    auto &elements = this->message().elements;
+    if (firstBadge >= elements.size())
+    {
+        return;
+    }
+
+    auto *provider = getApp()->getMoltorinoSupporterBadges();
+    auto layout = provider == nullptr ? std::optional<MoltorinoVanityLayout>{}
+                                      : provider->getVanityLayout(userID);
+    if (!layout)
+    {
+        return;
+    }
+
+    const auto badgeKey = [](const MessageElement &element) -> QString {
+        const auto flags = element.getFlags();
+        if (flags.has(MessageElementFlag::BadgeSharedChannel))
+        {
+            return {};
+        }
+        if (const auto *badge = dynamic_cast<const BadgeElement *>(&element))
+        {
+            if (const auto setID = badge->twitchBadgeSetID())
+            {
+                return QStringLiteral("t:") + setID->trimmed().toLower();
+            }
+        }
+        if (flags.has(MessageElementFlag::BadgeChatterino))
+        {
+            return QStringLiteral("c");
+        }
+        if (flags.has(MessageElementFlag::BadgeFfz))
+        {
+            return QStringLiteral("ff");
+        }
+        if (flags.has(MessageElementFlag::BadgeFfzAp))
+        {
+            return QStringLiteral("fa");
+        }
+        if (flags.has(MessageElementFlag::BadgeBttv))
+        {
+            return QStringLiteral("bt");
+        }
+        if (flags.has(MessageElementFlag::BadgeMoltorino))
+        {
+            return QStringLiteral("m");
+        }
+        if (flags.has(MessageElementFlag::BadgeBluzyrino))
+        {
+            return QStringLiteral("bl");
+        }
+        if (flags.has(MessageElementFlag::BadgeSevenTV))
+        {
+            return QStringLiteral("7");
+        }
+        if (flags.has(MessageElementFlag::BadgeHomiesSupporter))
+        {
+            return QStringLiteral("hs");
+        }
+        if (flags.has(MessageElementFlag::BadgeHomiesCustom))
+        {
+            return QStringLiteral("hc");
+        }
+        return {};
+    };
+
+    const auto badgeSlot = [&badgeKey](const MessageElement &element) {
+        return vanity::detail::badgeOrderSlot(badgeKey(element));
+    };
+
+    std::vector<QString> activeSlots;
+    activeSlots.reserve(elements.size() - firstBadge);
+    for (auto it = elements.begin() + static_cast<ptrdiff_t>(firstBadge);
+         it != elements.end(); ++it)
+    {
+        const auto slot = badgeSlot(**it);
+        if (!slot.isEmpty())
+        {
+            activeSlots.push_back(slot);
+        }
+    }
+    vanity::detail::appendMissingBadgeKeys(*layout, activeSlots);
+
+    elements.erase(
+        std::remove_if(elements.begin() + static_cast<ptrdiff_t>(firstBadge),
+                       elements.end(),
+                       [&](const auto &element) {
+                           const auto key = badgeKey(*element);
+                           return !key.isEmpty() &&
+                                  !vanity::detail::isBadgeVisible(*layout, key);
+                       }),
+        elements.end());
+
+    QHash<QString, int> requestedRanks;
+    for (int index = 0; index < static_cast<int>(layout->order.size()); ++index)
+    {
+        requestedRanks.insert(layout->order.at(index), index);
+    }
+    const auto customRankCount = requestedRanks.size();
+    const auto defaultRank = [](const QString &slot) {
+        static constexpr std::array<QStringView, 13> order{
+            u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa",
+            u"bt", u"bl", u"m",  u"7",  u"hc", u"hs",
+        };
+        return static_cast<int>(std::ranges::find(order, slot) - order.begin());
+    };
+
+    std::stable_sort(elements.begin() + static_cast<ptrdiff_t>(firstBadge),
+                     elements.end(), [&](const auto &left, const auto &right) {
+                         const auto leftSlot = badgeSlot(*left);
+                         const auto rightSlot = badgeSlot(*right);
+                         if (leftSlot.isEmpty() || rightSlot.isEmpty())
+                         {
+                             return leftSlot.isEmpty() && !rightSlot.isEmpty();
+                         }
+                         const int leftRank = requestedRanks.value(
+                             leftSlot, customRankCount + defaultRank(leftSlot));
+                         const int rightRank = requestedRanks.value(
+                             rightSlot,
+                             customRankCount + defaultRank(rightSlot));
+                         return leftRank < rightRank;
+                     });
+}
+
 void MessageBuilder::appendFfzBadges(TwitchChannel *twitchChannel,
                                      const QString &userID)
 {
@@ -3458,6 +3957,21 @@ void MessageBuilder::appendFfzBadges(TwitchChannel *twitchChannel,
     }
 }
 
+void MessageBuilder::appendFfzApBadge(const QString &userID)
+{
+    auto *provider = getApp()->getFfzApBadges();
+    if (provider == nullptr)
+    {
+        return;
+    }
+    if (auto badge = provider->getBadge({userID}))
+    {
+        this->emplace<FfzBadgeElement>(
+            badge->emote, MessageElementFlag::BadgeFfzAp, badge->color);
+        this->message().externalBadges.emplace_back(badge->emote->name.string);
+    }
+}
+
 void MessageBuilder::appendBttvBadges(const QString &userID)
 {
     if (auto badge = getApp()->getBttvBadges()->getBadge({userID}))
@@ -3466,6 +3980,20 @@ void MessageBuilder::appendBttvBadges(const QString &userID)
 
         /// e.g. "betterttv:Pro Subscriber"
         this->message().externalBadges.emplace_back((*badge)->name.string);
+    }
+}
+
+void MessageBuilder::appendBluzyrinoBadges(const QString &userID)
+{
+    auto *provider = getApp()->getBluzyrinoBadges();
+    if (provider == nullptr)
+    {
+        return;
+    }
+    for (const auto &badge : provider->getBadges({userID}))
+    {
+        this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeBluzyrino);
+        this->message().externalBadges.emplace_back(badge->name.string);
     }
 }
 
@@ -3480,7 +4008,8 @@ void MessageBuilder::appendSeventvBadges(const QString &userID)
     }
 }
 
-void MessageBuilder::appendHomiesBadges(const QString &userID)
+void MessageBuilder::appendHomiesBadges(const QString &userID,
+                                        bool senderIsCurrentUser)
 {
     const auto *settings = getSettings();
     const auto showSupporter = settings->showBadgesHomiesSupporter.getValue();
@@ -3496,6 +4025,11 @@ void MessageBuilder::appendHomiesBadges(const QString &userID)
         return;
     }
 
+    auto *moltorino = getApp()->getMoltorinoSupporterBadges();
+    const auto showCustomForUser =
+        moltorino == nullptr ||
+        moltorino->decorationsEnabledForUser(userID, senderIsCurrentUser);
+
     const auto badges = homies->getBadges(userID);
     for (size_t i = 0; i < badges.size(); ++i)
     {
@@ -3507,7 +4041,7 @@ void MessageBuilder::appendHomiesBadges(const QString &userID)
 
         const auto isSupporterBadge = i != 0;
         if ((isSupporterBadge && !showSupporter) ||
-            (!isSupporterBadge && !showCustom))
+            (!isSupporterBadge && (!showCustom || !showCustomForUser)))
         {
             continue;
         }
@@ -3549,7 +4083,7 @@ void MessageBuilder::appendMoltorinoBadges(const QString &userID)
 Outcome MessageBuilder::tryAppendCheermote(TextState &state,
                                            const QString &string)
 {
-    if (state.bitsLeft == 0)
+    if (state.bitsLeft <= 0 || state.twitchChannel == nullptr)
     {
         return Failure;
     }
@@ -3570,6 +4104,10 @@ Outcome MessageBuilder::tryAppendCheermote(TextState &state,
     }
 
     int cheerValue = match.captured(1).toInt();
+    if (cheerValue <= 0)
+    {
+        return Failure;
+    }
 
     if (getSettings()->stackBits)
     {
@@ -3607,7 +4145,7 @@ Outcome MessageBuilder::tryAppendCheermote(TextState &state,
     {
         QString newString = string;
         newString.chop(QString::number(cheerValue).length());
-        newString += QString::number(cheerValue - state.bitsLeft);
+        newString += QString::number(state.bitsLeft);
 
         return this->tryAppendCheermote(state, newString);
     }

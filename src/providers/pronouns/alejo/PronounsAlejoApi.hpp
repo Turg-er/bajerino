@@ -7,9 +7,12 @@
 #include "providers/pronouns/UserPronouns.hpp"
 
 #include <QJsonObject>
+#include <QObject>
 #include <QString>
 
 #include <atomic>
+#include <cstddef>
+#include <deque>
 #include <functional>
 #include <optional>
 #include <shared_mutex>
@@ -17,7 +20,7 @@
 
 namespace chatterino::pronouns {
 
-class AlejoApi
+class AlejoApi : public QObject
 {
 public:
     AlejoApi();
@@ -31,19 +34,32 @@ public:
                const std::function<void(std::optional<UserPronouns>)> &onDone);
 
 private:
-    void loadAvailablePronouns();
-    void scheduleAvailablePronounsRetry();
-
     struct PronounEntry {
         QString subject;
         QString object;
-        bool singular;
+        bool singular = false;
     };
+
+    struct PendingFetch {
+        QString username;
+        std::function<void(std::optional<UserPronouns>)> onDone;
+    };
+
+    void loadAvailablePronouns();
+    void scheduleAvailablePronounsRetry();
+    void drainPendingFetches();
+    void startUserFetch(PendingFetch fetch);
+    void finishUserFetch();
+    void failPendingFetches();
 
     /// Maps alejo.io pronoun IDs to their human readable representation (subject, object, and singularity)
     std::unordered_map<QString, PronounEntry> pronouns;
     std::shared_mutex mutex;
+    std::deque<PendingFetch> pendingFetches_;
+    size_t activeUserFetches_ = 0;
     std::atomic_bool pronounsLoadInFlight_{false};
+    std::atomic_bool pronounsRetryScheduled_{false};
+    std::atomic_bool pronounsCooldownActive_{false};
     std::atomic_int pronounsLoadRetryCount_{0};
 
     /// Parse a pronoun definition from the /users endpoint into a finished UserPronouns

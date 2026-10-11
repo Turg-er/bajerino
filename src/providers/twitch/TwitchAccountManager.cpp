@@ -12,6 +12,7 @@
 #include "common/QLogging.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "messages/MessageBuilder.hpp"
+#include "messages/MessageElement.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
@@ -52,21 +53,55 @@ QString missingScopes(const QJsonArray &scopesArray)
     return missingList;
 }
 
-void checkMissingScopes(const std::shared_ptr<TwitchAccount> &account)
+}  // namespace
+
+namespace chatterino {
+
+void TwitchAccountManager::validateCurrentAccount(const QString &eventSubUserID)
 {
+    auto account = this->getCurrent();
+    if (account->isAnon() ||
+        (!eventSubUserID.isEmpty() && eventSubUserID != account->getUserId()))
+    {
+        return;
+    }
+    if (!eventSubUserID.isEmpty() && !this->lastValidationWarning_.isEmpty())
+    {
+        return;
+    }
+    this->eventSubAuthFailed_ |= !eventSubUserID.isEmpty();
+    if (this->validationInFlight_)
+    {
+        return;
+    }
+    this->validationInFlight_ = true;
+    const auto generation = ++this->validationGeneration_;
+    const auto token = account->getOAuthToken();
+    auto isCurrent = [this, account, token, generation] {
+        return generation == this->validationGeneration_ &&
+               this->getCurrent() == account &&
+               account->getOAuthToken() == token;
+    };
     NetworkRequest(u"https://id.twitch.tv/oauth2/validate"_s,
                    NetworkRequestType::Get)
         .useProxy()
-        .header("Authorization", u"OAuth " % account->getOAuthToken())
+        .caller(&this->validationTimer_)
+        .followRedirects(false)
+        .maximumResponseSize(64 * 1024)
+        .header("Authorization", u"OAuth " % token)
         .timeout(20000)
-        .onSuccess([account](const auto &res) {
+        .onSuccess([this, account, isCurrent](const auto &res) {
             auto *app = tryGetApp();
-            if (!app)
+            if (!app || !isCurrent())
             {
                 return;
             }
 
             const auto json = res.parseJson();
+            if (!json["scopes"_L1].isArray())
+            {
+                return;
+            }
 
             const auto login = json["login"_L1].toString();
             if (!login.isEmpty() &&
@@ -89,26 +124,80 @@ void checkMissingScopes(const std::shared_ptr<TwitchAccount> &account)
             }
 
             auto missing = missingScopes(json["scopes"_L1].toArray());
-            if (missing.isEmpty())
+            if (!missing.isEmpty())
+            {
+                this->showAccountWarning(missing, missing);
+            }
+            else if (this->eventSubAuthFailed_)
+            {
+                this->showAccountWarning(
+                    u"Twitch could not reconnect some moderation updates for "
+                    "%1. Your login is valid."_s.arg(account->getUserName()));
+            }
+            else
+            {
+                this->lastValidationWarning_.clear();
+            }
+        })
+        .onError([this, account, isCurrent](const auto &res) {
+            if (!tryGetApp() || !isCurrent())
             {
                 return;
             }
-
-            auto msg = MessageBuilder::makeMissingScopesMessage(missing);
-            app->getTwitch()->forEachChannel([msg](const auto &chan) {
-                chan->addMessage(msg, MessageContext::Original);
-            });
+            if (res.status() == 401)
+            {
+                this->showAccountWarning(
+                    u"Your Twitch login for %1 is no longer valid. "
+                    "AutoMod and other account features may stop working. "
+                    "Add your account again to log in."_s.arg(
+                        account->getUserName()));
+            }
+            else if (this->eventSubAuthFailed_)
+            {
+                this->showAccountWarning(
+                    u"Twitch denied access to some live updates for %1. "
+                    "Couldn't check your login. AutoMod and moderation "
+                    "updates may stop working."_s.arg(account->getUserName()));
+            }
         })
-        .onError([](const auto &res) {
-            qCWarning(chatterinoTwitch)
-                << "Failed to check for missing scopes:" << res.formatError();
+        .finally([this, generation] {
+            if (generation == this->validationGeneration_)
+            {
+                this->validationInFlight_ = false;
+                this->eventSubAuthFailed_ = false;
+            }
         })
         .execute();
 }
 
-}  // namespace
-
-namespace chatterino {
+void TwitchAccountManager::showAccountWarning(const QString &text,
+                                              const QString &missing)
+{
+    if (this->lastValidationWarning_ == text)
+    {
+        return;
+    }
+    this->lastValidationWarning_ = text;
+    MessagePtrMut message;
+    if (missing.isEmpty())
+    {
+        MessageBuilder builder(systemMessage, text);
+        builder
+            .emplace<TextElement>(QStringLiteral("Open account settings"),
+                                  MessageElementFlag::Text, MessageColor::Link)
+            ->setLink({Link::OpenAccountsPage, {}});
+        message = builder.release();
+    }
+    else
+    {
+        message = MessageBuilder::makeMissingScopesMessage(missing);
+    }
+    getApp()->getTwitch()->forEachChannel([message](const auto &channel) {
+        channel->addMessage(message, MessageContext::Original);
+    });
+    getApp()->getTwitch()->getAutomodChannel()->addMessage(
+        message, MessageContext::Original);
+}
 
 const std::vector<QStringView> AUTH_SCOPES{
     u"channel:moderate",  // for seeing automod & which moderator banned/unbanned a user (felanbird unbanned weeb123)
@@ -235,19 +324,27 @@ TwitchAccountManager::TwitchAccountManager()
     : accounts(SharedPtrElementLess<TwitchAccount>{})
     , anonymousUser_(new TwitchAccount(ANONYMOUS_USERNAME, "", "", ""))
 {
-    // This is our own signal.
     std::ignore = this->currentUserChanged.connect([this] {
+        ++this->validationGeneration_;
+        this->validationInFlight_ = false;
+        this->eventSubAuthFailed_ = false;
+        this->lastValidationWarning_.clear();
         auto currentUser = this->getCurrent();
         currentUser->loadBlocks();
         currentUser->loadSeventvUserID();
         if (!currentUser->isAnon())
         {
-            checkMissingScopes(currentUser);
+            this->validateCurrentAccount();
         }
     });
 
-    // We can safely ignore this signal connection since accounts will always be removed
-    // before TwitchAccountManager
+    this->validationTimer_.setInterval(std::chrono::hours(1));
+    QObject::connect(&this->validationTimer_, &QTimer::timeout,
+                     &this->validationTimer_, [this] {
+                         this->validateCurrentAccount();
+                     });
+    this->validationTimer_.start();
+
     std::ignore = this->accounts.itemRemoved.connect([this](const auto &acc) {
         this->removeUser(acc.item.get());
     });

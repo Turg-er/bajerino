@@ -122,9 +122,16 @@ public:
                  HelixFailureCallback failureCallback),
                 (override));
 
+    MOCK_METHOD(void, getChannelFollowDate,
+                (QString broadcasterID, QString userID, QString clientID,
+                 QString oauthToken, const QObject *caller,
+                 ResultCallback<QDateTime> successCallback,
+                 HelixFailureCallback failureCallback),
+                (override));
+
     MOCK_METHOD(
         void, updateChannel,
-        (QString broadcasterId, QString gameId, QString language, QString title,
+        (QString broadcasterId, const HelixChannelUpdate &update,
          std::function<void(NetworkResult)> successCallback,
          (FailureCallback<HelixUpdateChannelError, QString> failureCallback)),
         (override));

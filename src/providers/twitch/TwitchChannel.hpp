@@ -14,6 +14,7 @@
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/eventsub/SubscriptionHandle.hpp"
+#include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
 #include "util/QStringHash.hpp"
@@ -22,12 +23,14 @@
 #include <boost/circular_buffer/space_optimized.hpp>
 #include <IrcMessage>
 #include <pajlada/signals/signalholder.hpp>
+#include <QCache>
 #include <QColor>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QRegularExpression>
 
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -45,6 +48,7 @@ enum class HighlightState;
 
 struct Emote;
 using EmotePtr = std::shared_ptr<const Emote>;
+class ChannelAvatarSource;
 class EmoteMap;
 
 class TwitchBadges;
@@ -92,6 +96,12 @@ namespace detail {
 /// ".@badcommand hello" should NOT be allowed
 /// ".@badcommand hello" should NOT be allowed
 bool isUnknownCommand(const QString &text);
+
+std::optional<bool> cachedFollowingStatus(const QString &accountID,
+                                          const QString &targetID);
+
+void rememberFollowingStatus(const QString &accountID, const QString &targetID,
+                             bool following);
 
 }  // namespace detail
 
@@ -186,6 +196,7 @@ public:
         QString authorLogin;
         QString authorColor;
         QString authorBadges;
+        QString emotes;
         QString pinnerName;
         QString pinnerLogin;
         std::optional<QDateTime> pinnedAt;
@@ -285,6 +296,8 @@ public:
     std::weak_ptr<TwitchChannel> weakFromThis();
 
     void initialize();
+    int chatterCount() const;
+    void refreshChatters();
 
     // Channel methods
     bool isEmpty() const override;
@@ -305,14 +318,29 @@ public:
     bool sendSpamMessageViaHelix(
         const QString &message, int duplicateNonce,
         std::function<void(bool sent, QString error)> callback);
+    bool trySendMessageViaHelixForPin(const QString &message,
+                                      int durationSeconds);
+    void showBotBadgeSetup();
     void sendBotMessage(const QString &message);
     void sendReply(const QString &message, const QString &replyId);
     bool isMod() const override;
+    std::uint64_t moderatorStatusRevision() const;
     bool isLeadMod() const;
+    struct ModeratorStatus {
+        bool moderator;
+        QDateTime changedAt;
+    };
+
+    void setKnownModeratorStatus(const QString &login, bool moderator,
+                                 const QDateTime &changedAt);
+    std::optional<ModeratorStatus> knownModeratorStatus(
+        const QString &login) const;
     bool isVip() const;
     bool isStaff() const;
     bool isFollowing() const;
     bool isFollowingStatusKnown() const;
+    std::vector<TwitchBadge> currentUserBadges(const QString &userId) const;
+    void setCurrentUserBadges(QString userId, std::vector<TwitchBadge> badges);
     bool isBroadcaster() const override;
     bool hasHighRateLimit() const override;
     bool canReconnect() const override;
@@ -342,10 +370,13 @@ public:
     const QString &subscriptionUrl();
     const QString &channelUrl();
     const QString &popoutPlayerUrl();
-    int chatterCount() const;
     bool isLive() const override;
     bool isRerun() const override;
     QString roomId() const;
+    void markMonitoredMessage(const QString &messageId,
+                              const QString &description);
+    void applyMonitoredStatus(const MessagePtrMut &message) const;
+    std::shared_ptr<ChannelAvatarSource> channelAvatar() const;
     SharedAccessGuard<const RoomModes> accessRoomModes() const;
     SharedAccessGuard<const StreamStatus> accessStreamStatus() const;
     SharedAccessGuard<const std::optional<PinnedMessage>> accessPinnedMessage()
@@ -355,6 +386,8 @@ public:
     void clearPinnedMessage();
     const HelixPinnedChatMessage *getPinnedMessage() const;
     void unpinCurrentMessage();
+    void refreshPinnedMessageIfStale();
+    bool canManagePinnedMessages() const;
     void pinMessage(const QString &messageId, int durationSeconds = 1200,
                     QString textHint = {});
     void unpinMessage();
@@ -365,7 +398,6 @@ public:
     void refreshActivePrediction();
     void refreshLeadModStatus(bool force = false);
     void refreshChannelPoints();
-    void refreshChatters();
     void refreshChannelPointsIfStale(bool force = false);
     void handlePinnedChatUpdate(const PubSubPinnedChatUpdate &update);
     void handlePinnedChatUpdate(const QJsonObject &data);
@@ -518,6 +550,7 @@ public:
 
     // Only TwitchChannel may invoke this signal
     pajlada::Signals::NoArgSignal userStateChanged;
+    pajlada::Signals::Signal<const QString &> targetModeratorChanged;
 
     /**
      * This signal fires whenever the stream status is changed
@@ -526,6 +559,7 @@ public:
      * or the viewer count changes, or the title has been updated
      **/
     pajlada::Signals::NoArgSignal streamStatusChanged;
+    pajlada::Signals::NoArgSignal roomIdChanged;
 
     pajlada::Signals::NoArgSignal roomModesChanged;
     pajlada::Signals::NoArgSignal pinnedMessageChanged;
@@ -574,6 +608,7 @@ public:
     void updateStreamStatus(const std::optional<HelixStream> &helixStream,
                             bool isInitialUpdate);
     void updateStreamTitle(const QString &title);
+    void updateStreamGame(const QString &gameName, const QString &gameId);
 
     /**
      * Returns the display name of the user
@@ -616,6 +651,38 @@ private:
         QString actualDisplayName;
     } nameOptions;
 
+    std::uint64_t expectReconnectPart() noexcept
+    {
+        const auto generation = ++this->expectedReconnectGeneration_;
+        this->expectedReconnectToken_.store(generation,
+                                            std::memory_order_release);
+        return generation;
+    }
+
+    bool hasExpectedReconnectPart() const noexcept
+    {
+        return this->expectedReconnectToken_.load(std::memory_order_acquire) !=
+               0;
+    }
+
+    bool consumeExpectedReconnectPart() noexcept
+    {
+        return this->expectedReconnectToken_.exchange(
+                   0, std::memory_order_acq_rel) != 0;
+    }
+
+    void clearExpectedReconnectParts() noexcept
+    {
+        this->expectedReconnectToken_.store(0, std::memory_order_release);
+    }
+
+    void clearExpectedReconnectPart(std::uint64_t generation) noexcept
+    {
+        auto expected = generation;
+        this->expectedReconnectToken_.compare_exchange_strong(
+            expected, 0, std::memory_order_acq_rel, std::memory_order_acquire);
+    }
+
     struct QueuedRedemption {
         QString rewardID;
         QString originalContent;
@@ -623,18 +690,24 @@ private:
     };
 
     std::optional<TwitchChannelMode> modeOverride_;
+    bool anonymousReadFallback_ = false;
+    std::shared_ptr<ChannelAvatarSource> channelAvatar_;
 
     void refreshPubSub();
     void refreshBadges();
+    void handleRoomIdChanged();
     void refreshCheerEmotes();
     void loadRecentMessages();
     void loadRecentMessagesReconnect();
     void cleanUpReplyThreads();
     void showLoginMessage();
+    void invalidatePinnedMessageRefresh();
+    void schedulePinnedMessageRefresh(int delayMs = 150);
+    void schedulePinnedMessageExpiry();
+    void handlePinnedMessageExpiry();
+    void unpinKnownMessage(PinnedMessage pin);
 
-    /// roomIdChanged is called whenever this channel's ID has been changed
     /// This should only happen once per channel, whenever the ID goes from unset to set
-    void roomIdChanged();
 
     void probeSharedChatSession();
     void refreshSharedChatSessionState();
@@ -724,23 +797,33 @@ private:
                             const TwitchAccount &moderator, QString textHint);
 
     // Data
-    const QString subscriptionUrl_;
-    const QString channelUrl_;
-    const QString popoutPlayerUrl_;
     int chatterCount_{};
     std::atomic<bool> chatterFetchInFlight_{false};
     QDateTime lastChatterRefreshAt_;
+    const QString subscriptionUrl_;
+    const QString channelUrl_;
+    const QString popoutPlayerUrl_;
 
     UniqueAccess<StreamStatus> streamStatus_;
+    mutable UniqueAccess<QCache<QString, QString>> monitoredMessages_;
     UniqueAccess<RoomModes> roomModes;
     UniqueAccess<std::optional<PinnedMessage>> currentPin_;
+    std::atomic<bool> pinnedMessageFetchInFlight_{false};
     std::atomic<int> pinnedMessageRefreshFailures_{0};
+    std::atomic<uint64_t> pinnedMessageRequestGeneration_{0};
+    QDateTime lastPinnedMessageRefreshAt_;
+    QTimer pinnedMessageRefreshTimer_;
+    QTimer pinnedMessageExpiryTimer_;
+    std::uint64_t personalAuthGeneration_ = 0;
+    QString personalAuthToken_;
     UniqueAccess<std::optional<PredictionEvent>> activePrediction_;
+    std::uint64_t predictionStateRevision_ = 0;
     std::atomic<bool> predictionFetchInFlight_{false};
     QDateTime lastPredictionRefreshAt_;
     QDateTime lastPredictionUpdateAt_;
     QString lastPredictionSystemMessageKey_;
     UniqueAccess<std::optional<PollEvent>> activePoll_;
+    std::uint64_t pollStateRevision_ = 0;
     std::atomic<bool> pollFetchInFlight_{false};
     QDateTime lastPollRefreshAt_;
     QDateTime lastPollUpdateAt_;
@@ -748,6 +831,7 @@ private:
     UniqueAccess<std::optional<RaidEvent>> activeRaid_;
     QString locallyClearedRaidId_;
     QDateTime locallyClearedRaidAt_;
+    std::uint64_t chatWarningStateRevision_ = 0;
     std::atomic<bool> chatWarningFetchInFlight_{false};
     std::atomic<bool> chatWarningFetchNotifyOnError_{false};
     std::atomic<bool> chatWarningAckInFlight_{false};
@@ -756,6 +840,7 @@ private:
     QDateTime lastChatWarningAuthPromptAt_;
     QString shownChatWarningMessageId_;
     std::atomic<qint64> channelPoints_{-1};
+    std::uint64_t channelPointsStateRevision_ = 0;
     std::atomic<bool> channelPointsFetchInFlight_{false};
     // Id of the bonus claim currently being auto-claimed, used to avoid
     // sending duplicate claim mutations. Only touched on the GUI thread.
@@ -764,6 +849,8 @@ private:
     QDateTime lastChannelPointsUpdateAt_;
     QString lastChannelPointsError_;
     bool disconnected_{};
+    std::atomic<std::uint64_t> expectedReconnectGeneration_{};
+    std::atomic<std::uint64_t> expectedReconnectToken_{};
     std::optional<std::chrono::time_point<std::chrono::system_clock>>
         lastConnectedAt_;
     std::atomic_flag loadingRecentMessages_ = ATOMIC_FLAG_INIT;
@@ -785,9 +872,15 @@ protected:
 
 private:
     // Badges
+    struct CurrentUserBadgeState {
+        QString userId;
+        std::vector<TwitchBadge> badges;
+    };
     UniqueAccess<std::map<QString, std::map<QString, EmotePtr>>>
         badgeSets_;  // "subscribers": { "0": ... "3": ... "6": ...
-    UniqueAccess<std::vector<CheerEmoteSet>> cheerEmoteSets_;
+    UniqueAccess<CurrentUserBadgeState> currentUserBadges_;
+    UniqueAccess<std::vector<std::shared_ptr<const CheerEmoteSet>>>
+        cheerEmoteSets_;
     UniqueAccess<std::map<QString, ChannelPointReward>> channelPointRewards_;
     boost::circular_buffer_space_optimized<QueuedRedemption>
         waitingRedemptions_{MAX_QUEUED_REDEMPTIONS};
@@ -795,7 +888,9 @@ private:
         recentChannelPointRedemptions_{MAX_RECENT_CHANNEL_POINT_REDEMPTIONS};
 
     bool mod_ = false;
+    std::uint64_t moderatorStatusRevision_ = 0;
     bool leadMod_ = false;
+    std::unordered_map<QString, ModeratorStatus> targetModeratorStates_;
     bool leadModStatusKnown_ = false;
     std::atomic<bool> leadModFetchInFlight_{false};
     bool leadModLookupAttempted_ = false;
@@ -892,10 +987,13 @@ private:
     eventsub::SubscriptionHandle eventSubChannelChatUserMessageUpdateHandle;
 
     friend class TwitchIrcServer;
+    friend class TwitchReadConnectionPoolSingle;
+    friend class TwitchReadConnectionPoolMulti;
     friend class MessageBuilder;
     friend class IrcMessageHandler;
     friend class Commands_E2E_Test;
     friend class TwitchChannelTestAccess;
+    friend class TwitchIrcServerTestAccess;
     friend class TwitchChannel_LiveUpdateGrouping_Test;
     friend class NotificationController_StatusMessagesRespectUsernameStyle_Test;
     friend class ::TestIrcMessageHandlerP;

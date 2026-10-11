@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: MIT
 
+#pragma once
+
 #include "providers/kick/ws/KickWebSocketManager.hpp"
 
 #include <memory>
@@ -13,6 +15,7 @@ class KickPusherManagerPrivate;
 class KickPusherManager : public KickWebSocketManager
 {
 public:
+    explicit KickPusherManager(QString url);
     KickPusherManager(QStringView appKey, QStringView cluster);
     ~KickPusherManager() override;
 

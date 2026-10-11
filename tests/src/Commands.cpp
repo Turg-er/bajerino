@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 #include "controllers/accounts/AccountController.hpp"
+#include "controllers/commands/builtin/twitch/Pin.hpp"
 #include "controllers/commands/Command.hpp"
 #include "controllers/commands/CommandContext.hpp"
 #include "controllers/commands/CommandController.hpp"
@@ -92,6 +93,26 @@ public:
 }  // namespace
 
 namespace chatterino {
+
+TEST(Commands, PinDurationAliasesAndLimits)
+{
+    for (const auto &[text, seconds] : std::vector<std::pair<QString, int>>{
+             {"60", 60},
+             {"5m", 300},
+             {"30 minutes", 1800},
+             {"1h", 0},
+             {"indefinite", 0},
+             {"forever", 0},
+             {"999999999999999999999999999999999", 0}})
+    {
+        const auto result = commands::parsePinDuration(text);
+        EXPECT_TRUE(result.matched) << text;
+        EXPECT_TRUE(result.error.isEmpty()) << text;
+        EXPECT_EQ(result.durationSeconds, seconds) << text;
+    }
+    EXPECT_FALSE(commands::parsePinDuration("message text").matched);
+    EXPECT_FALSE(commands::parsePinDuration("").matched);
+}
 
 TEST(Commands, parseBanActions)
 {

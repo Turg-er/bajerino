@@ -12,6 +12,7 @@
 #include "common/Version.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
+#include "controllers/recording/ChatRecordingController.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Resources.hpp"
@@ -139,6 +140,18 @@ bool Window::event(QEvent *event)
     {
         case QEvent::WindowActivate: {
             getApp()->getWindows()->selectedWindow_ = this;
+            if (auto *page = this->notebook_->getSelectedPage())
+            {
+                auto *split = page->getSelectedSplit();
+                if (!split)
+                {
+                    split = page->findChild<Split *>();
+                }
+                if (split)
+                {
+                    split->refreshSelectedYouTube();
+                }
+            }
             break;
         }
 
@@ -176,6 +189,14 @@ void Window::closeEvent(QCloseEvent *event)
 
     auto *app = getApp();
 
+#ifdef Q_OS_MACOS
+    const bool keepRunningAfterClose =
+        this->type_ == WindowType::Main &&
+        getSettings()->macosKeepRunningAfterClose.getValue();
+#else
+    constexpr bool keepRunningAfterClose = false;
+#endif
+
     if (this->type_ == WindowType::Main &&
         app->getWindows()->hideMainWindowToTray())
     {
@@ -185,11 +206,32 @@ void Window::closeEvent(QCloseEvent *event)
 
     if (this->type_ == WindowType::Main)
     {
+        if (!keepRunningAfterClose)
+        {
+            if (auto *recordings = app->getChatRecordings();
+                recordings && recordings->hasRecordings())
+            {
+                event->ignore();
+                requestApplicationQuit();
+                return;
+            }
+        }
         app->getWindows()->save();
-        app->getWindows()->closeAll();
+        if (!keepRunningAfterClose)
+        {
+            app->getWindows()->closeAll();
+        }
     }
     else
     {
+        if (auto *recordings = app->getChatRecordings())
+        {
+            for (int i = 0; i < this->notebook_->getPageCount(); ++i)
+            {
+                recordings->stop(dynamic_cast<SplitContainer *>(
+                    this->notebook_->getPageAt(i)));
+            }
+        }
         QRect rect = this->getBounds();
         QSize newSize(rect.width(), rect.height());
         getSettings()->lastPopupSize.setValue(newSize);
@@ -201,7 +243,7 @@ void Window::closeEvent(QCloseEvent *event)
 
     this->closed.invoke();
 
-    if (this->type_ == WindowType::Main)
+    if (this->type_ == WindowType::Main && !keepRunningAfterClose)
     {
         QApplication::exit();
     }
@@ -382,7 +424,7 @@ void Window::addShortcuts()
     HotkeyController::HotkeyMap actions{
         {"openSettings",  // Open settings
          [this](std::vector<QString>) -> QString {
-             SettingsDialog::showDialog(this);
+             SettingsDialog::showDialog();
              return "";
          }},
         {"openAccountSelector",  // Open account selector
@@ -577,7 +619,7 @@ void Window::addShortcuts()
          }},
         {"quit",
          [](std::vector<QString>) -> QString {
-             QApplication::exit();
+             requestApplicationQuit();
              return "";
          }},
         {"moveTab",
@@ -762,13 +804,13 @@ void Window::addMenuBar()
     QAction *about = menu->addAction(QString());
     about->setMenuRole(QAction::AboutRole);
     connect(about, &QAction::triggered, this, [this] {
-        SettingsDialog::showDialog(this, SettingsDialogPreference::About);
+        SettingsDialog::showDialog(SettingsDialogPreference::About);
     });
 
     QAction *prefs = menu->addAction(QString());
     prefs->setMenuRole(QAction::PreferencesRole);
     connect(prefs, &QAction::triggered, this, [this] {
-        SettingsDialog::showDialog(this);
+        SettingsDialog::showDialog();
     });
 
     // Window menu.

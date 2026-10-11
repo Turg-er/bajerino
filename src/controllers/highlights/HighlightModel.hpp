@@ -5,8 +5,11 @@
 #pragma once
 
 #include "common/SignalVectorModel.hpp"
+#include "controllers/highlights/HighlightChannelScope.hpp"
 
 #include <QObject>
+#include <QStringList>
+#include <QVariant>
 
 namespace chatterino {
 
@@ -17,7 +20,11 @@ class HighlightModel : public SignalVectorModel<HighlightPhrase>
 public:
     explicit HighlightModel(QObject *parent);
 
-    // Used here, in HighlightingPage and in UserHighlightModel
+    static constexpr int MatchStyleRole = Qt::UserRole;
+    static constexpr int MatchPaintIDRole = Qt::UserRole + 1;
+    static constexpr int ChannelScopeRole = Qt::UserRole + 2;
+    static constexpr int MatchPaintAllowedRole = Qt::UserRole + 3;
+
     enum Column {
         Pattern = 0,
         ShowInMentions = 1,
@@ -27,8 +34,18 @@ public:
         PlaySound = 5,
         SoundPath = 6,
         Color = 7,
-        COUNT  // keep this as last member of enum
+        MatchAppearance = 8,
+        ChannelScope = 9,
+        COUNT
     };
+
+    static void setChannelScopeItem(QStandardItem *item,
+                                    const HighlightChannelScope &scope,
+                                    bool enabled = true);
+    static QStringList channelScopeData(const HighlightChannelScope &scope);
+    static HighlightChannelScope channelScopeFromData(const QVariant &data);
+    static HighlightChannelScope channelScopeFromItem(
+        const QStandardItem *item);
 
     enum HighlightRowIndexes {
         SelfHighlightRow = 0,

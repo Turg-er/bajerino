@@ -4,6 +4,7 @@
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "controllers/accounts/AccountController.hpp"
+#include "providers/moltorino/MoltorinoAuthPagination.hpp"
 #include "providers/twitch/api/TwitchGql.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchAccountManager.hpp"
@@ -29,7 +30,9 @@ namespace chatterino::MoltorinoAuth {
 namespace {
 
 constexpr int HELIX_MODERATED_CHANNEL_TIMEOUT_MS = 20 * 1000;
-constexpr int MAX_HELIX_MODERATED_CHANNEL_PAGES = 100;
+constexpr int HELIX_MODERATED_CHANNEL_PAGE_SIZE = 100;
+constexpr int HELIX_MODERATED_CHANNEL_FALLBACK_PAGE_SIZE = 1;
+constexpr int MAX_HELIX_MODERATED_CHANNEL_REQUESTS = 5000;
 constexpr auto TWITCH_TV_CLIENT_ID = "ue6666qo983tsx6so1t0vnawi233wa";
 
 QString normalizeToken(QString token)
@@ -85,7 +88,10 @@ QString lower(const QString &text)
 
 struct RefreshCoordinator {
     bool running = false;
+    MoltorinoAuthRefreshMode mode = MoltorinoAuthRefreshMode::Automatic;
     std::vector<std::function<void(MoltorinoAuthRefreshResult)>> callbacks;
+    std::vector<std::function<void(MoltorinoAuthRefreshResult)>>
+        queuedManualCallbacks;
 };
 
 RefreshCoordinator &refreshCoordinator()
@@ -119,9 +125,14 @@ MoltorinoAuthAccount accountFromJson(const QJsonObject &obj)
     account.login = obj.value("login").toString().trimmed().toLower();
     account.displayName = obj.value("displayName").toString().trimmed();
     account.token = obj.value("token").toString().trimmed();
+    account.clientId = obj.value("clientId").toString().trimmed();
+    account.enabled =
+        !obj.contains("enabled") || obj.value("enabled").toBool(true);
     account.valid = obj.value("valid").toBool(false);
     account.lastError = obj.value("lastError").toString();
     account.lastValidatedAt = obj.value("lastValidatedAt").toString();
+    account.moderatedChannelsManualRefreshOnly =
+        obj.value("moderatedChannelsManualRefreshOnly").toBool(false);
 
     const auto channels = obj.value("moderatedChannels").toArray();
     account.moderatedChannels.reserve(channels.size());
@@ -130,6 +141,17 @@ MoltorinoAuthAccount accountFromJson(const QJsonObject &obj)
         if (channelValue.isObject())
         {
             account.moderatedChannels.push_back(
+                channelFromJson(channelValue.toObject()));
+        }
+    }
+
+    const auto editorChannels = obj.value("verifiedEditorChannels").toArray();
+    account.verifiedEditorChannels.reserve(editorChannels.size());
+    for (const auto &channelValue : editorChannels)
+    {
+        if (channelValue.isObject())
+        {
+            account.verifiedEditorChannels.push_back(
                 channelFromJson(channelValue.toObject()));
         }
     }
@@ -143,9 +165,13 @@ QJsonObject accountToJson(const MoltorinoAuthAccount &account)
     obj.insert("login", account.login);
     obj.insert("displayName", account.displayName);
     obj.insert("token", account.token);
+    obj.insert("clientId", account.clientId);
+    obj.insert("enabled", account.enabled);
     obj.insert("valid", account.valid);
     obj.insert("lastError", account.lastError);
     obj.insert("lastValidatedAt", account.lastValidatedAt);
+    obj.insert("moderatedChannelsManualRefreshOnly",
+               account.moderatedChannelsManualRefreshOnly);
 
     QJsonArray channels;
     for (const auto &channel : account.moderatedChannels)
@@ -153,6 +179,13 @@ QJsonObject accountToJson(const MoltorinoAuthAccount &account)
         channels.append(channelToJson(channel));
     }
     obj.insert("moderatedChannels", channels);
+
+    QJsonArray editorChannels;
+    for (const auto &channel : account.verifiedEditorChannels)
+    {
+        editorChannels.append(channelToJson(channel));
+    }
+    obj.insert("verifiedEditorChannels", editorChannels);
     return obj;
 }
 
@@ -194,9 +227,32 @@ void upsertAccount(MoltorinoAuthAccount account)
 
     auto current = accounts();
     const auto token = account.token;
-    std::erase_if(current, [&](const auto &existing) {
-        return sameAccount(existing, account.userId, token);
-    });
+    const auto existing =
+        std::find_if(current.begin(), current.end(), [&](const auto &saved) {
+            return sameAccount(saved, account.userId, token);
+        });
+    if (existing != current.end())
+    {
+        account.enabled = existing->enabled;
+        account.verifiedEditorChannels = existing->verifiedEditorChannels;
+        if (account.clientId.isEmpty())
+        {
+            account.clientId = existing->clientId;
+        }
+        if ((account.displayName.isEmpty() ||
+             account.displayName.compare(account.login, Qt::CaseInsensitive) ==
+                 0) &&
+            !existing->displayName.isEmpty())
+        {
+            account.displayName = existing->displayName;
+        }
+    }
+    current.erase(std::remove_if(current.begin(), current.end(),
+                                 [&](const auto &existing) {
+                                     return sameAccount(existing,
+                                                        account.userId, token);
+                                 }),
+                  current.end());
     current.push_back(std::move(account));
     sortAccounts(current);
     saveAccounts(current);
@@ -272,9 +328,12 @@ QString separateAccountAuthDisabledMessage(const QString &action)
 std::vector<MoltorinoAuthAccount> validAccounts()
 {
     auto loaded = accounts();
-    std::erase_if(loaded, [](const auto &account) {
-        return !account.valid || account.token.trimmed().isEmpty();
-    });
+    loaded.erase(std::remove_if(loaded.begin(), loaded.end(),
+                                [](const auto &account) {
+                                    return !account.enabled || !account.valid ||
+                                           account.token.trimmed().isEmpty();
+                                }),
+                 loaded.end());
     return loaded;
 }
 
@@ -284,6 +343,7 @@ MoltorinoAuthToken makeToken(const MoltorinoAuthAccount &account)
         .token = account.token,
         .userId = account.userId,
         .login = account.login,
+        .clientId = account.clientId,
         .legacy = false,
     };
 }
@@ -307,24 +367,12 @@ MoltorinoAuthToken makeLegacyToken()
         {
             token.userId = account.userId;
             token.login = account.login;
+            token.clientId = account.clientId;
             break;
         }
     }
 
     return token;
-}
-
-bool hasStoredAccountForToken(const QString &token)
-{
-    const auto normalizedToken = normalizeToken(token);
-    if (normalizedToken.isEmpty())
-    {
-        return false;
-    }
-
-    return std::ranges::any_of(accounts(), [&](const auto &account) {
-        return normalizeToken(account.token) == normalizedToken;
-    });
 }
 
 QString &lastResolvedPersonalToken()
@@ -421,10 +469,22 @@ bool looksLikeAuthError(const QString &error)
     const auto lowered = error.toLower();
     return lowered.contains("unauthenticated") ||
            lowered.contains("unauthorized") ||
-           lowered.contains("authorization") ||
-           lowered.contains("access token") || lowered.contains("token") ||
-           lowered.contains("forbidden") || lowered.contains("401") ||
-           lowered.contains("403");
+           lowered.contains("authentication required") ||
+           lowered.contains("authentication credentials") ||
+           lowered.contains("invalid oauth") ||
+           lowered.contains("invalid access token") ||
+           lowered.contains("invalid token") ||
+           lowered.contains("token is invalid") ||
+           lowered.contains("token is not valid") ||
+           lowered.contains("token has expired") ||
+           lowered.contains("token expired") ||
+           lowered.contains("expired oauth token") ||
+           lowered.contains("expired access token") ||
+           lowered.contains("missing oauth token") ||
+           lowered.contains("oauth token is missing") ||
+           lowered.contains("missing access token") ||
+           lowered.contains("no token provided") ||
+           lowered.contains("rejected the token") || lowered.contains("401");
 }
 
 std::shared_ptr<TwitchAccount> localAccountForAuthAccount(
@@ -470,18 +530,43 @@ QString moderatedChannelKey(const QString &id, const QString &login)
     return {};
 }
 
+void rememberManualModeratedChannelRefresh(const MoltorinoAuthAccount &account)
+{
+    auto current = accounts();
+    const auto saved =
+        std::find_if(current.begin(), current.end(), [&](const auto &existing) {
+            return sameAccount(existing, account.userId,
+                               normalizeToken(account.token));
+        });
+    if (saved == current.end() || saved->moderatedChannelsManualRefreshOnly)
+    {
+        return;
+    }
+
+    saved->moderatedChannelsManualRefreshOnly = true;
+    saveAccounts(current);
+}
+
 void fetchModeratedChannelsWithHelix(
     const MoltorinoAuthAccount &account, QString clientId, QString oauthToken,
-    std::function<void(QVector<MoltorinoAuthChannel>)> successCallback,
-    std::function<void(const QString &)> failureCallback)
+    std::function<void(QVector<MoltorinoAuthChannel>, bool)> successCallback,
+    std::function<void(const QString &, bool)> failureCallback)
 {
     clientId = clientId.trimmed();
     oauthToken = normalizeToken(oauthToken);
     if (account.userId.isEmpty() || clientId.isEmpty() || oauthToken.isEmpty())
     {
-        failureCallback("Missing account details for Helix mod access");
+        failureCallback("Missing account details for Helix mod access", false);
         return;
     }
+
+    enum class FetchMode {
+        Normal,
+        FastSeed,
+        FastPage,
+        FastVerification,
+        OneAtATimeFallback,
+    };
 
     struct FetchState {
         MoltorinoAuthAccount account;
@@ -490,11 +575,19 @@ void fetchModeratedChannelsWithHelix(
         QVector<MoltorinoAuthChannel> channels;
         QSet<QString> seenChannels;
         QSet<QString> seenCursors;
-        int pageCount = 0;
+        QSet<QString> seenFastBoundaries;
+        int requestCount = 0;
+        FetchMode mode = FetchMode::Normal;
+        QString firstChannelId;
+        QString fastTargetBoundaryId;
+        QString fastBoundaryId;
+        int oneAtATimeRequestCount = 0;
+        bool usedOneAtATimeFallback = false;
         bool completed = false;
         std::shared_ptr<std::function<void(QString)>> requestPage;
-        std::function<void(QVector<MoltorinoAuthChannel>)> successCallback;
-        std::function<void(const QString &)> failureCallback;
+        std::function<void(QVector<MoltorinoAuthChannel>, bool)>
+            successCallback;
+        std::function<void(const QString &, bool)> failureCallback;
     };
 
     auto state = std::make_shared<FetchState>();
@@ -512,7 +605,7 @@ void fetchModeratedChannelsWithHelix(
 
         state->completed = true;
         auto callback = std::move(state->successCallback);
-        callback(std::move(state->channels));
+        callback(std::move(state->channels), state->usedOneAtATimeFallback);
     };
 
     auto finishFailure = [](const std::shared_ptr<FetchState> &state,
@@ -524,7 +617,7 @@ void fetchModeratedChannelsWithHelix(
 
         state->completed = true;
         auto callback = std::move(state->failureCallback);
-        callback(error);
+        callback(error, state->usedOneAtATimeFallback);
     };
 
     auto requestPage = std::make_shared<std::function<void(QString)>>();
@@ -543,17 +636,62 @@ void fetchModeratedChannelsWithHelix(
             return;
         }
 
-        if (++state->pageCount > MAX_HELIX_MODERATED_CHANNEL_PAGES)
+        if (++state->requestCount > MAX_HELIX_MODERATED_CHANNEL_REQUESTS)
         {
             finishFailure(state,
-                          "Helix moderated channel list has too many pages");
+                          "Helix moderated channel list has too many requests");
             return;
         }
+
+        const auto requestMode = state->mode;
+        const auto pageSize = requestMode == FetchMode::Normal ||
+                                      requestMode == FetchMode::FastPage
+                                  ? HELIX_MODERATED_CHANNEL_PAGE_SIZE
+                                  : HELIX_MODERATED_CHANNEL_FALLBACK_PAGE_SIZE;
+
+        if (requestMode == FetchMode::OneAtATimeFallback &&
+            ++state->oneAtATimeRequestCount > 1 &&
+            !state->usedOneAtATimeFallback)
+        {
+            state->usedOneAtATimeFallback = true;
+            rememberManualModeratedChannelRefresh(state->account);
+        }
+
+        auto startOneAtATimeFallback = [state, weakRequestPage,
+                                        finishFailure](const QString &reason) {
+            if (state->completed)
+            {
+                return;
+            }
+            if (state->mode == FetchMode::OneAtATimeFallback)
+            {
+                finishFailure(state, reason);
+                return;
+            }
+
+            state->mode = FetchMode::OneAtATimeFallback;
+            state->oneAtATimeRequestCount = 0;
+            state->channels.clear();
+            state->seenChannels.clear();
+            state->seenCursors.clear();
+            state->seenFastBoundaries.clear();
+            state->firstChannelId.clear();
+            state->fastTargetBoundaryId.clear();
+            state->fastBoundaryId.clear();
+
+            if (auto requestPage = weakRequestPage.lock())
+            {
+                (*requestPage)({});
+                return;
+            }
+            finishFailure(state, "Could not start Twitch's one at a time "
+                                 "moderated channel fallback");
+        };
 
         QUrl url("https://api.twitch.tv/helix/moderation/channels");
         QUrlQuery query;
         query.addQueryItem("user_id", state->account.userId);
-        query.addQueryItem("first", "100");
+        query.addQueryItem("first", QString::number(pageSize));
         if (!cursor.isEmpty())
         {
             query.addQueryItem("after", cursor);
@@ -563,22 +701,37 @@ void fetchModeratedChannelsWithHelix(
         NetworkRequest(url, NetworkRequestType::Get)
             .useProxy()
             .timeout(HELIX_MODERATED_CHANNEL_TIMEOUT_MS)
+            .maximumResponseSize(1024 * 1024)
             .hideRequestBody()
             .followRedirects(true)
             .header("Accept", "application/json")
             .header("Client-ID", state->clientId)
             .header("Authorization", "Bearer " + state->oauthToken)
-            .onSuccess([state, weakRequestPage, finishSuccess,
-                        finishFailure](const NetworkResult &result) mutable {
+            .onSuccess([state, weakRequestPage, finishSuccess, finishFailure,
+                        startOneAtATimeFallback, requestMode, pageSize,
+                        cursor](const NetworkResult &result) mutable {
+                auto rejectResponse = [state, finishFailure,
+                                       startOneAtATimeFallback,
+                                       requestMode](const QString &error) {
+                    if (requestMode == FetchMode::FastSeed ||
+                        requestMode == FetchMode::FastPage ||
+                        requestMode == FetchMode::FastVerification)
+                    {
+                        startOneAtATimeFallback(error);
+                        return;
+                    }
+                    finishFailure(state, error);
+                };
+
                 const auto root = result.parseJson();
                 if (!root.contains("data") || !root.value("data").isArray())
                 {
                     const auto message = root.value("message").toString();
-                    finishFailure(state,
-                                  message.isEmpty()
-                                      ? QString("Failed to parse Helix "
-                                                "moderated channels response")
-                                      : message);
+                    rejectResponse(
+                        message.isEmpty()
+                            ? QString("Failed to parse Helix moderated "
+                                      "channels response")
+                            : message);
                     return;
                 }
 
@@ -586,12 +739,28 @@ void fetchModeratedChannelsWithHelix(
                 if (!root.value("message").toString().isEmpty() &&
                     data.isEmpty())
                 {
-                    finishFailure(state, root.value("message").toString());
+                    rejectResponse(root.value("message").toString());
                     return;
                 }
 
-                for (const auto value : data)
+                if (data.size() > pageSize)
                 {
+                    rejectResponse("Twitch returned more moderated channels "
+                                   "than requested");
+                    return;
+                }
+
+                QVector<MoltorinoAuthChannel> pageChannels;
+                pageChannels.reserve(data.size());
+                QSet<QString> pageKeys;
+                bool pageCanAdvance = true;
+                for (const auto &value : data)
+                {
+                    if (!value.isObject())
+                    {
+                        pageCanAdvance = false;
+                        continue;
+                    }
                     const auto obj = value.toObject();
                     MoltorinoAuthChannel channel{
                         .id = obj.value("broadcaster_id").toString().trimmed(),
@@ -604,54 +773,294 @@ void fetchModeratedChannelsWithHelix(
                     };
                     if (channel.id.isEmpty() && channel.login.isEmpty())
                     {
+                        pageCanAdvance = false;
                         continue;
                     }
 
                     const auto key =
                         moderatedChannelKey(channel.id, channel.login);
-                    if (key.isEmpty() || state->seenChannels.contains(key))
+                    if (channel.id.isEmpty() || key.isEmpty() ||
+                        pageKeys.contains(key))
                     {
+                        pageCanAdvance = false;
                         continue;
                     }
 
-                    state->seenChannels.insert(key);
-                    state->channels.push_back(std::move(channel));
+                    pageKeys.insert(key);
+                    pageChannels.push_back(std::move(channel));
+                }
+
+                if (pageChannels.size() != data.size())
+                {
+                    pageCanAdvance = false;
                 }
 
                 const auto nextCursor = root.value("pagination")
                                             .toObject()
                                             .value("cursor")
-                                            .toString();
-                if (nextCursor.isEmpty())
+                                            .toString()
+                                            .trimmed();
+
+                auto queuePage = [state, weakRequestPage, finishFailure,
+                                  startOneAtATimeFallback,
+                                  rejectResponse](const QString &next,
+                                                  const QString &boundaryId,
+                                                  FetchMode nextMode) {
+                    if (next.isEmpty())
+                    {
+                        rejectResponse(
+                            "Twitch's moderated channel cursor was empty");
+                        return false;
+                    }
+
+                    if (state->seenCursors.contains(next))
+                    {
+                        rejectResponse(
+                            "Twitch repeated a moderated channel cursor");
+                        return false;
+                    }
+
+                    if (!boundaryId.isEmpty())
+                    {
+                        if (state->seenFastBoundaries.contains(boundaryId))
+                        {
+                            startOneAtATimeFallback(
+                                "Twitch repeated a moderated channel boundary");
+                            return false;
+                        }
+                        state->seenFastBoundaries.insert(boundaryId);
+                        state->fastBoundaryId = boundaryId;
+                    }
+
+                    state->seenCursors.insert(next);
+                    state->mode = nextMode;
+                    if (auto requestPage = weakRequestPage.lock())
+                    {
+                        (*requestPage)(next);
+                        return true;
+                    }
+
+                    finishFailure(state, "Could not continue Twitch moderated "
+                                         "channel pagination");
+                    return false;
+                };
+
+                if (requestMode == FetchMode::FastSeed)
                 {
-                    finishSuccess(state);
+                    if (!pageCanAdvance || pageChannels.size() != 1 ||
+                        pageChannels.front().id != state->firstChannelId ||
+                        nextCursor.isEmpty())
+                    {
+                        startOneAtATimeFallback(
+                            "Twitch's moderated channel seed did not match "
+                            "the first page");
+                        return;
+                    }
+
+                    const auto advanced =
+                        detail::advanceModeratedChannelsCursor(
+                            nextCursor, state->firstChannelId,
+                            state->fastTargetBoundaryId);
+                    if (!advanced)
+                    {
+                        startOneAtATimeFallback(
+                            "Twitch's moderated channel cursor format changed");
+                        return;
+                    }
+
+                    queuePage(*advanced, state->fastTargetBoundaryId,
+                              FetchMode::FastPage);
                     return;
                 }
 
-                if (state->seenCursors.contains(nextCursor))
+                bool pageOverlapsExisting = false;
+                for (const auto &channel : pageChannels)
                 {
-                    finishFailure(state,
-                                  "Twitch repeated a Helix pagination cursor");
+                    const auto key =
+                        moderatedChannelKey(channel.id, channel.login);
+                    if (state->seenChannels.contains(key))
+                    {
+                        pageOverlapsExisting = true;
+                        continue;
+                    }
+                    state->seenChannels.insert(key);
+                    state->channels.push_back(channel);
+                }
+
+                if (requestMode == FetchMode::Normal)
+                {
+                    if (!pageCanAdvance)
+                    {
+                        finishFailure(state, "Twitch returned an invalid "
+                                             "moderated channel page");
+                        return;
+                    }
+                    if (pageOverlapsExisting)
+                    {
+                        finishFailure(
+                            state, "Twitch repeated a moderated channel while "
+                                   "paginating");
+                        return;
+                    }
+
+                    if (state->firstChannelId.isEmpty() && cursor.isEmpty() &&
+                        !pageChannels.isEmpty())
+                    {
+                        state->firstChannelId = pageChannels.front().id;
+                    }
+
+                    if (!nextCursor.isEmpty())
+                    {
+                        queuePage(nextCursor, {}, FetchMode::Normal);
+                        return;
+                    }
+
+                    if (data.size() < pageSize)
+                    {
+                        finishSuccess(state);
+                        return;
+                    }
+
+                    if (state->firstChannelId.isEmpty() ||
+                        pageChannels.isEmpty())
+                    {
+                        startOneAtATimeFallback(
+                            "Twitch's full moderated channel page could not "
+                            "be safely advanced");
+                        return;
+                    }
+
+                    state->fastTargetBoundaryId = pageChannels.back().id;
+                    state->mode = FetchMode::FastSeed;
+                    if (auto requestPage = weakRequestPage.lock())
+                    {
+                        (*requestPage)({});
+                        return;
+                    }
+                    finishFailure(state, "Could not request a Twitch moderated "
+                                         "channel cursor seed");
                     return;
                 }
 
-                state->seenCursors.insert(nextCursor);
-                if (auto requestPage = weakRequestPage.lock())
+                if (requestMode == FetchMode::OneAtATimeFallback)
                 {
-                    (*requestPage)(nextCursor);
+                    if (!pageCanAdvance || pageOverlapsExisting)
+                    {
+                        finishFailure(
+                            state, "Twitch's one at a time moderated channel "
+                                   "pagination did not make progress");
+                        return;
+                    }
+                    if (nextCursor.isEmpty())
+                    {
+                        finishSuccess(state);
+                        return;
+                    }
+                    if (pageChannels.isEmpty())
+                    {
+                        finishFailure(
+                            state,
+                            "Twitch returned an empty moderated channel page "
+                            "with another cursor");
+                        return;
+                    }
+                    queuePage(nextCursor, {}, FetchMode::OneAtATimeFallback);
+                    return;
                 }
+
+                if (!pageCanAdvance || pageOverlapsExisting)
+                {
+                    startOneAtATimeFallback(
+                        "Twitch's fast moderated channel pagination did not "
+                        "make progress");
+                    return;
+                }
+
+                if (requestMode == FetchMode::FastVerification)
+                {
+                    if (pageChannels.isEmpty())
+                    {
+                        if (nextCursor.isEmpty())
+                        {
+                            finishSuccess(state);
+                        }
+                        else
+                        {
+                            startOneAtATimeFallback(
+                                "Twitch returned an empty verification page "
+                                "with another cursor");
+                        }
+                        return;
+                    }
+
+                    if (nextCursor.isEmpty())
+                    {
+                        finishSuccess(state);
+                        return;
+                    }
+
+                    queuePage(nextCursor, pageChannels.back().id,
+                              FetchMode::FastPage);
+                    return;
+                }
+
+                if (pageChannels.isEmpty())
+                {
+                    if (nextCursor.isEmpty())
+                    {
+                        finishSuccess(state);
+                    }
+                    else
+                    {
+                        startOneAtATimeFallback(
+                            "Twitch returned an empty fast page with another "
+                            "cursor");
+                    }
+                    return;
+                }
+
+                if (!nextCursor.isEmpty())
+                {
+                    queuePage(nextCursor, pageChannels.back().id,
+                              FetchMode::FastPage);
+                    return;
+                }
+
+                const auto advanced = detail::advanceModeratedChannelsCursor(
+                    cursor, state->fastBoundaryId, pageChannels.back().id);
+                if (!advanced)
+                {
+                    startOneAtATimeFallback(
+                        "Twitch's moderated channel cursor format changed");
+                    return;
+                }
+
+                queuePage(*advanced, pageChannels.back().id,
+                          data.size() == pageSize
+                              ? FetchMode::FastPage
+                              : FetchMode::FastVerification);
             })
-            .onError([state,
-                      finishFailure](const NetworkResult &result) mutable {
+            .onError([state, finishFailure, startOneAtATimeFallback,
+                      requestMode](const NetworkResult &result) mutable {
                 const auto body = QString::fromUtf8(result.getData()).trimmed();
+                auto error = result.formatError();
                 if (!body.isEmpty())
                 {
-                    finishFailure(state,
-                                  QString("%1 | %2").arg(result.formatError(),
-                                                         body.left(200)));
-                    return;
+                    error = QString("%1 | %2").arg(error, body.left(200));
                 }
-                finishFailure(state, result.formatError());
+
+                if (requestMode == FetchMode::FastSeed ||
+                    requestMode == FetchMode::FastPage ||
+                    requestMode == FetchMode::FastVerification)
+                {
+                    startOneAtATimeFallback(
+                        QString("Fast moderated channel pagination failed: %1")
+                            .arg(error));
+                }
+                else
+                {
+                    finishFailure(state, error);
+                }
             })
             .execute();
     };
@@ -660,6 +1069,7 @@ void fetchModeratedChannelsWithHelix(
 }
 
 void fetchModeratedChannels(MoltorinoAuthAccount account,
+                            bool refreshManualOnlyAccount,
                             std::function<void(MoltorinoAuthAccount)> callback)
 {
     struct CallbackState {
@@ -669,6 +1079,15 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
 
     auto state = std::make_shared<CallbackState>();
     state->callback = std::move(callback);
+
+    if (account.moderatedChannelsManualRefreshOnly && !refreshManualOnlyAccount)
+    {
+        account.valid = true;
+        account.lastValidatedAt = nowIso();
+        auto finishCallback = std::move(state->callback);
+        finishCallback(std::move(account));
+        return;
+    }
 
     auto finish = [state](MoltorinoAuthAccount refreshedAccount) mutable {
         if (state->completed || !state->callback)
@@ -681,41 +1100,49 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
         callback(std::move(refreshedAccount));
     };
 
-    auto finishWithChannels =
-        [finish](MoltorinoAuthAccount baseAccount,
-                 QVector<MoltorinoAuthChannel> channels) mutable {
-            baseAccount.moderatedChannels = std::move(channels);
-            baseAccount.valid = true;
-            baseAccount.lastError.clear();
-            baseAccount.lastValidatedAt = nowIso();
-            finish(std::move(baseAccount));
-        };
-
-    auto finishWithCachedChannels = [finish](MoltorinoAuthAccount baseAccount,
-                                             const QString &error) mutable {
-        auto account = std::move(baseAccount);
-        for (const auto &existing : accounts())
-        {
-            if (sameAccount(existing, account.userId,
-                            normalizeToken(account.token)))
-            {
-                account.moderatedChannels = existing.moderatedChannels;
-                break;
-            }
-        }
-        account.valid = true;
-        account.lastError =
-            QString("Could not refresh mod access: %1").arg(error);
-        account.lastValidatedAt = nowIso();
-        finish(std::move(account));
+    auto finishWithChannels = [finish](MoltorinoAuthAccount baseAccount,
+                                       QVector<MoltorinoAuthChannel> channels,
+                                       bool manualRefreshOnly) mutable {
+        baseAccount.moderatedChannels = std::move(channels);
+        baseAccount.moderatedChannelsManualRefreshOnly = manualRefreshOnly;
+        baseAccount.valid = true;
+        baseAccount.lastError.clear();
+        baseAccount.lastValidatedAt = nowIso();
+        finish(std::move(baseAccount));
     };
 
+    auto finishWithCachedChannels =
+        [finish](MoltorinoAuthAccount baseAccount, const QString &error,
+                 bool usedOneAtATimeFallback) mutable {
+            auto account = baseAccount;
+            for (const auto &existing : accounts())
+            {
+                if (sameAccount(existing, account.userId,
+                                normalizeToken(account.token)))
+                {
+                    account.moderatedChannels = existing.moderatedChannels;
+                    account.verifiedEditorChannels =
+                        existing.verifiedEditorChannels;
+                    account.moderatedChannelsManualRefreshOnly =
+                        existing.moderatedChannelsManualRefreshOnly ||
+                        usedOneAtATimeFallback;
+                    break;
+                }
+            }
+            account.valid = true;
+            account.lastError =
+                QString("Could not refresh mod access: %1").arg(error);
+            account.lastValidatedAt = nowIso();
+            finish(std::move(account));
+        };
+
     auto fetchWithGql = [finishWithChannels, finishWithCachedChannels](
-                            const MoltorinoAuthAccount &baseAccount) mutable {
+                            MoltorinoAuthAccount baseAccount,
+                            bool usedOneAtATimeFallback) mutable {
         TwitchGql::getModeratedChannels(
             baseAccount.token,
-            [baseAccount, finishWithChannels](
-                const QVector<GqlModeratedChannel> &channels) mutable {
+            [baseAccount, finishWithChannels, usedOneAtATimeFallback](
+                QVector<GqlModeratedChannel> channels) mutable {
                 QVector<MoltorinoAuthChannel> converted;
                 converted.reserve(channels.size());
                 for (const auto &channel : channels)
@@ -726,11 +1153,15 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
                         .displayName = channel.displayName,
                     });
                 }
-                finishWithChannels(baseAccount, std::move(converted));
+                finishWithChannels(
+                    baseAccount, std::move(converted),
+                    baseAccount.moderatedChannelsManualRefreshOnly ||
+                        usedOneAtATimeFallback);
             },
-            [baseAccount,
-             finishWithCachedChannels](const QString &error) mutable {
-                finishWithCachedChannels(baseAccount, error);
+            [baseAccount, finishWithCachedChannels,
+             usedOneAtATimeFallback](const QString &error) mutable {
+                finishWithCachedChannels(baseAccount, error,
+                                         usedOneAtATimeFallback);
             });
     };
 
@@ -739,13 +1170,20 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
     if (!localAccount)
     {
         fetchModeratedChannelsWithHelix(
-            baseAccount, TWITCH_TV_CLIENT_ID, baseAccount.token,
+            baseAccount,
+            baseAccount.clientId.isEmpty()
+                ? QString::fromUtf8(TWITCH_TV_CLIENT_ID)
+                : baseAccount.clientId,
+            baseAccount.token,
             [baseAccount, finishWithChannels](
-                QVector<MoltorinoAuthChannel> channels) mutable {
-                finishWithChannels(baseAccount, std::move(channels));
+                QVector<MoltorinoAuthChannel> channels,
+                bool usedOneAtATimeFallback) mutable {
+                finishWithChannels(baseAccount, std::move(channels),
+                                   usedOneAtATimeFallback);
             },
-            [baseAccount, fetchWithGql](const QString &) mutable {
-                fetchWithGql(baseAccount);
+            [baseAccount, fetchWithGql](const QString &,
+                                        bool usedOneAtATimeFallback) mutable {
+                fetchWithGql(std::move(baseAccount), usedOneAtATimeFallback);
             });
         return;
     }
@@ -753,20 +1191,32 @@ void fetchModeratedChannels(MoltorinoAuthAccount account,
     fetchModeratedChannelsWithHelix(
         baseAccount, localAccount->getOAuthClient(),
         localAccount->getOAuthToken(),
-        [baseAccount,
-         finishWithChannels](QVector<MoltorinoAuthChannel> channels) mutable {
-            finishWithChannels(baseAccount, std::move(channels));
+        [baseAccount, finishWithChannels](
+            QVector<MoltorinoAuthChannel> channels,
+            bool usedOneAtATimeFallback) mutable {
+            finishWithChannels(baseAccount, std::move(channels),
+                               usedOneAtATimeFallback);
         },
-        [baseAccount, fetchWithGql,
-         finishWithChannels](const QString &) mutable {
+        [baseAccount, fetchWithGql, finishWithChannels](
+            const QString &, bool localUsedOneAtATimeFallback) mutable {
             fetchModeratedChannelsWithHelix(
-                baseAccount, TWITCH_TV_CLIENT_ID, baseAccount.token,
-                [baseAccount, finishWithChannels](
-                    QVector<MoltorinoAuthChannel> channels) mutable {
-                    finishWithChannels(baseAccount, std::move(channels));
+                baseAccount,
+                baseAccount.clientId.isEmpty()
+                    ? QString::fromUtf8(TWITCH_TV_CLIENT_ID)
+                    : baseAccount.clientId,
+                baseAccount.token,
+                [baseAccount, finishWithChannels, localUsedOneAtATimeFallback](
+                    QVector<MoltorinoAuthChannel> channels,
+                    bool tvUsedOneAtATimeFallback) mutable {
+                    finishWithChannels(baseAccount, std::move(channels),
+                                       localUsedOneAtATimeFallback ||
+                                           tvUsedOneAtATimeFallback);
                 },
-                [baseAccount, fetchWithGql](const QString &) mutable {
-                    fetchWithGql(baseAccount);
+                [baseAccount, fetchWithGql, localUsedOneAtATimeFallback](
+                    const QString &, bool tvUsedOneAtATimeFallback) mutable {
+                    fetchWithGql(std::move(baseAccount),
+                                 localUsedOneAtATimeFallback ||
+                                     tvUsedOneAtATimeFallback);
                 });
         });
 }
@@ -787,6 +1237,7 @@ void validateWithOAuth(
                    NetworkRequestType::Get)
         .useProxy()
         .timeout(20000)
+        .maximumResponseSize(64 * 1024)
         .hideRequestBody()
         .followRedirects(true)
         .header("Accept", "application/json")
@@ -799,6 +1250,7 @@ void validateWithOAuth(
             account.token = normalizedToken;
             account.userId = json.value("user_id").toString().trimmed();
             account.login = json.value("login").toString().trimmed().toLower();
+            account.clientId = json.value("client_id").toString().trimmed();
             account.displayName = account.login;
             account.valid = true;
             account.lastValidatedAt = nowIso();
@@ -823,59 +1275,6 @@ void validateWithOAuth(
             failureCallback(result.formatError());
         })
         .execute();
-}
-
-void validateToken(const QString &token,
-                   std::function<void(MoltorinoAuthAccount)> successCallback,
-                   std::function<void(const QString &)> failureCallback)
-{
-    struct ValidationState {
-        std::function<void(MoltorinoAuthAccount)> successCallback;
-        std::function<void(const QString &)> failureCallback;
-        bool completed = false;
-    };
-
-    auto state = std::make_shared<ValidationState>();
-    state->successCallback = std::move(successCallback);
-    state->failureCallback = std::move(failureCallback);
-
-    auto succeed = [state](MoltorinoAuthAccount account) mutable {
-        if (state->completed || !state->successCallback)
-        {
-            return;
-        }
-
-        state->completed = true;
-        auto callback = std::move(state->successCallback);
-        callback(std::move(account));
-    };
-
-    auto fail = [state](const QString &error) mutable {
-        if (state->completed || !state->failureCallback)
-        {
-            return;
-        }
-
-        state->completed = true;
-        auto callback = std::move(state->failureCallback);
-        callback(error);
-    };
-
-    TwitchGql::validateCustomAuthToken(
-        token,
-        [succeed](const CustomAuthValidationResult &result) mutable {
-            MoltorinoAuthAccount account;
-            account.token = result.normalizedToken;
-            account.userId = result.userId;
-            account.login = result.login.trimmed().toLower();
-            account.displayName = result.displayName;
-            account.valid = true;
-            account.lastValidatedAt = nowIso();
-            succeed(std::move(account));
-        },
-        [token, succeed, fail](const QString &) mutable {
-            validateWithOAuth(token, std::move(succeed), std::move(fail));
-        });
 }
 
 }  // namespace
@@ -919,15 +1318,7 @@ MoltorinoAuthSummary summary()
 
     QSet<QString> channels;
     auto addChannelKey = [&channels](const QString &id, const QString &login) {
-        QString key;
-        if (!id.trimmed().isEmpty())
-        {
-            key = "id:" + id.trimmed();
-        }
-        else if (!login.trimmed().isEmpty())
-        {
-            key = "login:" + lower(login);
-        }
+        const auto key = moderatedChannelKey(id, login);
         if (!key.isEmpty())
         {
             channels.insert(key);
@@ -937,6 +1328,13 @@ MoltorinoAuthSummary summary()
     for (const auto &account : accounts())
     {
         ++result.accountCount;
+        if (!account.enabled)
+        {
+            ++result.disabledAccountCount;
+            continue;
+        }
+
+        ++result.enabledAccountCount;
         if (account.valid)
         {
             ++result.validAccountCount;
@@ -963,16 +1361,29 @@ QString legacyToken()
     return normalizeToken(getSettings()->customPinAuthToken.getValue());
 }
 
+bool hasConfiguredAuth()
+{
+    const auto saved = accounts();
+    if (std::any_of(saved.begin(), saved.end(), [](const auto &account) {
+            return account.enabled;
+        }))
+    {
+        return true;
+    }
+
+    return saved.empty() && !legacyToken().isEmpty();
+}
+
 void addOrUpdateToken(const QString &token,
                       std::function<void(MoltorinoAuthAccount)> successCallback,
                       std::function<void(const QString &)> failureCallback)
 {
-    validateToken(
+    validateWithOAuth(
         token,
         [successCallback =
              std::move(successCallback)](MoltorinoAuthAccount account) mutable {
             fetchModeratedChannels(
-                std::move(account),
+                std::move(account), true,
                 [successCallback = std::move(successCallback)](
                     MoltorinoAuthAccount account) mutable {
                     upsertAccount(account);
@@ -980,6 +1391,122 @@ void addOrUpdateToken(const QString &token,
                 });
         },
         std::move(failureCallback));
+}
+
+void rememberEditorChannel(const QString &token,
+                           const MoltorinoAuthChannel &channel)
+{
+    const auto normalizedToken = normalizeToken(token);
+    auto normalizedChannel = channel;
+    normalizedChannel.id = normalizedChannel.id.trimmed();
+    normalizedChannel.login = lower(normalizedChannel.login);
+    normalizedChannel.displayName = normalizedChannel.displayName.trimmed();
+    if (normalizedToken.isEmpty() ||
+        (normalizedChannel.id.isEmpty() && normalizedChannel.login.isEmpty()))
+    {
+        return;
+    }
+
+    auto current = accounts();
+    auto account = std::find_if(
+        current.begin(), current.end(), [&normalizedToken](const auto &saved) {
+            return normalizeToken(saved.token) == normalizedToken;
+        });
+    if (account == current.end() || !account->enabled || !account->valid)
+    {
+        return;
+    }
+
+    auto existing = std::find_if(
+        account->verifiedEditorChannels.begin(),
+        account->verifiedEditorChannels.end(),
+        [&normalizedChannel](const MoltorinoAuthChannel &saved) {
+            if (!normalizedChannel.id.isEmpty() && !saved.id.isEmpty())
+            {
+                return normalizedChannel.id == saved.id;
+            }
+            return !normalizedChannel.login.isEmpty() &&
+                   lower(saved.login) == normalizedChannel.login;
+        });
+    if (existing == account->verifiedEditorChannels.end())
+    {
+        account->verifiedEditorChannels.push_back(std::move(normalizedChannel));
+        saveAccounts(current);
+        return;
+    }
+
+    if (existing->id != normalizedChannel.id ||
+        existing->login != normalizedChannel.login ||
+        existing->displayName != normalizedChannel.displayName)
+    {
+        *existing = std::move(normalizedChannel);
+        saveAccounts(current);
+    }
+}
+
+void forgetEditorChannel(const QString &token, const QString &channelId,
+                         const QString &channelLogin)
+{
+    const auto normalizedToken = normalizeToken(token);
+    const auto normalizedChannelId = channelId.trimmed();
+    const auto normalizedChannelLogin = lower(channelLogin);
+    if (normalizedToken.isEmpty() ||
+        (normalizedChannelId.isEmpty() && normalizedChannelLogin.isEmpty()))
+    {
+        return;
+    }
+
+    auto current = accounts();
+    auto account = std::find_if(
+        current.begin(), current.end(), [&normalizedToken](const auto &saved) {
+            return normalizeToken(saved.token) == normalizedToken;
+        });
+    if (account == current.end())
+    {
+        return;
+    }
+
+    const auto previousSize = account->verifiedEditorChannels.size();
+    account->verifiedEditorChannels.erase(
+        std::remove_if(
+            account->verifiedEditorChannels.begin(),
+            account->verifiedEditorChannels.end(),
+            [&normalizedChannelId,
+             &normalizedChannelLogin](const MoltorinoAuthChannel &saved) {
+                if (!normalizedChannelId.isEmpty() && !saved.id.isEmpty())
+                {
+                    return saved.id.trimmed() == normalizedChannelId;
+                }
+                return !normalizedChannelLogin.isEmpty() &&
+                       lower(saved.login) == normalizedChannelLogin;
+            }),
+        account->verifiedEditorChannels.end());
+    if (account->verifiedEditorChannels.size() != previousSize)
+    {
+        saveAccounts(current);
+    }
+}
+
+bool setAccountEnabled(const QString &userId, const QString &token,
+                       bool enabled)
+{
+    const auto normalizedToken = normalizeToken(token);
+    auto current = accounts();
+    auto account =
+        std::find_if(current.begin(), current.end(), [&](const auto &saved) {
+            return sameAccount(saved, userId, normalizedToken);
+        });
+    if (account == current.end())
+    {
+        return false;
+    }
+
+    if (account->enabled != enabled)
+    {
+        account->enabled = enabled;
+        saveAccounts(current);
+    }
+    return true;
 }
 
 void removeAccount(const QString &userId, const QString &token)
@@ -998,21 +1525,49 @@ void removeAccount(const QString &userId, const QString &token)
     }
 }
 
-void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
+void refreshAccounts(MoltorinoAuthRefreshMode mode,
+                     std::function<void(MoltorinoAuthRefreshResult)> callback)
 {
-    auto &coordinator = refreshCoordinator();
-    coordinator.callbacks.push_back(std::move(callback));
-    if (coordinator.running)
+    if (isAppAboutToQuit())
     {
+        if (callback)
+        {
+            callback({});
+        }
         return;
     }
+    auto &coordinator = refreshCoordinator();
+    if (coordinator.running)
+    {
+        if (mode == MoltorinoAuthRefreshMode::Manual &&
+            coordinator.mode == MoltorinoAuthRefreshMode::Automatic)
+        {
+            coordinator.queuedManualCallbacks.push_back(std::move(callback));
+        }
+        else
+        {
+            coordinator.callbacks.push_back(std::move(callback));
+        }
+        return;
+    }
+    coordinator.callbacks.push_back(std::move(callback));
     coordinator.running = true;
+    coordinator.mode = mode;
 
     auto finishRefresh = [](const MoltorinoAuthRefreshResult &result) {
         auto &coordinator = refreshCoordinator();
         auto callbacks = std::move(coordinator.callbacks);
+        auto queuedManualCallbacks =
+            std::move(coordinator.queuedManualCallbacks);
         coordinator.callbacks.clear();
+        coordinator.queuedManualCallbacks.clear();
         coordinator.running = false;
+
+        for (auto &callback : queuedManualCallbacks)
+        {
+            refreshAccounts(MoltorinoAuthRefreshMode::Manual,
+                            std::move(callback));
+        }
 
         for (auto &callback : callbacks)
         {
@@ -1029,6 +1584,10 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
     tokens.reserve(existing.size() + 1);
     for (const auto &account : existing)
     {
+        if (!account.enabled)
+        {
+            continue;
+        }
         const auto token = normalizeToken(account.token);
         if (!token.isEmpty() &&
             std::ranges::find(tokens, token) == tokens.end())
@@ -1038,14 +1597,14 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
     }
 
     const auto legacy = legacyToken();
-    if (!legacy.isEmpty() && std::ranges::find(tokens, legacy) == tokens.end())
+    if (existing.empty() && !legacy.isEmpty() &&
+        std::find(tokens.begin(), tokens.end(), legacy) == tokens.end())
     {
         tokens.push_back(legacy);
     }
 
     if (tokens.empty())
     {
-        saveAccounts({});
         finishRefresh({});
         return;
     }
@@ -1102,76 +1661,71 @@ void refreshAccounts(std::function<void(MoltorinoAuthRefreshResult)> callback)
             return;
         }
 
-        const auto currentAccounts = accounts();
+        auto merged = accounts();
+        const auto currentLegacy = legacyToken();
 
-        std::vector<QString> configuredTokens;
-        for (const auto &current : currentAccounts)
-        {
-            const auto token = normalizeToken(current.token);
-            if (!token.isEmpty())
-            {
-                configuredTokens.push_back(token);
-            }
-        }
-
-        const auto legacy = legacyToken();
-        if (!legacy.isEmpty())
-        {
-            configuredTokens.push_back(legacy);
-        }
-
-        std::erase_if(state->accounts, [&](const auto &refreshed) {
-            const auto token = normalizeToken(refreshed.token);
-            return token.isEmpty() ||
-                   std::ranges::find(configuredTokens, token) ==
-                       configuredTokens.end();
-        });
-
-        std::vector<QString> refreshedTokens;
-        refreshedTokens.reserve(state->accounts.size());
-        for (const auto &refreshed : state->accounts)
+        for (auto &refreshed : state->accounts)
         {
             const auto token = normalizeToken(refreshed.token);
-            if (!token.isEmpty())
-            {
-                refreshedTokens.push_back(token);
-            }
-        }
-
-        for (const auto &current : currentAccounts)
-        {
-            const auto token = normalizeToken(current.token);
             if (token.isEmpty())
             {
                 continue;
             }
-            if (std::ranges::find(configuredTokens, token) ==
-                configuredTokens.end())
+
+            auto current = std::find_if(
+                merged.begin(), merged.end(), [&](const auto &saved) {
+                    return normalizeToken(saved.token) == token;
+                });
+            if (current != merged.end())
             {
-                continue;
-            }
-            if (std::ranges::find(refreshedTokens, token) !=
-                refreshedTokens.end())
-            {
+                if (!current->enabled)
+                {
+                    continue;
+                }
+                refreshed.enabled = true;
+                refreshed.verifiedEditorChannels =
+                    current->verifiedEditorChannels;
+                if ((refreshed.displayName.isEmpty() ||
+                     refreshed.displayName.compare(refreshed.login,
+                                                   Qt::CaseInsensitive) == 0) &&
+                    !current->displayName.isEmpty())
+                {
+                    refreshed.displayName = current->displayName;
+                }
+                *current = std::move(refreshed);
                 continue;
             }
 
-            state->accounts.push_back(current);
-            refreshedTokens.push_back(token);
+            if (merged.empty() && !currentLegacy.isEmpty() &&
+                token == currentLegacy)
+            {
+                refreshed.enabled = true;
+                merged.push_back(std::move(refreshed));
+            }
         }
 
-        sortAccounts(state->accounts);
-        saveAccounts(state->accounts);
+        sortAccounts(merged);
+        saveAccounts(merged);
         state->result.moderatedChannels = summary().moderatedChannelCount;
         state->callback(state->result);
     };
 
     for (const auto &token : tokens)
     {
-        validateToken(
+        validateWithOAuth(
             token,
-            [finishOne](MoltorinoAuthAccount account) mutable {
-                fetchModeratedChannels(std::move(account), finishOne);
+            [finishOne, existingAccountForToken,
+             mode](MoltorinoAuthAccount account) mutable {
+                const auto existing = existingAccountForToken(account.token);
+                account.moderatedChannels = existing.moderatedChannels;
+                account.verifiedEditorChannels =
+                    existing.verifiedEditorChannels;
+                account.lastError = existing.lastError;
+                account.moderatedChannelsManualRefreshOnly =
+                    existing.moderatedChannelsManualRefreshOnly;
+                fetchModeratedChannels(std::move(account),
+                                       mode == MoltorinoAuthRefreshMode::Manual,
+                                       finishOne);
             },
             [token, finishOne,
              existingAccountForToken](const QString &error) mutable {
@@ -1193,8 +1747,7 @@ void scheduleStartupRefresh()
     }
     scheduled = true;
 
-    const auto currentSummary = summary();
-    if (currentSummary.accountCount == 0 && !currentSummary.hasLegacyToken)
+    if (!hasConfiguredAuth())
     {
         return;
     }
@@ -1206,13 +1759,13 @@ void scheduleStartupRefresh()
     }
 
     QTimer::singleShot(10000, app, [] {
-        const auto currentSummary = summary();
-        if (currentSummary.accountCount == 0 && !currentSummary.hasLegacyToken)
+        if (!hasConfiguredAuth())
         {
             return;
         }
 
-        refreshAccounts([](const MoltorinoAuthRefreshResult &) {});
+        refreshAccounts(MoltorinoAuthRefreshMode::Automatic,
+                        [](MoltorinoAuthRefreshResult) {});
     });
 }
 
@@ -1246,13 +1799,6 @@ MoltorinoAuthToken resolveModerationToken(const QString &channelId,
             }
         }
 
-        const auto legacy = legacyToken();
-        if (allowSeparate && !legacy.isEmpty() &&
-            !hasStoredAccountForToken(legacy))
-        {
-            return makeLegacyToken();
-        }
-
         if (errorMessage)
         {
             if (!allowSeparate &&
@@ -1278,7 +1824,7 @@ MoltorinoAuthToken resolveModerationToken(const QString &channelId,
         return {};
     }
 
-    if (allowSeparate && !legacyToken().isEmpty())
+    if (allowSeparate && accounts().empty() && !legacyToken().isEmpty())
     {
         return makeLegacyToken();
     }
@@ -1336,13 +1882,6 @@ MoltorinoAuthToken resolveBroadcasterToken(const QString &channelId,
             return makeToken(*account);
         }
 
-        const auto legacy = legacyToken();
-        if (allowSeparate && !legacy.isEmpty() &&
-            !hasStoredAccountForToken(legacy))
-        {
-            return makeLegacyToken();
-        }
-
         if (errorMessage)
         {
             if (!allowSeparate && broadcasterAccountForChannel(
@@ -1363,7 +1902,7 @@ MoltorinoAuthToken resolveBroadcasterToken(const QString &channelId,
         return {};
     }
 
-    if (allowSeparate && !legacyToken().isEmpty())
+    if (allowSeparate && accounts().empty() && !legacyToken().isEmpty())
     {
         return makeLegacyToken();
     }
@@ -1418,23 +1957,6 @@ MoltorinoAuthToken resolveCurrentUserToken(QString *errorMessage)
             }
         }
 
-        if (!allowSeparate)
-        {
-            if (errorMessage)
-            {
-                *errorMessage =
-                    "Saved login for the current Twitch account was not found. "
-                    "Add this account in Settings -> Moltorino -> "
-                    "Authentication.";
-            }
-            return {};
-        }
-
-        if (!legacyToken().isEmpty())
-        {
-            return rememberPersonalToken(makeLegacyToken());
-        }
-
         if (auto lastAccount =
                 validAccountForToken(valid, lastResolvedPersonalToken()))
         {
@@ -1460,7 +1982,7 @@ MoltorinoAuthToken resolveCurrentUserToken(QString *errorMessage)
         return {};
     }
 
-    if (allowSeparate && !legacyToken().isEmpty())
+    if (allowSeparate && accounts().empty() && !legacyToken().isEmpty())
     {
         return rememberPersonalToken(makeLegacyToken());
     }
@@ -1488,6 +2010,7 @@ MoltorinoAuthToken resolveReadToken(QString *errorMessage)
             .token = current->getOAuthToken(),
             .userId = current->getUserId(),
             .login = current->getUserName(),
+            .clientId = current->getOAuthClient(),
             .legacy = false,
         };
     }
