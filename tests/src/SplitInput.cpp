@@ -29,12 +29,14 @@
 #include "Test.hpp"
 #include "TwitchChannelTestAccess.hpp"
 #include "util/Crypto.hpp"
+#include "util/MultiChannel.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/dialogs/PollDialog.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/PinnedMessageWidget.hpp"
 #include "widgets/splits/Split.hpp"
+#include "widgets/splits/SplitHeader.hpp"
 
 #include <QApplication>
 #include <QCompleter>
@@ -45,6 +47,7 @@
 #include <QString>
 
 #include <algorithm>
+#include <array>
 #include <tuple>
 
 using namespace chatterino;
@@ -52,6 +55,15 @@ using namespace chatterino::literals;
 using ::testing::Exactly;
 
 namespace {
+
+class HeaderTestTwitchServer : public mock::MockTwitchIrcServer
+{
+public:
+    ChannelPtr getOrAddChannel(const QString &name) override
+    {
+        return this->getChannelOrEmpty(name);
+    }
+};
 
 class TestableSplitInput : public SplitInput
 {
@@ -101,7 +113,7 @@ public:
         return &this->twitch;
     }
 
-    mock::MockTwitchIrcServer twitch;
+    HeaderTestTwitchServer twitch;
 
     BttvEmotes *getBttvEmotes() override
     {
@@ -226,6 +238,51 @@ TEST(PinnedMessageWidget, PreservesEncryptedPinsAndManualVisibility)
     EXPECT_TRUE(banner.isHidden());
     EXPECT_FALSE(banner.hasPinnedMessage());
     EXPECT_EQ(channel->getPinnedMessage(), nullptr);
+}
+
+TEST(SplitHeader, FollowButtonTracksSingleChannelAndStaysHiddenForMultiChannel)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    auto account = std::make_shared<TwitchAccount>("viewer", "native-token",
+                                                   "client", "42");
+    app.accounts.twitch.accounts.append(account);
+    app.accounts.twitch.currentUsername = "viewer";
+    app.accounts.twitch.load();
+    app.settings.moltorinoAuthAccounts = R"([{
+        "userId":"42", "login":"viewer", "token":"saved-token", "valid":true
+    }])";
+    app.settings.showFollowButtonInSplitHeader = true;
+
+    auto channel = std::make_shared<TwitchChannel>(u"pajlada"_s);
+    app.twitch.mockChannels[channel->getName()] = channel;
+    Split split(nullptr);
+    split.setChannel(IndirectChannel{channel});
+    auto *header = new SplitHeader(&split);
+    const auto buttons = header->findChildren<SvgButton *>();
+    const auto follow =
+        std::find_if(buttons.begin(), buttons.end(), [](auto *button) {
+            return button->toolTip() == u"Follow pajlada";
+        });
+    ASSERT_NE(follow, buttons.end());
+    EXPECT_FALSE((*follow)->isHidden());
+    channel->setFollowingStatus(true);
+    EXPECT_EQ((*follow)->toolTip(), u"Unfollow pajlada"_s);
+
+    const std::array<MultiChannel::Spec, 1> specs{{
+        {.platform = MultiChannel::Platform::Twitch, .name = u"pajlada"_s},
+    }};
+    auto multi = std::make_shared<MultiChannel>(
+        specs, MultiChannelIndicatorMode::PlatformBadgeIfUnselected);
+    split.setChannel(IndirectChannel{multi});
+    EXPECT_TRUE((*follow)->isHidden());
+    channel->setFollowingStatus(false);
+    EXPECT_TRUE((*follow)->isHidden());
+
+    split.setChannel(IndirectChannel{channel});
+    EXPECT_FALSE((*follow)->isHidden());
+    EXPECT_EQ((*follow)->toolTip(), u"Follow pajlada"_s);
 }
 
 TEST(PollDialog, CreatesPollUsingNativeAccountAndHelix)

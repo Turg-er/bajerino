@@ -72,8 +72,13 @@ Release packages use the pinned, limited codec build produced by
 its executables and licenses in a package. Add the dependency prefix to
 `CMAKE_PREFIX_PATH` when using the script's static codec libraries.
 
-YouTube reading works without OAuth credentials. To enable Google sign-in in
-an independently distributed build, set `MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID` and
+YouTube channel resolution and chat reading require a compatible read relay.
+Set `MOLTORINO_YOUTUBE_READ_ROOT` to its URL when configuring CMake; no relay URL
+is bundled by default. The direct-read option still needs the relay for channel
+resolution. Reading does not require Google OAuth credentials.
+
+To enable Google sign-in in an independently distributed build, set
+`MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID` and
 `MOLTORINO_YOUTUBE_OAUTH_CLIENT_SECRET` for a desktop OAuth client. The imported
 CMake option names are retained for compatibility with Moltorino's provider code.
 Account support can be disabled explicitly with `MOLTORINO_YOUTUBE_ACCOUNTS=OFF`

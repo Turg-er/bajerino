@@ -1957,6 +1957,16 @@ MoltorinoAuthToken resolveCurrentUserToken(QString *errorMessage)
             }
         }
 
+        if (!allowSeparate)
+        {
+            if (errorMessage)
+            {
+                *errorMessage = separateAccountAuthDisabledMessage(
+                    "use this account for personal actions");
+            }
+            return {};
+        }
+
         if (auto lastAccount =
                 validAccountForToken(valid, lastResolvedPersonalToken()))
         {

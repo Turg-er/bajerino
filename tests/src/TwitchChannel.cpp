@@ -11,8 +11,10 @@
 #include "mocks/Helix.hpp"
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
+#include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/PubSubManager.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "Test.hpp"
 #include "TwitchChannelTestAccess.hpp"
 
@@ -218,6 +220,47 @@ public:
     PubSub pubSub;
     bool testMode = true;
 };
+
+TEST(MoltorinoAuth, PersonalTokenRequiresMatchingAccountUnlessExplicitlyAllowed)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    app.settings.moltorinoAuthAccounts = R"([{
+        "userId":"42", "login":"saved", "token":"saved-token", "valid":true
+    }])";
+    app.settings.moltorinoAllowSeparateAuthAccounts = false;
+    EXPECT_FALSE(MoltorinoAuth::resolveCurrentUserToken().hasToken());
+
+    app.settings.moltorinoAllowSeparateAuthAccounts = true;
+    EXPECT_EQ(MoltorinoAuth::resolveCurrentUserToken().token, "saved-token");
+    // A previously resolved token must not bypass a later preference change.
+    app.settings.moltorinoAllowSeparateAuthAccounts = false;
+    EXPECT_FALSE(MoltorinoAuth::resolveCurrentUserToken().hasToken());
+
+    auto account = std::make_shared<TwitchAccount>("saved", "native-token",
+                                                   "client", "42");
+    app.accounts.twitch.accounts.append(account);
+    app.accounts.twitch.currentUsername = "saved";
+    app.accounts.twitch.load();
+    EXPECT_EQ(MoltorinoAuth::resolveCurrentUserToken().token, "saved-token");
+}
+
+TEST(MoltorinoAuth, DisabledSavedAccountDoesNotFallBackToItsLegacyToken)
+{
+    MockApplication app;
+    app.settings.moltorinoAllowSeparateAuthAccounts = true;
+    app.settings.customPinAuthToken = "saved-token";
+    app.settings.moltorinoAuthAccounts = R"([{
+        "userId":"42", "login":"saved", "token":"saved-token",
+        "valid":true, "enabled":false
+    }])";
+    EXPECT_FALSE(MoltorinoAuth::resolveCurrentUserToken().hasToken());
+    EXPECT_FALSE(
+        MoltorinoAuth::resolveModerationToken("42", "saved").hasToken());
+    EXPECT_FALSE(
+        MoltorinoAuth::resolveBroadcasterToken("42", "saved").hasToken());
+}
 
 TEST(TwitchChannel, ProductionConstructionDoesNotRefreshEmotesBeforeOwnership)
 {

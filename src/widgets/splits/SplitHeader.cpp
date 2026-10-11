@@ -1611,8 +1611,6 @@ void SplitHeader::handleChannelChanged()
 
     if (auto *multiChannel = dynamic_cast<MultiChannel *>(channel.get()))
     {
-        connectSelectedChannel();
-
         const auto selectedChannel = this->split_->getSelectedChannel();
         for (const auto &child : multiChannel->channels())
         {
@@ -1654,11 +1652,6 @@ void SplitHeader::handleChannelChanged()
                 this->updateRoomModes();
             });
     }
-    else
-    {
-        connectSelectedChannel();
-    }
-
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
         this->channelConnections_.managedConnect(
@@ -2369,7 +2362,8 @@ void SplitHeader::updateIcons()
                 getSettings()->showEditStreamInfoButtonInSplitHeader &&
                 canShowChannelManagementButton(*twitchChannel));
 
-            if (!getSettings()->showFollowButtonInSplitHeader ||
+            if (isMultiChannel ||
+                !getSettings()->showFollowButtonInSplitHeader ||
                 !canUseFollowButtonForChannel(*twitchChannel))
             {
                 this->followButton_->hide();
