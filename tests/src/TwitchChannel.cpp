@@ -8,6 +8,7 @@
 #include "controllers/highlights/HighlightController.hpp"
 #include "messages/Message.hpp"
 #include "mocks/BaseApplication.hpp"
+#include "mocks/Helix.hpp"
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
@@ -217,6 +218,26 @@ public:
     PubSub pubSub;
     bool testMode = true;
 };
+
+TEST(TwitchChannel, ProductionConstructionDoesNotRefreshEmotesBeforeOwnership)
+{
+    MockApplication app;
+    testing::StrictMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    // Normal fixtures skip production emote loading, which concealed a
+    // settings callback calling shared_from_this() inside the constructor.
+    app.testMode = false;
+
+    std::shared_ptr<TwitchChannel> channel;
+    ASSERT_NO_THROW(channel = std::make_shared<TwitchChannel>("startup"));
+    ASSERT_NE(channel, nullptr);
+    EXPECT_EQ(channel->sharedFromThis(), channel);
+
+    // Raid-banner visibility is unrelated to emote loading. Neither the
+    // initial setting callback nor later toggles should make Helix requests.
+    app.settings.showRaidStatusAboveInput =
+        !app.settings.showRaidStatusAboveInput.getValue();
+}
 
 QJsonObject makeChannelPointRedemption(const QString &redemptionId,
                                        QString cursor = "cursor-1")

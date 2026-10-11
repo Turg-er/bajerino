@@ -1149,7 +1149,6 @@ TwitchChannel::TwitchChannel(const QString &name,
     getSettings()->showRaidStatusAboveInput.connect(
         [this](const auto &, auto) {
             this->refreshPubSub();
-            this->refreshTwitchChannelEmotes(false);
         },
         this->signalHolder_);
 
