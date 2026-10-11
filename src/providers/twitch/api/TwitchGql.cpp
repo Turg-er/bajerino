@@ -4909,7 +4909,9 @@ void TwitchGql::createPollEvent(
     input.insert("title", title);
     input.insert("durationSeconds", durationSeconds);
     input.insert("ownedBy", channelId);
-    input.insert("multichoiceEnabled", true);
+    // The dialog exposes single-choice polls; preserve Bajerino's correction
+    // to the old private mutation payload as well as its Helix creation path.
+    input.insert("multichoiceEnabled", false);
     input.insert("isCommunityPointsVotingEnabled", pointsPerVote.has_value());
     input.insert("communityPointsCost", pointsPerVote.value_or(0));
 

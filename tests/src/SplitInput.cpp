@@ -19,6 +19,7 @@
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Paths.hpp"
@@ -26,8 +27,10 @@
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "Test.hpp"
+#include "TwitchChannelTestAccess.hpp"
 #include "util/Crypto.hpp"
 #include "widgets/buttons/SvgButton.hpp"
+#include "widgets/dialogs/PollDialog.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/splits/PinnedMessageWidget.hpp"
@@ -37,6 +40,8 @@
 #include <QCompleter>
 #include <QDebug>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QString>
 
 #include <algorithm>
@@ -221,6 +226,38 @@ TEST(PinnedMessageWidget, PreservesEncryptedPinsAndManualVisibility)
     EXPECT_TRUE(banner.isHidden());
     EXPECT_FALSE(banner.hasPinnedMessage());
     EXPECT_EQ(channel->getPinnedMessage(), nullptr);
+}
+
+TEST(PollDialog, CreatesPollUsingNativeAccountAndHelix)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    auto account = std::make_shared<TwitchAccount>(
+        "broadcaster", "native-token", "client", "42");
+    app.accounts.twitch.accounts.append(account);
+    app.accounts.twitch.currentUsername = "broadcaster";
+    app.accounts.twitch.load();
+
+    auto channel = std::make_shared<TwitchChannel>(u"broadcaster"_s);
+    TwitchChannelTestAccess::setRoomId(*channel, u"42"_s);
+    PollDialog dialog(channel.get());
+    auto *title = dialog.findChild<QLineEdit *>(u"PollTitleInput"_s);
+    const auto choices = dialog.findChildren<QLineEdit *>(u"PollOptionInput"_s);
+    auto *start = dialog.findChild<QPushButton *>(u"PollCreateStartButton"_s);
+    ASSERT_NE(title, nullptr);
+    ASSERT_GE(choices.size(), 2);
+    ASSERT_NE(start, nullptr);
+    title->setText(u"Use the native account?"_s);
+    choices[0]->setText(u"Yes"_s);
+    choices[1]->setText(u"No"_s);
+
+    EXPECT_CALL(
+        helix, createPoll(QString("42"), QString("Use the native account?"),
+                          (QStringList{"Yes", "No"}), std::chrono::seconds(120),
+                          0, testing::_, testing::_))
+        .Times(1);
+    start->click();
 }
 
 TEST_F(SplitInputCompletionTest, EmoteCompletionPreservesUndoHistory)

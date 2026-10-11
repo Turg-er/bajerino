@@ -1571,14 +1571,13 @@ void PollDialog::createPoll()
         return;
     }
 
-    QString authError;
-    const auto auth = MoltorinoAuth::resolveModerationToken(
-        this->channel_->roomId(), this->channel_->getName(), &authError);
-    if (!auth.hasToken())
+    // Keep Bajerino's native-account creation path. The dialog previously
+    // switched to Helix to avoid failures from the private CreatePoll mutation.
+    const auto account = getApp()->getAccounts()->twitch.getCurrent();
+    if (account->isAnon())
     {
         this->channel_->addSystemMessage(
-            authError.isEmpty() ? moltorinoAuthRequiredMessage("creating polls")
-                                : authError);
+            "You must be logged in to create a poll.");
         return;
     }
 
@@ -1586,13 +1585,10 @@ void PollDialog::createPoll()
     this->updateUi();
 
     QPointer<PollDialog> self = this;
-    TwitchGql::createPollEvent(
+    getHelix()->createPoll(
         this->channel_->roomId(), title, choices,
-        std::max(30, this->draftDurationSeconds_),
-        this->draftEnableAdditionalVotes_
-            ? std::optional<int>(this->draftPointsPerVote_)
-            : std::nullopt,
-        auth.token,
+        std::chrono::seconds(this->draftDurationSeconds_),
+        this->draftEnableAdditionalVotes_ ? this->draftPointsPerVote_ : 0,
         [self] {
             if (!self)
             {
