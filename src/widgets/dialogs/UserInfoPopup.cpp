@@ -2592,9 +2592,23 @@ void UserInfoPopup::themeChangedEvent()
     this->ui_.rolesView->refreshStyle(this->scale());
 }
 
+bool UserInfoPopup::event(QEvent *event)
+{
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    if (event->type() == QEvent::DevicePixelRatioChange)
+    {
+        const bool result = DraggablePopup::event(event);
+        this->updateSevenTVAvatarSize();
+        return result;
+    }
+#endif
+    return DraggablePopup::event(event);
+}
+
 void UserInfoPopup::scaleChangedEvent(float scale)
 {
     DraggablePopup::scaleChangedEvent(scale);
+    this->updateSevenTVAvatarSize();
     this->themeChangedEvent();
 
     auto *paint =
@@ -2997,8 +3011,40 @@ void UserInfoPopup::clearSevenTVAvatar()
         this->seventvAvatar_ = nullptr;
     }
     this->seventvAvatarUrl_.clear();
+    this->seventvAvatarSourceSize_ = {};
     this->isTwitchAvatarShown_ = true;
     this->ui_.switchAvatars->hide();
+}
+
+void UserInfoPopup::updateSevenTVAvatarSize()
+{
+    auto *movie = this->seventvAvatar_;
+    if (!movie)
+    {
+        return;
+    }
+    const auto size =
+        (QSize(100, 100) * this->scale() * this->devicePixelRatioF())
+            .boundedTo(this->seventvAvatarSourceSize_);
+    if (size == movie->scaledSize())
+    {
+        return;
+    }
+    movie->setScaledSize(size);
+    if (movie->currentFrameNumber() >= 0)
+    {
+        const auto state = movie->state();
+        movie->stop();
+        movie->start();
+        if (state == QMovie::NotRunning)
+        {
+            movie->stop();
+        }
+        else if (state == QMovie::Paused)
+        {
+            movie->setPaused(true);
+        }
+    }
 }
 
 void UserInfoPopup::refreshAvatarVisibility()
@@ -4820,7 +4866,6 @@ void UserInfoPopup::setSevenTVAvatar(const QString &filename,
         return;
     }
     auto *movie = new QMovie(filename, format, this);
-    movie->setScaledSize(QSize(100, 100) * this->devicePixelRatioF());
     if (!movie->isValid())
     {
         qCWarning(chatterinoSeventv)
@@ -4833,6 +4878,8 @@ void UserInfoPopup::setSevenTVAvatar(const QString &filename,
     this->clearSevenTVAvatar();
     this->seventvAvatarUrl_ = avatarUrl;
     this->seventvAvatar_ = movie;
+    this->seventvAvatarSourceSize_ = size;
+    this->updateSevenTVAvatarSize();
 
     QObject::connect(movie, &QMovie::frameChanged, this, [this, movie] {
         if (!this->isTwitchAvatarShown_ &&

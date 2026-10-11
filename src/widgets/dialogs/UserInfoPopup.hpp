@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QPixmap>
 #include <QPointer>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 
@@ -83,6 +84,7 @@ public:
                        const ChannelPtr &openingChannel);
 
 protected:
+    bool event(QEvent *event) override;
     void themeChangedEvent() override;
     void scaleChangedEvent(float scale) override;
     void windowDeactivationEvent() override;
@@ -98,6 +100,7 @@ private:
     void resetTargetState();
     void updateIdentityLayout();
     void clearSevenTVAvatar();
+    void updateSevenTVAvatarSize();
     void refreshAvatarVisibility();
     void refreshCustomActions();
     void runCustomAction(const Command &command);
@@ -369,6 +372,7 @@ private:
     } ui_;
 
     QMovie *seventvAvatar_ = nullptr;
+    QSize seventvAvatarSourceSize_;
     bool isTwitchAvatarShown_ = true;
     QPixmap avatarPixmap_;
     QPointer<EditUserNotesDialog> editUserNotesDialog_;

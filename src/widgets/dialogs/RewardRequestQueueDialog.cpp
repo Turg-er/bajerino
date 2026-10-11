@@ -1178,7 +1178,8 @@ void RewardRequestQueueDialog::resolveRequests(
         self->publishResult(message);
         self->reloadOverview(message);
     };
-    const auto failure = [self](const QString &error, int completedCount) {
+    const auto failure = [self, authGeneration](const QString &error,
+                                                int completedCount) {
         if (!self)
         {
             return;
@@ -1196,6 +1197,10 @@ void RewardRequestQueueDialog::resolveRequests(
                                "the action. %2")
                     .arg(QLocale().toString(completedCount), normalized),
                 true);
+        }
+        else if (authGeneration != self->authGeneration_)
+        {
+            self->reloadOverview(normalized, true);
         }
         else
         {
