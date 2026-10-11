@@ -8,11 +8,13 @@
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/accounts/AccountModel.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
+#include "providers/youtube/YouTubeCredentials.hpp"
 #include "util/LayoutCreator.hpp"
 #include "widgets/dialogs/LoginDialog.hpp"
 #include "widgets/helper/EditableModelView.hpp"
 
 #include <QDialogButtonBox>
+#include <QGroupBox>
 #include <QHeaderView>
 #include <QLabel>
 #include <QPushButton>
@@ -104,6 +106,29 @@ AccountsPage::AccountsPage()
         refreshCleanupWarning);
 
     view->getTableView()->setStyleSheet("background: #333");
+
+    auto *youtubeRelayGroup =
+        layout.emplace<QGroupBox>("YouTube chat relay").getElement();
+    auto *youtubeRelayLayout = new QVBoxLayout(youtubeRelayGroup);
+    auto *youtubeRelayNotice = new QLabel(youtubeRelayGroup);
+    youtubeRelayNotice->setWordWrap(true);
+    youtubeRelayNotice->setTextFormat(Qt::PlainText);
+    youtubeRelayNotice->setTextInteractionFlags(Qt::TextSelectableByMouse |
+                                                Qt::TextSelectableByKeyboard);
+    const auto relay = youtube::credentials::readRoot().trimmed();
+    youtubeRelayNotice->setText(
+        relay.isEmpty()
+            ? QStringLiteral("No YouTube chat relay is configured. YouTube "
+                             "chat is unavailable in this build.")
+            : QStringLiteral(
+                  "Opening a YouTube chat connects to a third-party relay, "
+                  "even when you are not signed in.\n\n"
+                  "Relay: %1\n\n"
+                  "The relay receives your IP address and the channel or "
+                  "video you request, and may also deliver public chat "
+                  "messages.")
+                  .arg(relay));
+    youtubeRelayLayout->addWidget(youtubeRelayNotice);
 
     auto *youtubeDisconnectHelp = layout.emplace<QLabel>().getElement();
     youtubeDisconnectHelp->setWordWrap(true);

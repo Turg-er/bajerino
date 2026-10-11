@@ -73,9 +73,12 @@ its executables and licenses in a package. Add the dependency prefix to
 `CMAKE_PREFIX_PATH` when using the script's static codec libraries.
 
 YouTube channel resolution and chat reading require a compatible read relay.
-Set `MOLTORINO_YOUTUBE_READ_ROOT` to its URL when configuring CMake; no relay URL
-is bundled by default. The direct-read option still needs the relay for channel
-resolution. Reading does not require Google OAuth credentials.
+Bajerino defaults to Moltorino's relay at `https://api.moltorino.com/v1/youtube/`.
+Override `MOLTORINO_YOUTUBE_READ_ROOT` when configuring CMake to use another relay.
+For an existing build directory with the old empty value cached, run
+`cmake -U MOLTORINO_YOUTUBE_READ_ROOT -S . -B build` to pick up the default.
+The direct-read option still needs the relay for channel resolution. Reading
+does not require Google OAuth credentials.
 
 To enable Google sign-in in an independently distributed build, set
 `MOLTORINO_YOUTUBE_OAUTH_CLIENT_ID` and
