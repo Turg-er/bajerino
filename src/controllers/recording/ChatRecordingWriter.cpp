@@ -190,7 +190,7 @@ bool trustedImage(const QUrl &url)
          {"jtvnw.net", "twitchcdn.net", "7tv.app", "7tv.io", "betterttv.net",
           "frankerfacez.com", "ffzap.com", "kick.com", "kickstatic.com",
           "ytimg.com", "ggpht.com", "googleusercontent.com", "homies.tv",
-          "chatterino.com", "moltorino.com", "jil.chat"})
+          "chatterino.com", "moltorino.com", "jil.chat", "badgehq.xyz"})
     {
         if (host == QLatin1String(domain) ||
             host.endsWith("." + QString::fromLatin1(domain)))

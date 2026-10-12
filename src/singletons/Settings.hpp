@@ -355,6 +355,7 @@ public:
     BoolSetting showBadgesFfzAp = {"/appearance/badges/ffzap", true};
     BoolSetting showBadgesBluzyrino = {"/appearance/badges/bluzyrino", true};
     BoolSetting showBadgesJilChat = {"/appearance/badges/jilchat", true};
+    BoolSetting showBadgesBadgeHQ = {"/appearance/badges/badgehq", true};
     BoolSetting useCustomFfzModeratorBadges = {
         "/appearance/badges/useCustomFfzModeratorBadges", true};
     BoolSetting useCustomFfzVipBadges = {
@@ -939,6 +940,8 @@ public:
                                                   "bar"};
     QStringSetting usercardRolesActionPlacement = {"/usercard/actions/roles",
                                                    "bar"};
+    QStringSetting usercardBadgesActionPlacement = {"/usercard/actions/badges",
+                                                    "bar"};
     QStringSetting usercardSevenTVActionPlacement = {
         "/usercard/actions/seventv", "bar"};
     QStringSetting usercardNotesActionPlacement = {"/usercard/actions/notes",

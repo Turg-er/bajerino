@@ -73,6 +73,11 @@ public:
         return nullptr;
     }
 
+    BadgeHQBadges *getBadgeHQBadges() override
+    {
+        return nullptr;
+    }
+
     PotatCommands *getPotatCommands() override
     {
         return nullptr;
