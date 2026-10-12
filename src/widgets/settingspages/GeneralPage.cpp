@@ -1230,6 +1230,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->setTooltip("e.g. prime, bits, sub gifter")
         ->addTo(layout);
 
+    SettingWidget::checkbox("BadgeHQ", s.showBadgesBadgeHQ)
+        ->addKeywords({"badgehq", "badge hq", "supporter", "founder"})
+        ->setTooltip("Supporter and Founder badges from BadgeHQ. Nothing is "
+                     "requested from BadgeHQ while this is off.")
+        ->addTo(layout);
+
     SettingWidget::checkbox("Chatterino", s.showBadgesChatterino)
         ->setTooltip("e.g. Chatterino Supporter/Contributor/Developer")
         ->addTo(layout);

@@ -23,6 +23,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "messages/MessageElement.hpp"
 #include "messages/Link.hpp"
+#include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
@@ -76,6 +77,7 @@
 #include "widgets/dialogs/EditUserNotesDialog.hpp"
 #include "widgets/dialogs/ModeratorCommentsView.hpp"
 #include "widgets/dialogs/UserLogsView.hpp"
+#include "widgets/dialogs/UserBadgesView.hpp"
 #include "widgets/dialogs/UserRolesView.hpp"
 #include "widgets/helper/ChannelView.hpp"
 #include "widgets/helper/Line.hpp"
@@ -2188,6 +2190,10 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                          .assign(&this->ui_.rolesLabel);
         roles->setToolTip("View roles and channels");
         roles->hide();
+        auto badges = user.emplace<LabelButton>("Badges", this)
+                          .assign(&this->ui_.badgesLabel);
+        badges->setToolTip("View badge collection");
+        badges->hide();
         auto notesAction = user.emplace<LabelButton>("Notes", this)
                                .assign(&this->ui_.notesActionLabel);
         notesAction->hide();
@@ -2245,6 +2251,12 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         QObject::connect(roles.getElement(), &Button::leftClicked, openRoles);
         this->registerMnemonicButton(this->ui_.rolesLabel, Qt::Key_R,
                                      openRoles);
+
+        auto openBadges = [this] { this->toggleUserBadges(); };
+        QObject::connect(badges.getElement(), &Button::leftClicked,
+                         openBadges);
+        this->registerMnemonicButton(this->ui_.badgesLabel, Qt::Key_B,
+                                     openBadges);
 
         QObject::connect(notesAction.getElement(), &Button::leftClicked, this,
                          [this] { this->openUserNotes(); });
@@ -2436,6 +2448,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         [this](QWidget *anchor) { this->showRoleManagementMenu(anchor); });
     this->ui_.rolesView->refreshStyle(this->scale());
     activityStack->addWidget(this->ui_.rolesView);
+    this->ui_.badgesView = new UserBadgesView(activityStack);
+    this->ui_.badgesView->refreshStyle(this->scale());
+    activityStack->addWidget(this->ui_.badgesView);
     activityStack->setCurrentWidget(messagesPage);
     layout->addWidget(activityStack);
 
@@ -2474,6 +2489,12 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             [this] { this->refreshIdentityBadges(); });
     }
     if (auto *provider = getApp()->getJilChatBadges())
+    {
+        this->signalHolder_.managedConnect(
+            provider->badgesUpdated,
+            [this] { this->refreshIdentityBadges(); });
+    }
+    if (auto *provider = getApp()->getBadgeHQBadges())
     {
         this->signalHolder_.managedConnect(
             provider->badgesUpdated,
@@ -2594,6 +2615,7 @@ void UserInfoPopup::themeChangedEvent()
     this->ui_.commentsView->refreshStyle(this->scale());
     this->ui_.logsView->refreshStyle(this->scale());
     this->ui_.rolesView->refreshStyle(this->scale());
+    this->ui_.badgesView->refreshStyle(this->scale());
 }
 
 bool UserInfoPopup::event(QEvent *event)
@@ -2811,6 +2833,11 @@ void UserInfoPopup::installEvents()
     getSettings()->usercardRolesActionPlacement.connect(
         [this](const QString &) {
             this->updateUserRolesContext();
+        },
+        this->signalHolder_);
+    getSettings()->usercardBadgesActionPlacement.connect(
+        [this](const QString &) {
+            this->updateUserBadgesContext();
         },
         this->signalHolder_);
     getSettings()->usercardSevenTVActionPlacement.connect(
@@ -3284,6 +3311,7 @@ void UserInfoPopup::setData(const QString &name,
     this->refreshTargetModerationStatus();
     this->updateModeratorCommentsAvailability();
     this->updateUserRolesContext();
+    this->updateUserBadgesContext();
     if (!this->isKick_)
     {
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(
@@ -3317,6 +3345,7 @@ void UserInfoPopup::setData(const QString &name,
     this->refreshUsercardActionPlacements();
     this->updateUserLogsContext();
     this->updateUserRolesContext();
+    this->updateUserBadgesContext();
 }
 
 bool UserInfoPopup::usercardActionAvailable() const
@@ -3394,6 +3423,14 @@ bool UserInfoPopup::userRolesActionAvailable() const
            !this->isTikTok_ && !this->isKick_;
 }
 
+bool UserInfoPopup::userBadgesActionAvailable() const
+{
+    const auto placement = usercardActionPlacement(
+        getSettings()->usercardBadgesActionPlacement.getValue());
+    return placement != UsercardActionPlacement::Hidden && !this->isYouTube_ &&
+           !this->isTikTok_ && !this->isKick_;
+}
+
 void UserInfoPopup::toggleModeratorComments()
 {
     this->showActivityPage(this->ui_.activityStack->currentWidget() ==
@@ -3416,6 +3453,14 @@ void UserInfoPopup::toggleUserRoles()
                                    this->ui_.rolesView
                                ? ActivityPage::Messages
                                : ActivityPage::Roles);
+}
+
+void UserInfoPopup::toggleUserBadges()
+{
+    this->showActivityPage(this->ui_.activityStack->currentWidget() ==
+                                   this->ui_.badgesView
+                               ? ActivityPage::Messages
+                               : ActivityPage::Badges);
 }
 
 void UserInfoPopup::openSevenTVUser()
@@ -3698,12 +3743,32 @@ void UserInfoPopup::updateUserRolesContext()
     }
 }
 
+void UserInfoPopup::updateUserBadgesContext()
+{
+    if (this->ui_.badgesView == nullptr || this->ui_.badgesLabel == nullptr)
+    {
+        return;
+    }
+    const bool available = this->userBadgesActionAvailable();
+    const auto placement = usercardActionPlacement(
+        getSettings()->usercardBadgesActionPlacement.getValue());
+    this->ui_.badgesLabel->setVisible(
+        available && placement == UsercardActionPlacement::Bar);
+    this->ui_.badgesView->setContext(available ? this->userName_ : QString{});
+    if (!available && this->ui_.activityStack->currentWidget() ==
+                          this->ui_.badgesView)
+    {
+        this->showActivityPage(ActivityPage::Messages);
+    }
+}
+
 void UserInfoPopup::showActivityPage(ActivityPage page)
 {
     if (this->ui_.activityStack == nullptr ||
         this->ui_.commentsLabel == nullptr ||
         this->ui_.userlogsLabel == nullptr ||
-        this->ui_.rolesLabel == nullptr)
+        this->ui_.rolesLabel == nullptr ||
+        this->ui_.badgesLabel == nullptr)
     {
         return;
     }
@@ -3717,6 +3782,10 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
         page = ActivityPage::Messages;
     }
     if (page == ActivityPage::Roles && !this->userRolesActionAvailable())
+    {
+        page = ActivityPage::Messages;
+    }
+    if (page == ActivityPage::Badges && !this->userBadgesActionAvailable())
     {
         page = ActivityPage::Messages;
     }
@@ -3734,11 +3803,16 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     {
         widget = this->ui_.rolesView;
     }
+    else if (page == ActivityPage::Badges)
+    {
+        widget = this->ui_.badgesView;
+    }
     this->ui_.activityStack->setCurrentWidget(widget);
 
     const bool commentsShown = page == ActivityPage::Comments;
     const bool logsShown = page == ActivityPage::Logs;
     const bool rolesShown = page == ActivityPage::Roles;
+    const bool badgesShown = page == ActivityPage::Badges;
     this->ui_.commentsLabel->setText(commentsShown ? "Messages" : "Comments");
     this->ui_.commentsLabel->setToolTip(
         commentsShown ? "Return to recent messages"
@@ -3749,6 +3823,9 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     this->ui_.rolesLabel->setText(rolesShown ? "Messages" : "Roles");
     this->ui_.rolesLabel->setToolTip(
         rolesShown ? "Return to recent messages" : "View roles and channels");
+    this->ui_.badgesLabel->setText(badgesShown ? "Messages" : "Badges");
+    this->ui_.badgesLabel->setToolTip(
+        badgesShown ? "Return to recent messages" : "View badge collection");
 
     if (commentsShown)
     {
@@ -3773,6 +3850,14 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     else
     {
         this->ui_.rolesView->deactivate();
+    }
+    if (badgesShown)
+    {
+        this->ui_.badgesView->activate();
+    }
+    else
+    {
+        this->ui_.badgesView->deactivate();
     }
 }
 
@@ -4279,6 +4364,7 @@ void UserInfoPopup::updateUserData()
         this->twitchUserLookupFinished_ = true;
         this->updateModeratorCommentsAvailability();
         this->updateUserRolesContext();
+        this->updateUserBadgesContext();
     };
     const auto onUserFetched = [this, isCurrentRequest,
                                 currentUser](const HelixUser &user) {
@@ -4311,6 +4397,7 @@ void UserInfoPopup::updateUserData()
         this->updateModeratorCommentsAvailability();
         this->updateUserLogsContext();
         this->updateUserRolesContext();
+        this->updateUserBadgesContext();
 
         this->resetNameHistory();
         this->refreshFollowButton();
@@ -6370,6 +6457,14 @@ void UserInfoPopup::refreshIdentityBadges()
                                         MessageElementFlag::BadgeJilChat);
                         }
                     }
+                    if (auto *provider = getApp()->getBadgeHQBadges())
+                    {
+                        for (const auto &badge : provider->getBadges({userID}))
+                        {
+                            appendBadge(badge,
+                                        MessageElementFlag::BadgeBadgeHQ);
+                        }
+                    }
                 }
             }
         }
@@ -6785,6 +6880,15 @@ void UserInfoPopup::appendPlacedUsercardActions(QMenu *menu)
     {
         addPageAction("&Roles", this->ui_.rolesView, [this] {
             this->toggleUserRoles();
+        });
+    }
+    if (usercardActionPlacement(
+            getSettings()->usercardBadgesActionPlacement.getValue()) ==
+            UsercardActionPlacement::Menu &&
+        this->userBadgesActionAvailable())
+    {
+        addPageAction("Ba&dges", this->ui_.badgesView, [this] {
+            this->toggleUserBadges();
         });
     }
     if (usercardActionPlacement(
@@ -7204,6 +7308,7 @@ void UserInfoPopup::setYouTubeData(const MessagePtr &message,
     this->updateUserLogsContext();
     this->ui_.sevenTVUserLabel->hide();
     this->updateUserRolesContext();
+    this->updateUserBadgesContext();
     this->ui_.usercardLabel->setText("YouTube");
     this->ui_.usercardLabel->setToolTip("Open YouTube channel");
     this->refreshUsercardActionPlacements();
@@ -7351,6 +7456,7 @@ void UserInfoPopup::setTikTokData(const TikTokAuthor &author,
     this->ui_.usercardLabel->setToolTip("Open TikTok profile");
     this->updateUserLogsContext();
     this->updateUserRolesContext();
+    this->updateUserBadgesContext();
     this->ui_.timeoutWidget->hide();
 
     auto avatarUrl = author.avatarUrl;

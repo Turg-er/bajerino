@@ -703,6 +703,8 @@ Settings::Settings(const Modes &modes, const Args &args,
                                      QStringLiteral("bar"));
     configureUsercardActionPlacement(this->usercardRolesActionPlacement,
                                      nullptr, QStringLiteral("bar"));
+    configureUsercardActionPlacement(this->usercardBadgesActionPlacement,
+                                     nullptr, QStringLiteral("bar"));
     configureUsercardActionPlacement(this->usercardSevenTVActionPlacement,
                                      &this->showSevenTVUsercardButton,
                                      QStringLiteral("bar"));

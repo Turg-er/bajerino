@@ -438,6 +438,9 @@ set(SOURCE_FILES
         providers/NetworkConfigurationProvider.cpp
         providers/NetworkConfigurationProvider.hpp
 
+        providers/badgehq/BadgeHQBadges.cpp
+        providers/badgehq/BadgeHQBadges.hpp
+
         providers/bluzyrino/BluzyrinoBadges.cpp
         providers/bluzyrino/BluzyrinoBadges.hpp
         providers/bttv/BttvBadges.cpp
@@ -1012,6 +1015,8 @@ set(SOURCE_FILES
         widgets/dialogs/UpdateDialog.hpp
         widgets/dialogs/UserInfoPopup.cpp
         widgets/dialogs/UserInfoPopup.hpp
+        widgets/dialogs/UserBadgesView.cpp
+        widgets/dialogs/UserBadgesView.hpp
         widgets/dialogs/UserLogsView.cpp
         widgets/dialogs/UserLogsView.hpp
         widgets/dialogs/UserRolesView.cpp

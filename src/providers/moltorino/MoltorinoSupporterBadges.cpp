@@ -71,7 +71,7 @@ bool isValidVanitySlotKey(const QString &value)
         QStringLiteral("tp"), QStringLiteral("c"),  QStringLiteral("ff"),
         QStringLiteral("fa"), QStringLiteral("bt"), QStringLiteral("m"),
         QStringLiteral("7"),  QStringLiteral("hs"), QStringLiteral("hc"),
-        QStringLiteral("bl"), QStringLiteral("jc"),
+        QStringLiteral("bl"), QStringLiteral("jc"), QStringLiteral("bh"),
     };
     return slots.contains(value);
 }
@@ -605,6 +605,10 @@ MoltorinoVanityLayout normalizeLayout(MoltorinoVanityLayout layout)
     if (present.insert(QStringLiteral("jc")).second)
     {
         order.push_back(QStringLiteral("jc"));
+    }
+    if (present.insert(QStringLiteral("bh")).second)
+    {
+        order.push_back(QStringLiteral("bh"));
     }
     layout.order = std::move(order);
 

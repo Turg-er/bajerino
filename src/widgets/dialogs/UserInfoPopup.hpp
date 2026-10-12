@@ -58,6 +58,7 @@ class PixmapButton;
 class DrawnButton;
 class LiveIndicator;
 class ModeratorCommentsView;
+class UserBadgesView;
 class UserLogsView;
 class UserRolesView;
 
@@ -111,14 +112,17 @@ private:
     void updateModeratorCommentsAvailability();
     void updateUserLogsContext();
     void updateUserRolesContext();
+    void updateUserBadgesContext();
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
     bool moderatorCommentsActionAvailable() const;
     bool userLogsActionAvailable() const;
     bool userRolesActionAvailable() const;
+    bool userBadgesActionAvailable() const;
     void toggleModeratorComments();
     void toggleUserLogs();
     void toggleUserRoles();
+    void toggleUserBadges();
     void openSevenTVUser();
     void refreshUsercardActionPlacements();
     bool crossActionAvailable() const;
@@ -129,6 +133,7 @@ private:
         Comments,
         Logs,
         Roles,
+        Badges,
     };
     void showActivityPage(ActivityPage page);
     void updateUsercardMessagesVisibility();
@@ -353,12 +358,14 @@ private:
         ModeratorCommentsView *commentsView = nullptr;
         UserLogsView *logsView = nullptr;
         UserRolesView *rolesView = nullptr;
+        UserBadgesView *badgesView = nullptr;
 
         LabelButton *usercardLabel = nullptr;
         LabelButton *commentsLabel = nullptr;
         LabelButton *userlogsLabel = nullptr;
         LabelButton *sevenTVUserLabel = nullptr;
         LabelButton *rolesLabel = nullptr;
+        LabelButton *badgesLabel = nullptr;
         LabelButton *notesActionLabel = nullptr;
         LabelButton *blockActionLabel = nullptr;
         LabelButton *hideActionLabel = nullptr;
