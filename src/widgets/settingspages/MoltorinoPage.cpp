@@ -874,8 +874,7 @@ private:
 
         if (error == "slow_down" || message == "slow_down")
         {
-            this->devicePollIntervalMs_ =
-                std::min(this->devicePollIntervalMs_ + 5000, 60000);
+            this->devicePollIntervalMs_ += 5000;
             setLabelStatus(this->deviceStatusLabel_,
                            "Twitch asked Moltorino to poll more slowly. "
                            "Still waiting for approval...");
@@ -2079,10 +2078,6 @@ MoltorinoPage::MoltorinoPage()
             false)
         ->setToolTip("Choose when the inline Delete action appears beside "
                      "messages sent by the selected account.");
-
-    SettingWidget::checkbox("Thin tab lines", s.thinTabLines)
-        ->setTooltip("Thinner lines with less space above tabs.")
-        ->addTo(*view);
 
     SettingWidget::checkbox("Continuous background across splits",
                             s.continuousSplitBackground)

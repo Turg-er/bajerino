@@ -290,7 +290,6 @@ public:
         "/appearance/tabStyle",
         TabStyle::Normal,
     };
-    BoolSetting thinTabLines = {"/appearance/tabs/thinLines", false};
     BoolSetting hidePreferencesButton = {"/appearance/hidePreferencesButton",
                                          false};
     BoolSetting hideUserButton = {"/appearance/hideUserButton", false};

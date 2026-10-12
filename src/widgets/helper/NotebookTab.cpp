@@ -341,11 +341,6 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
             this->update();
         },
         this->managedConnections_);
-    getSettings()->thinTabLines.connect(
-        [this] {
-            this->update();
-        },
-        this->managedConnections_);
     getSettings()->colorTabHighlightsByMessage.connect(
         [this](auto, auto) {
             this->update();
@@ -1629,8 +1624,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
         (windowFocused ? colors.backgrounds.regular
                        : colors.backgrounds.unfocused);
 
-    const auto tabLineWidth = getSettings()->thinTabLines ? 1 : 2;
-    auto selectionOffset = ceil((this->selected_ ? 0 : tabLineWidth) * scale);
+    auto selectionOffset = ceil((this->selected_ ? 0.f : 1.f) * scale);
 
     // fill the tab background
     auto bgRect = this->rect();
@@ -1705,8 +1699,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     }
 
     // draw color indicator line
-    auto lineThickness =
-        ceil((tabLineWidth + (this->selected_ ? 1 : 0)) * scale);
+    auto lineThickness = ceil((this->selected_ ? 2.f : 1.f) * scale);
     const auto &lineColors =
         this->role_ == Role::GroupHeader && this->selected_ &&
                 this->highlightState_ != HighlightState::None

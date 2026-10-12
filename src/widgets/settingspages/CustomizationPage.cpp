@@ -1045,7 +1045,6 @@ protected:
         constexpr qreal TAB_HEIGHT = 28;
         constexpr qreal TAB_SPACER = 1;
         const TabStyle tabStyle = getSettings()->tabStyle;
-        const int tabLineWidth = getSettings()->thinTabLines ? 1 : 2;
         const bool compactTabs = tabStyle == TabStyle::Compact;
         const bool showTabCloseButton =
             getSettings()->showTabCloseButton.getValue();
@@ -1057,7 +1056,7 @@ protected:
                                  bool roundEnd) {
             auto backgroundRect = rect;
             backgroundRect.setTop(backgroundRect.top() +
-                                  (selected ? 0 : tabLineWidth));
+                                  (selected ? 0 : 1));
             auto shapedRect = backgroundRect;
             if (this->profile_.tabShape == ThemeTabShape::Individual)
             {
@@ -1101,7 +1100,7 @@ protected:
                 painter.setClipPath(path);
                 painter.fillRect(
                     QRectF(backgroundRect.left(), backgroundRect.top(),
-                           backgroundRect.width(), tabLineWidth + 1),
+                           backgroundRect.width(), 2),
                     selectedTabLine);
                 painter.restore();
             }
@@ -1111,7 +1110,7 @@ protected:
                 painter.setClipPath(path);
                 painter.fillRect(
                     QRectF(backgroundRect.left(), backgroundRect.top(),
-                           backgroundRect.width(), tabLineWidth),
+                           backgroundRect.width(), 1),
                     regularTabLine);
                 painter.restore();
             }
@@ -2038,11 +2037,6 @@ void CustomizationPage::buildUi()
     this->preview_ = new ThemePreviewWidget;
     this->preview_->setMinimumWidth(290);
     workspace->addWidget(this->preview_);
-    getSettings()->thinTabLines.connect(
-        [this] {
-            this->preview_->update();
-        },
-        this->managedConnections_, false);
 
     auto *tabs = new QTabWidget;
     tabs->setMinimumWidth(470);
