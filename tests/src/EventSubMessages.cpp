@@ -183,7 +183,7 @@ const std::map<QString, std::string_view, QCompareCaseInsensitive>
             "cost": 0
         })",
         },
-};
+    };
 
 class MockApplication : public mock::BaseApplication
 {

@@ -451,7 +451,7 @@ void Client::onEntitlementCreate(
                         LastPersonalEmoteAssignment{
                             .connections = entitlement.connections,
                             .emoteSetID = entitlement.refID,
-                    };
+                        };
                 }
                 else
                 {

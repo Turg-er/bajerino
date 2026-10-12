@@ -25,6 +25,7 @@ QFont makeResolvedFont(const QString &family, qreal pointSize, int weight,
                        bool italic = false);
 QFont makeResolvedFont(const QFont &base, int weight);
 
+/** @exposeenum c2.FontStyle */
 enum class FontStyle : uint8_t {
     Tiny,
     ChatSmall,

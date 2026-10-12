@@ -797,7 +797,8 @@ struct TokenizedGif {
     QString id;
     QStringView originalText;
 };
-struct TokenizedBreak {};
+struct TokenizedBreak {
+};
 struct TokenizedEmoji {
     EmotePtr emote;
 };

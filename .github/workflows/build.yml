@@ -236,7 +236,8 @@ jobs:
         with:
           cache: true
           cache-key-prefix: ${{ runner.os }}-QtCache-${{ matrix.qt-version }}-v2
-          modules: qtimageformats qtsvg
+          # Qt SVG is included in the base Qt archives.
+          modules: qtimageformats
           version: ${{ matrix.qt-version }}
           # https://github.com/miurahr/aqtinstall/pull/1052
           aqtsource: git+https://github.com/pzhlkj6612/forked-aqtinstall@7b60b0f64e2fdd28552d7603e9831b027172afb0
@@ -261,10 +262,13 @@ jobs:
             sccache-build-${{ matrix.os }}-${{ runner.arch }}-${{ matrix.qt-version }}
 
       - name: Cache conan packages (Windows/macOS)
+        id: conan-cache
         if: runner.os == 'Windows' || runner.os == 'macOS'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: ${{ runner.os }}-${{ runner.arch }}-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-conan-user-
           path: ~/.conan2/
 
       - name: Setup Python (Windows)
@@ -279,27 +283,47 @@ jobs:
         with:
           version: 22
 
+      # Run Conan from the native shell so its MSYS build environment can set
+      # Windows tool paths and pkg-config paths without an outer Git Bash.
       - name: Install and Setup Conan (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
           pip install conan==${{env.CONAN_VERSION}}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           conan --version
           conan profile detect -f
-        shell: bash
+        shell: pwsh
 
       - name: Install dependencies (Windows)
         if: startsWith(matrix.os, 'windows')
         run: |
           mkdir build
           cd build
-          conan install .. \
-              -s build_type=RelWithDebInfo \
-              -c tools.cmake.cmaketoolchain:generator="Ninja" \
-              -b missing \
-              --output-folder=. \
+          conan install .. `
+              -pr:h ../.CI/conan/windows.profile `
+              -s build_type=RelWithDebInfo `
+              -c tools.cmake.cmaketoolchain:generator="Ninja" `
+              -b missing `
+              --output-folder=. `
               -o with_openssl3=True
+          $installExitCode = $LASTEXITCODE
+          if ($installExitCode -ne 0) {
+              Get-ChildItem "$Env:USERPROFILE/.conan2/p/b/ffmpe*/b/build-*/ffbuild/config.log" -ErrorAction SilentlyContinue | ForEach-Object {
+                  Write-Output "FFmpeg configure log: $($_.FullName)"
+                  Get-Content $_.FullName -Tail 150
+              }
+              exit $installExitCode
+          }
           conan cache clean --source --build --download "*"
-        shell: bash
+        shell: pwsh
+
+      # Keep completed dependencies even if compiling or packaging the app fails.
+      - name: Save conan packages (Windows)
+        if: runner.os == 'Windows' && steps.conan-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}-conan-user-${{ hashFiles('**/conanfile.py') }}-QT6
+          path: ~/.conan2/
 
       - name: Build (Windows)
         if: startsWith(matrix.os, 'windows')
@@ -323,6 +347,7 @@ jobs:
               -DCHATTERINO_NIGHTLY_BUILD="${{ steps.build-type.outputs.NIGHTLY_BUILD }}" `
               -DCHATTERINO_SPELLCHECK=On `
               ..
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ninja
 
       - name: Build crashpad (Windows)

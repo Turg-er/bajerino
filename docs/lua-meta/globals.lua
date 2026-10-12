@@ -56,6 +56,8 @@ c2.ChannelType = {
     Kick = {}, ---@type c2.ChannelType.Kick
     Misc = {}, ---@type c2.ChannelType.Misc
     Multi = {}, ---@type c2.ChannelType.Multi
+    YouTube = {}, ---@type c2.ChannelType.YouTube
+    TikTok = {}, ---@type c2.ChannelType.TikTok
 }
 
 -- End src/common/Channel.hpp
@@ -827,6 +829,7 @@ c2.FontStyle = {
     UiMedium = {}, ---@type c2.FontStyle.UiMedium
     UiMediumBold = {}, ---@type c2.FontStyle.UiMediumBold
     UiTabs = {}, ---@type c2.FontStyle.UiTabs
+    ChatUsername = {}, ---@type c2.FontStyle.ChatUsername
     EndType = {}, ---@type c2.FontStyle.EndType
     ChatStart = {}, ---@type c2.FontStyle.ChatStart
     ChatEnd = {}, ---@type c2.FontStyle.ChatEnd
@@ -866,6 +869,16 @@ c2.MessageElementFlag = {
     BadgeBttv = 0,
     BadgeFfz = 0,
     BadgeDecrypted = 0,
+    AutoModReviewExpanded = 0,
+    AutoModReviewCompact = 0,
+    AbnormalClientNonce = 0,
+    ChannelPointRewardHeader = 0,
+    Pronouns = 0,
+    IgnoreExactMatch = 0,
+    BadgeFfzAp = 0,
+    BadgeBluzyrino = 0,
+    ChannelAvatar = 0,
+    NoUsernamePaint = 0,
     Badges = 0,
     ChannelName = 0,
     BitsAmount = 0,
@@ -945,6 +958,9 @@ c2.MessageFlag = {
     ChatWarning = 0,
     UncategorizedNotification = 0,
     AsciiArt = 0,
+    GigantifiedEmote = 0,
+    TwitchGif = 0,
+    ExtendedClientNonce = 0,
     MaybeEncrypted = 0,
     Decrypted = 0,
 }
@@ -1102,6 +1118,7 @@ c2.HTTPMethod = {
     Put = {}, ---@type c2.HTTPMethod.Put
     Delete = {}, ---@type c2.HTTPMethod.Delete
     Patch = {}, ---@type c2.HTTPMethod.Patch
+    Head = {}, ---@type c2.HTTPMethod.Head
 }
 
 -- End src/common/network/NetworkCommon.hpp

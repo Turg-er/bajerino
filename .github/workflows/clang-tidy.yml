@@ -36,7 +36,8 @@ jobs:
         with:
           cache: true
           cache-key-prefix: ${{ runner.os }}-QtCache-${{ matrix.qt-version }}-v2
-          modules: qtimageformats qtsvg
+          # Qt SVG is included in the base Qt archives.
+          modules: qtimageformats
           version: ${{ matrix.qt-version }}
           dir: ${{ github.workspace }}/.qtinstall
           set-env: false

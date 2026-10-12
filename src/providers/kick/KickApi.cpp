@@ -14,11 +14,14 @@ using namespace chatterino;
 using namespace Qt::Literals;
 
 template <typename T>
-struct IsCollectionS : std::false_type {};
+struct IsCollectionS : std::false_type {
+};
 template <typename T, typename Alloc>
-struct IsCollectionS<std::vector<T, Alloc>> : std::true_type {};
+struct IsCollectionS<std::vector<T, Alloc>> : std::true_type {
+};
 template <typename T>
-struct IsCollectionS<QList<T>> : std::true_type {};
+struct IsCollectionS<QList<T>> : std::true_type {
+};
 
 template <typename T>
 concept IsCollection = IsCollectionS<T>::value;

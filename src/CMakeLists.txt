@@ -1461,9 +1461,15 @@ if (BUILD_APP)
   target_link_libraries(${EXECUTABLE_PROJECT} PUBLIC ${LIBRARY_PROJECT})
 
   set_target_directory_hierarchy(${EXECUTABLE_PROJECT})
+  if(APPLE)
+      # Contents/MacOS is reserved for code and cannot contain license resources.
+      set(bajerino_bundle_licenses "$<TARGET_BUNDLE_CONTENT_DIR:${EXECUTABLE_PROJECT}>/Resources/licenses")
+  else()
+      set(bajerino_bundle_licenses "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/licenses")
+  endif()
   add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${BAJERINO_LICENSES_DIR}"
-          "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/licenses" VERBATIM)
+          "${bajerino_bundle_licenses}" VERBATIM)
 
 
     set(BAJERINO_MEDIA_TOOLS_DIR "" CACHE PATH "Optional ffmpeg/ffprobe bundle with licenses")
@@ -1476,17 +1482,32 @@ if (BUILD_APP)
         if(NOT EXISTS "${BAJERINO_MEDIA_TOOLS_DIR}/licenses")
             message(FATAL_ERROR "The background converter license directory is missing")
         endif()
-        add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${BAJERINO_MEDIA_TOOLS_DIR}"
-                "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/support/media" VERBATIM)
-        if(WIN32)
-            set(media_install_dir support/media)
-        elseif(APPLE)
-            set(media_install_dir "bin/${EXECUTABLE_PROJECT}.app/Contents/MacOS/support/media")
+        if(APPLE)
+            foreach(program ffmpeg ffprobe)
+                add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${BAJERINO_MEDIA_TOOLS_DIR}/${program}"
+                        "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/${program}" VERBATIM)
+                install(PROGRAMS "${BAJERINO_MEDIA_TOOLS_DIR}/${program}"
+                    DESTINATION "bin/${EXECUTABLE_PROJECT}.app/Contents/MacOS")
+            endforeach()
+            add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory
+                    "${BAJERINO_MEDIA_TOOLS_DIR}/licenses"
+                    "${bajerino_bundle_licenses}/media" VERBATIM)
+            install(DIRECTORY "${BAJERINO_MEDIA_TOOLS_DIR}/licenses/"
+                DESTINATION "bin/${EXECUTABLE_PROJECT}.app/Contents/Resources/licenses/media")
         else()
-            set(media_install_dir bin/support/media)
+            add_custom_command(TARGET ${EXECUTABLE_PROJECT} POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${BAJERINO_MEDIA_TOOLS_DIR}"
+                    "$<TARGET_FILE_DIR:${EXECUTABLE_PROJECT}>/support/media" VERBATIM)
+            if(WIN32)
+                set(media_install_dir support/media)
+            else()
+                set(media_install_dir bin/support/media)
+            endif()
+            install(DIRECTORY "${BAJERINO_MEDIA_TOOLS_DIR}/" DESTINATION "${media_install_dir}" USE_SOURCE_PERMISSIONS)
         endif()
-        install(DIRECTORY "${BAJERINO_MEDIA_TOOLS_DIR}/" DESTINATION "${media_install_dir}" USE_SOURCE_PERMISSIONS)
     endif()
 
 

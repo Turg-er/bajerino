@@ -1244,8 +1244,8 @@ void ChannelManagementDialog::updateTitleCounter()
         overflow ? QString("Shorten by %1 character%2")
                        .arg(size - TITLE_LIMIT)
                        .arg(size - TITLE_LIMIT == 1 ? "" : "s")
-        : empty  ? QStringLiteral("Enter a title")
-                 : QString());
+        : empty ? QStringLiteral("Enter a title")
+                : QString());
     this->titleValidationLabel_->setToolTip(
         this->titleValidationLabel_->text());
 

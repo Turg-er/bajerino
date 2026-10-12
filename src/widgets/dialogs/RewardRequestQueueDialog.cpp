@@ -866,9 +866,9 @@ void RewardRequestQueueDialog::loadNextPage()
             self->loadedLabel_->setText(
                 self->hasNextPage_ ? QStringLiteral("%1 loaded")
                                          .arg(QLocale().toString(loaded))
-                : loaded == 1      ? QStringLiteral("1 request")
-                                   : QStringLiteral("%1 requests")
-                                         .arg(QLocale().toString(loaded)));
+                : loaded == 1 ? QStringLiteral("1 request")
+                              : QStringLiteral("%1 requests")
+                                    .arg(QLocale().toString(loaded)));
             if (!self->refreshNotice_.isEmpty())
             {
                 self->setStatus(self->refreshNotice_,

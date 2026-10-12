@@ -280,7 +280,7 @@ void YouTubeInnertubeSession::retryBootstrap(const QString &detail)
             std::chrono::seconds(1),
             std::chrono::seconds(3),
             std::chrono::seconds(10),
-    };
+        };
     const auto index = std::min<std::size_t>(
         this->runtime_->bootstrapFailures - 1, BOOTSTRAP_BACKOFF.size() - 1);
     this->runtime_->bootstrapPending = true;

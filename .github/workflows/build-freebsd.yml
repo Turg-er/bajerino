@@ -58,11 +58,12 @@ jobs:
             mkdir build
             cd build
             c++ --version
+            # libc++ 19 gates the C++20 stop-token types behind this flag.
             cmake \
                 -DCMAKE_C_COMPILER="cc" \
                 -DCMAKE_CXX_COMPILER="c++" \
                 -DCMAKE_C_FLAGS="-O2 -pipe  -fstack-protector-strong -fno-strict-aliasing "  \
-                -DCMAKE_CXX_FLAGS="-O2 -pipe -fstack-protector-strong -fno-strict-aliasing  " \
+                -DCMAKE_CXX_FLAGS="-O2 -pipe -fstack-protector-strong -fno-strict-aliasing -fexperimental-library" \
                 -DLINK_OPTIONS="-fstack-protector-strong" \
                 -DCMAKE_INSTALL_PREFIX="/usr/local" \
                 -DUSE_SYSTEM_QTKEYCHAIN="ON" \

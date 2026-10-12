@@ -1,4 +1,4 @@
-find_package(keychain 1.3.0 QUIET CONFIG)
+find_package(keychain 1.3.1 QUIET CONFIG)
 if(TARGET keychain::keychain)
     return()
 endif()
@@ -17,11 +17,17 @@ function(_moltorino_fetch_keychain)
         list(APPEND keychain_options EXCLUDE_FROM_ALL)
     endif()
     FetchContent_Declare(keychain
-        URL https://github.com/hrantzsch/keychain/archive/refs/tags/v1.3.0.tar.gz
-        URL_HASH SHA256=0e2eb3c6ca2c62253f7d28a478d0cb3eeb4b9656b33d2946e1a294361f72809c
+        URL https://github.com/hrantzsch/keychain/archive/refs/tags/v1.3.1.tar.gz
+        URL_HASH SHA256=9a9fc5aaa94d03180f1c3735f93d1ebcf9d2925fc915306b8476abc17a3906a9
         ${keychain_options}
     )
     FetchContent_MakeAvailable(keychain)
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+       CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+        # Keychain selects GNU warning flags for clang-cl, which rejects
+        # -pedantic. Use the same options as its MSVC build instead.
+        set_property(TARGET keychain PROPERTY COMPILE_OPTIONS /W2 /WX)
+    endif()
     add_library(keychain::keychain ALIAS keychain)
     configure_file("${keychain_SOURCE_DIR}/LICENSE"
         "${BAJERINO_LICENSES_DIR}/keychain.txt" COPYONLY)

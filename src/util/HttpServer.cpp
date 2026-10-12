@@ -130,7 +130,7 @@ private:
                     res{
                         static_cast<boost::beast::http::status>(status),
                         msg.base().version(),
-                };
+                    };
                 res.body() = boost::beast::span<char>{
                     resBody.data(), static_cast<size_t>(resBody.size())};
                 res.keep_alive(keepAlive);

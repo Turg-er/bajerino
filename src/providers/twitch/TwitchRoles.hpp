@@ -64,7 +64,7 @@ void loadPage(Perspective perspective, Role role, const QString &userID,
 
 namespace detail {
 
-constexpr int PAGE_SIZE = 100;
+constexpr int ROLE_PAGE_SIZE = 100;
 
 QUrl summaryUrl(Perspective perspective, const QString &userID);
 QUrl pageUrl(Perspective perspective, Role role, const QString &userID,

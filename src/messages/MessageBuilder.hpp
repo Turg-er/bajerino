@@ -51,13 +51,20 @@ namespace linkparser {
 struct Parsed;
 }  // namespace linkparser
 
-struct SystemMessageTag {};
-struct TimeoutMessageTag {};
-struct LiveUpdatesUpdateEmoteMessageTag {};
-struct LiveUpdatesRemoveEmoteMessageTag {};
-struct LiveUpdatesAddEmoteMessageTag {};
-struct LiveUpdatesUpdateEmoteSetMessageTag {};
-struct ImageUploaderResultTag {};
+struct SystemMessageTag {
+};
+struct TimeoutMessageTag {
+};
+struct LiveUpdatesUpdateEmoteMessageTag {
+};
+struct LiveUpdatesRemoveEmoteMessageTag {
+};
+struct LiveUpdatesAddEmoteMessageTag {
+};
+struct LiveUpdatesUpdateEmoteSetMessageTag {
+};
+struct ImageUploaderResultTag {
+};
 
 // NOLINTBEGIN(readability-identifier-naming)
 const SystemMessageTag systemMessage{};

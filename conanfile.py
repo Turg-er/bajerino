@@ -13,8 +13,6 @@ class Bajerino(ConanFile):
         "openssl*:shared": True,
         "boost*:header_only": True,
         "hunspell*:shared": False,
-        "libwebm/*:with_new_parser_api": True,
-        "libwebm/*:with_pes_ts": False,
         "ffmpeg/*:shared": False,
         "ffmpeg/*:avdevice": False,
         "ffmpeg/*:swresample": False,
@@ -71,7 +69,6 @@ class Bajerino(ConanFile):
             self.requires("libavif/1.4.1")
         self.requires("libwebp/1.6.0")
         self.requires("libvpx/1.16.0", force=True)
-        self.requires("libwebm/1.0.0.32")
         self.requires("libyuv/1892")
         self.requires("ffmpeg/7.1.5")
         if self.options.get_safe("with_benchmark", False):
@@ -79,7 +76,8 @@ class Bajerino(ConanFile):
 
         self.requires("openssl/3.6.1")
         self.requires("hunspell/1.7.2")
-        self.requires("keychain/1.3.0")
+        # WebM and keychain are pinned in CMake. Building the WebM parser with
+        # the application compiler avoids MSVC's private-template access error.
 
     def generate(self):
         tc = CMakeToolchain(self)
@@ -94,7 +92,9 @@ class Bajerino(ConanFile):
             tc.blocks.remove("output_dirs")
             tc.blocks.remove("apple_system")
         tc.user_presets_path = False
-        tc.variables["BAJERINO_MEDIA_TOOLS_DIR"] = path.join(self.build_folder, "support", "media")
+        tc.variables["BAJERINO_MEDIA_TOOLS_DIR"] = path.join(
+            self.build_folder, "support", "media"
+        ).replace("\\", "/")
         tc.generate()
 
         media = self.dependencies["ffmpeg"]
@@ -110,7 +110,7 @@ class Bajerino(ConanFile):
                     keep_path=False,
                 )
 
-            for package in ("ffmpeg", "libwebp", "libvpx", "libwebm", "libyuv", "dav1d", "zlib", "keychain"):
+            for package in ("ffmpeg", "libwebp", "libvpx", "libyuv", "dav1d", "zlib"):
                 dependency = self.dependencies[package]
                 copy(
                     self,

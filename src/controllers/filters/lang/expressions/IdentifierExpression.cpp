@@ -26,15 +26,20 @@ struct Narrow {
     using Type = T;
 };
 template <>
-struct Narrow<unsigned int> : Narrow<int> {};
+struct Narrow<unsigned int> : Narrow<int> {
+};
 template <>
-struct Narrow<long> : Narrow<int> {};
+struct Narrow<long> : Narrow<int> {
+};
 template <>
-struct Narrow<unsigned long> : Narrow<int> {};
+struct Narrow<unsigned long> : Narrow<int> {
+};
 template <>
-struct Narrow<long long> : Narrow<int> {};
+struct Narrow<long long> : Narrow<int> {
+};
 template <>
-struct Narrow<unsigned long long> : Narrow<int> {};
+struct Narrow<unsigned long long> : Narrow<int> {
+};
 
 template <typename T>
 QVariant makeVariantFor(T &&v)

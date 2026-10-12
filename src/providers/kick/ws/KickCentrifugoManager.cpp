@@ -102,8 +102,10 @@ private:
     struct SubCompletion {
         std::string channel;
     };
-    struct Refresh {};
-    struct Connect {};
+    struct Refresh {
+    };
+    struct Connect {
+    };
     using CompletionData = std::variant<SubCompletion, Refresh, Connect>;
 
     boost::unordered_flat_set<QString> subscriptionBacklog;

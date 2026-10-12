@@ -28,7 +28,8 @@ jobs:
         skip-crashpad: [false]
       fail-fast: false
     env:
-      QT_MODULES: qtimageformats qtsvg
+      # Qt SVG is included in the base Qt archives.
+      QT_MODULES: qtimageformats
       C2_USE_OPENSSL3: ${{ case(startsWith(matrix.qt-version, '6.'), 'True', 'False') }}
       C2_CONAN_CACHE_SUFFIX: ${{ case(startsWith(matrix.qt-version, '6.'), '-QT6', '') }}
 
@@ -88,6 +89,7 @@ jobs:
           mkdir build-test
           cd build-test
           conan install .. `
+              -pr:h ../.CI/conan/windows.profile `
               -s build_type=RelWithDebInfo `
               -c tools.cmake.cmaketoolchain:generator="NMake Makefiles" `
               -b missing `

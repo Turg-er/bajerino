@@ -351,7 +351,13 @@ FetchContent_Declare(
     FIND_PACKAGE_ARGS 0.5.1 CONFIG
 )
 
+# RapidJSON's global ccache launcher also wraps resource compilation and linking.
+# Keep the compiler-specific launcher configured above instead.
+get_property(_saved_compile_launcher GLOBAL PROPERTY RULE_LAUNCH_COMPILE)
+get_property(_saved_link_launcher GLOBAL PROPERTY RULE_LAUNCH_LINK)
 FetchContent_MakeAvailable(RapidJSON PajladaSignals PajladaSerialize PajladaSettings)
+set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${_saved_compile_launcher}")
+set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${_saved_link_launcher}")
 
 find_package(LRUCache REQUIRED)
 find_package(MagicEnum REQUIRED)

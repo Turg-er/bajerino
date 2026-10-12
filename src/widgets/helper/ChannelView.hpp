@@ -367,7 +367,8 @@ protected:
                          QPointF &relativePos, int &index);
 
 private:
-    struct InternalCtor {};
+    struct InternalCtor {
+    };
 
     ChannelView(InternalCtor tag, QWidget *parent, Split *split,
                 Context context, size_t messagesLimit);

@@ -390,7 +390,8 @@ QUrl pageUrl(Perspective perspective, Role role, const QString &userID,
         QStringLiteral("/api/stats/%1/%2/id/%3")
             .arg(perspectivePath(perspective), rolePath(role), normalized));
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("per_page"), QString::number(PAGE_SIZE));
+    query.addQueryItem(QStringLiteral("per_page"),
+                       QString::number(ROLE_PAGE_SIZE));
     if (!cursor.isEmpty())
     {
         query.addQueryItem(QStringLiteral("after"), cursor);
@@ -553,7 +554,7 @@ std::optional<Page> parsePage(const QByteArray &data, QString *error)
     {
         return page;
     }
-    if (!dataValue.isArray() || dataValue.toArray().size() > PAGE_SIZE)
+    if (!dataValue.isArray() || dataValue.toArray().size() > ROLE_PAGE_SIZE)
     {
         if (error)
         {

@@ -39,9 +39,13 @@ QString mediaTool(const QString &name)
     filename += QStringLiteral(".exe");
 #endif
 
-    const auto bundled =
-        QDir(QCoreApplication::applicationDirPath())
-            .filePath(QStringLiteral("support/media/") + filename);
+    const QDir executableDirectory(QCoreApplication::applicationDirPath());
+#ifdef Q_OS_MACOS
+    const auto bundled = executableDirectory.filePath(filename);
+#else
+    const auto bundled = executableDirectory.filePath(
+        QStringLiteral("support/media/") + filename);
+#endif
     return QFileInfo::exists(bundled)
                ? bundled
                : QStandardPaths::findExecutable(filename);

@@ -164,9 +164,9 @@ enum class MessageElementFlag : int64_t {
     NoUsernamePaint = (1LL << 54),
 
     Badges = BadgeGlobalAuthority | BadgePredictions | BadgeChannelAuthority |
-        BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
-        BadgeFfz | BadgeSharedChannel | BadgeBttv | BadgeHomies |
-        BadgeMoltorino | BadgeDecrypted | BadgeFfzAp | BadgeBluzyrino,
+             BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
+             BadgeFfz | BadgeSharedChannel | BadgeBttv | BadgeHomies |
+             BadgeMoltorino | BadgeDecrypted | BadgeFfzAp | BadgeBluzyrino,
 
     ChannelName = (1LL << 20),
 
@@ -224,7 +224,7 @@ enum class MessageElementFlag : int64_t {
     PlatformBadgeIfUnselected = (1LL << 52),
 
     Default = Timestamp | Badges | Username | BitsStatic | EmoteImage |
-        BitsAmount | Text | AlwaysShow,
+              BitsAmount | Text | AlwaysShow,
 };
 using MessageElementFlags = FlagsEnum<MessageElementFlag>;
 
@@ -345,7 +345,8 @@ class TextElement : public MessageElement
     friend class LayeredEmoteElement;
 
 protected:
-    struct CloneTag {};
+    struct CloneTag {
+    };
 
 public:
     static constexpr CloneTag CLONE{};
@@ -847,7 +848,8 @@ private:
 class TimestampElement : public MessageElement
 {
 protected:
-    struct CloneConstructorTag {};
+    struct CloneConstructorTag {
+    };
 
 public:
     static constexpr std::string_view TYPE = "timestamp";
