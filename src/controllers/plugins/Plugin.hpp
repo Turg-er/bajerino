@@ -49,7 +49,7 @@ public:
         , meta(std::move(meta))
         , loadDirectory_(loadDirectory)
         , state_(state)
-        , selfRef_(state ? this : nullptr)
+        , selfRef_(state ? lua::PluginRef(this) : lua::PluginRef())
     {
     }
 

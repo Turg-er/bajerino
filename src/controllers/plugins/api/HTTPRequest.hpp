@@ -19,6 +19,13 @@ class PluginController;
 
 namespace chatterino::lua::api {
 
+/**
+ * @lua@alias c2.HTTPCallback fun(result: c2.HTTPResponse): nil
+ */
+
+/**
+ * @lua@class c2.HTTPRequest
+ */
 class HTTPRequest : public std::enable_shared_from_this<HTTPRequest>
 {
 

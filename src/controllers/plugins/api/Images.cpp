@@ -44,8 +44,9 @@ ImagePtr imageCtor(const QString &urlString, sol::variadic_args args)
         expectedSize = args.get<QSize>(1);
     }
     if (!std::isfinite(scale) || scale <= 0 || scale > 16 ||
-        expectedSize.width() < 0 || expectedSize.height() < 0 ||
-        expectedSize.width() > 32768 || expectedSize.height() > 32768)
+        (args.size() >= 2 &&
+         (expectedSize.width() < 0 || expectedSize.height() < 0 ||
+          expectedSize.width() > 32768 || expectedSize.height() > 32768)))
     {
         throw std::runtime_error("Invalid image size or scale");
     }

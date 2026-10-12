@@ -1035,6 +1035,10 @@ QString formatUsercardStatus(const IvrUserProfile &profile)
     {
         return "Staff";
     }
+    if (profile.isVerifiedBot)
+    {
+        return "Verified Bot";
+    }
     if (profile.isPartner)
     {
         return "Partner";

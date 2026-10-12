@@ -7,6 +7,9 @@
 
 namespace chatterino::lua::api {
 
+/**
+ * @exposeenum c2.EventType
+ */
 enum class EventType {
     CompletionRequested,
 };

@@ -20,34 +20,114 @@
 struct lua_State;
 namespace chatterino::lua::api {
 
+/**
+ * @exposeenum c2.LogLevel
+ */
 enum class LogLevel { Debug, Info, Warning, Critical };
 
+/**
+ * @includefile controllers/plugins/api/EventType.hpp
+ */
+
+/**
+ * @lua@class CommandContext
+ * @lua@field words string[] The words typed when executing the command. For example `/foo bar baz` will result in `{"/foo", "bar", "baz"}`.
+ * @lua@field channel c2.Channel The channel the command was executed in.
+ */
+
+/**
+ * @lua@class CompletionList
+ */
 struct CompletionList {
     CompletionList(const sol::table &);
 
+    /**
+     * @lua@field values string[] The completions
+     */
     QStringList values;
 
+    /**
+     * @lua@field hide_others boolean Whether other completions from Chatterino should be hidden/ignored.
+     */
     bool hideOthers{};
 };
 
+/**
+ * @lua@class CompletionEvent
+ */
 struct CompletionEvent {
 
+    /**
+     * @lua@field query string The word being completed
+     */
     QString query;
 
+    /**
+     * @lua@field full_text_content string Content of the text input
+     */
     QString full_text_content;
 
+    /**
+     * @lua@field cursor_position integer Position of the cursor in the text input in unicode codepoints (not bytes)
+     */
     int cursor_position{};
 
+    /**
+     * @lua@field is_first_word boolean True if this is the first word in the input
+     */
     bool is_first_word{};
 };
 
 sol::table toTable(lua_State *L, const CompletionEvent &ev);
 
+/* @lua-fragment
+---@alias QSize [integer, integer] A pair of [width, height]
+---@alias QSizeF [number, number] A pair of [width, height]
+*/
+
+/**
+ * @includefile common/Channel.hpp
+ * @includefile controllers/plugins/api/Accounts.hpp
+ * @includefile controllers/plugins/api/ChannelRef.hpp
+ * @includefile controllers/plugins/api/ConnectionHandle.hpp
+ * @includefile controllers/plugins/api/DateTime.hpp
+ * @includefile controllers/plugins/api/HTTPResponse.hpp
+ * @includefile controllers/plugins/api/HTTPRequest.hpp
+ * @includefile controllers/plugins/api/Images.hpp
+ * @includefile controllers/plugins/api/Menu.hpp
+ * @includefile controllers/plugins/api/Message.hpp
+ * @includefile controllers/plugins/api/WebSocket.hpp
+ * @includefile controllers/plugins/api/WindowManager.hpp
+ * @includefile common/network/NetworkCommon.hpp
+ */
+
+/**
+ * @lua@param name string The name of the command.
+ * @lua@param handler fun(ctx: CommandContext) The handler to be invoked when the command gets executed.
+ * @lua@return boolean ok  Returns `true` if everything went ok, `false` if a command with this name exists.
+ * @exposed c2.register_command
+ */
+
+/**
+ * @lua@param type c2.EventType.CompletionRequested
+ * @lua@param func fun(event: CompletionEvent): CompletionList The callback to be invoked.
+ * @exposed c2.register_callback
+ */
 void c2_register_callback(ThisPluginState L, EventType evtType,
                           sol::protected_function callback);
 
+/**
+ * @lua@param level c2.LogLevel The desired level.
+ * @lua@param ... any Values to log. Should be convertible to a string with `tostring()`.
+ * @exposed c2.log
+ */
 void c2_log(ThisPluginState L, LogLevel lvl, sol::variadic_args args);
 
+/**
+ * @lua@param callback fun() The callback that will be called.
+ * @lua@param msec number How long to wait.
+ * @exposed c2.later
+ */
 void c2_later(ThisPluginState L, sol::protected_function callback, int time);
 
 sol::variadic_results g_load(ThisPluginState s, sol::object data);

@@ -17,6 +17,9 @@ class PluginController;
 
 namespace chatterino::lua::api {
 
+/**
+ * @lua@class c2.HTTPResponse
+ */
 class HTTPResponse
 {
     NetworkResult result_;
@@ -35,12 +38,32 @@ private:
 
 public:
 
+    /**
+     * @lua@return string
+     * @lua@nodiscard
+     * @exposed c2.HTTPResponse:data
+     */
     QByteArray data();
 
+    /**
+     * @lua@return number|nil
+     * @lua@nodiscard
+     * @exposed c2.HTTPResponse:status
+     */
     std::optional<int> status();
 
+    /**
+     * @lua@return string
+     * @lua@nodiscard
+     * @exposed c2.HTTPResponse:error
+     */
     QString error();
 
+    /**
+     * @lua@return string
+     * @lua@nodiscard
+     * @exposed c2.HTTPResponse:__tostring
+     */
     QString to_string();
 };
 
