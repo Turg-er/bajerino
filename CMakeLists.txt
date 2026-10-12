@@ -398,6 +398,9 @@ endif()
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# The application uses headers rather than C++ modules. Avoid redundant module
+# scans, which also emit clang-cl PCH macro mismatch diagnostics on Windows.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # Generate resource files
 include(cmake/resources/generate_resources.cmake)

@@ -1395,8 +1395,9 @@ if(MOLTORINO_TIKTOK_ACCOUNTS)
     if(OPENSSL_VERSION VERSION_LESS 3.0)
         message(FATAL_ERROR "TikTok accounts require OpenSSL 3.0 or newer")
     endif()
-    set_source_files_properties(providers/tiktok/TikTokRequestSigning.cpp
-        PROPERTIES COMPILE_DEFINITIONS MOLTORINO_HAVE_TIKTOK_ACCOUNTS=1)
+    # Keep this definition consistent with the library's precompiled header.
+    target_compile_definitions(${LIBRARY_PROJECT} PRIVATE
+        MOLTORINO_HAVE_TIKTOK_ACCOUNTS=1)
 endif()
 configure_file(providers/tiktok/TikTokSigning.LICENSE.txt
     "${BAJERINO_LICENSES_DIR}/TikTokSigning.txt" COPYONLY)
