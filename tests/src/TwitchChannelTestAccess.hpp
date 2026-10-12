@@ -20,6 +20,11 @@ public:
     {
         channel.refreshPubSub();
     }
+
+    static void refreshBadges(TwitchChannel &channel)
+    {
+        channel.refreshBadges();
+    }
 };
 
 }  // namespace chatterino

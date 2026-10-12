@@ -4288,6 +4288,7 @@ void TwitchChannel::refreshBadges()
             }
 
             shared->addTwitchBadgeSets(channelBadges);
+            shared->badgesLoaded();
         },
         // failureCallback
         [weak = this->weakFromThis()](auto error, const auto &message) {
@@ -4315,7 +4316,32 @@ void TwitchChannel::refreshBadges()
             }
 
             shared->addSystemMessage(errorMessage);
+            shared->badgesLoaded();
         });
+}
+
+void TwitchChannel::onBadgesLoaded(std::function<void()> callback)
+{
+    assertInGuiThread();
+    if (this->badgesLoaded_)
+    {
+        callback();
+    }
+    else
+    {
+        this->badgeLoadCallbacks_.push_back(std::move(callback));
+    }
+}
+
+void TwitchChannel::badgesLoaded()
+{
+    assertInGuiThread();
+    this->badgesLoaded_ = true;
+    auto callbacks = std::exchange(this->badgeLoadCallbacks_, {});
+    for (const auto &callback : callbacks)
+    {
+        callback();
+    }
 }
 
 void TwitchChannel::addTwitchBadgeSets(const HelixChannelBadges &channelBadges)

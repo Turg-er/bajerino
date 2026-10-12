@@ -9,6 +9,7 @@
 #include "messages/MessageBuilder.hpp"
 #include "providers/recentmessages/Api.hpp"
 #include "providers/twitch/IrcMessageHandler.hpp"
+#include "providers/twitch/TwitchBadges.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Settings.hpp"
 #include "util/Helpers.hpp"
@@ -305,10 +306,30 @@ void buildRecentMessagesBatched(
 {
     assertInGuiThread();
 
-    auto &state = buildSchedulerState();
-    state.tasks.emplace_back(std::make_shared<RecentMessagesBuildTask>(
-        std::move(messages), std::move(channel), std::move(onBuilt)));
-    scheduleNextBuildSlice();
+    auto task = std::make_shared<RecentMessagesBuildTask>(
+        std::move(messages), channel, std::move(onBuilt));
+
+    // Badge elements are fixed when a message is built. Fetch history in
+    // parallel, but wait for both badge catalogs before constructing messages.
+    getApp()->getTwitchBadges()->onLoaded(
+        [channel = std::move(channel), task = std::move(task)] {
+            auto shared = channel.lock();
+            auto *twitchChannel =
+                shared ? dynamic_cast<TwitchChannel *>(shared.get()) : nullptr;
+            if (twitchChannel == nullptr || isAppAboutToQuit())
+            {
+                return;
+            }
+            twitchChannel->onBadgesLoaded([task] {
+                if (isAppAboutToQuit())
+                {
+                    return;
+                }
+                auto &state = buildSchedulerState();
+                state.tasks.push_back(task);
+                scheduleNextBuildSlice();
+            });
+        });
 }
 
 QJsonArray mergeRecentMessageBatches(const std::vector<QJsonArray> &batches,

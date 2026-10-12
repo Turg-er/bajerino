@@ -25,6 +25,7 @@
 #include "mocks/UserData.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
+#include "providers/recentmessages/Impl.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/api/Helix.hpp"
@@ -34,6 +35,7 @@
 #include "providers/twitch/TwitchBadges.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "Test.hpp"
+#include "TwitchChannelTestAccess.hpp"
 #include "util/Crypto.hpp"
 #include "util/IrcHelpers.hpp"
 #include "util/VectorMessageSink.hpp"
@@ -48,7 +50,9 @@
 #include <QJsonValue>
 #include <QString>
 #include <QStringBuilder>
+#include <QtCore/qtestsupport_core.h>
 
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -681,6 +685,201 @@ INSTANTIATE_TEST_SUITE_P(
 TEST(TestIrcMessageHandlerP, Integrity)
 {
     ASSERT_FALSE(UPDATE_SNAPSHOTS);  // make sure fixtures are actually tested
+}
+
+TEST(IrcMessageHandler, RecentMessagesWaitForTwitchBadges)
+{
+    for (const bool globalFirst : {false, true})
+    {
+        SCOPED_TRACE(globalFirst);
+        MockApplication app(QString::fromUtf8(SETTINGS_DEFAULT));
+        initializeHelix(&app.helix);
+        auto channel = std::make_shared<TwitchChannel>("pajlada");
+        TwitchChannelTestAccess::setRoomId(*channel, "11148817");
+
+        ResultCallback<HelixGlobalBadges> globalLoaded;
+        ResultCallback<HelixChannelBadges> channelLoaded;
+        EXPECT_CALL(app.helix, getGlobalBadges)
+            .WillOnce([&](auto success, auto) {
+                globalLoaded = std::move(success);
+            });
+        EXPECT_CALL(app.helix,
+                    getChannelBadges(u"11148817"_s, testing::_, testing::_))
+            .WillOnce([&](auto, auto success, auto) {
+                channelLoaded = std::move(success);
+            });
+        app.twitchBadges.loadTwitchBadges();
+        TwitchChannelTestAccess::refreshBadges(*channel);
+
+        const auto badgeData = [](const QString &set, const QString &version) {
+            return HelixGlobalBadges(QJsonObject{
+                {"data", QJsonArray{QJsonObject{
+                             {"set_id", set},
+                             {"versions", QJsonArray{QJsonObject{
+                                              {"id", version},
+                                              {"title", set},
+                                              {"image_url_1x",
+                                               "https://example.com/badge.png"},
+                                          }}},
+                         }}},
+            });
+        };
+        Emote chatterinoBadge;
+        chatterinoBadge.name = {"chatterino"};
+        app.chatterinoBadges.setBadge(
+            {"123456"}, makeEmote(std::move(chatterinoBadge)).second);
+
+        const QJsonArray history{
+            "@historical=1;badges=moderator/1,subscriber/12;"
+            "badge-info=subscriber/12;room-id=11148817;user-id=123456;"
+            "id=history-badges;display-name=Example;tmi-sent-ts=1790452460376 "
+            ":example!example@example.tmi.twitch.tv PRIVMSG #pajlada :hello"};
+        std::optional<std::vector<MessagePtr>> messages;
+        const auto buildHistory = [&] {
+            recentmessages::detail::buildRecentMessagesBatched(
+                history, channel, [&](auto built) {
+                    messages = std::move(built);
+                });
+        };
+        buildHistory();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+        EXPECT_FALSE(messages.has_value());
+
+        if (globalFirst)
+        {
+            globalLoaded(badgeData("moderator", "1"));
+        }
+        else
+        {
+            channelLoaded(badgeData("subscriber", "12"));
+        }
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+        EXPECT_FALSE(messages.has_value());
+
+        if (globalFirst)
+        {
+            channelLoaded(badgeData("subscriber", "12"));
+        }
+        else
+        {
+            globalLoaded(badgeData("moderator", "1"));
+        }
+        ASSERT_TRUE(QTest::qWaitFor(
+            [&] {
+                return messages.has_value();
+            },
+            1000));
+        ASSERT_EQ(messages->size(), 1);
+        const auto &message = messages->front();
+        EXPECT_TRUE(message->flags.has(MessageFlag::RecentMessage));
+        std::vector<QString> badgeSets;
+        bool hasChatterinoBadge = false;
+        for (const auto &element : message->elements)
+        {
+            if (auto *badge = dynamic_cast<BadgeElement *>(element.get()))
+            {
+                if (auto set = badge->twitchBadgeSetID())
+                {
+                    badgeSets.push_back(*set);
+                }
+                hasChatterinoBadge |=
+                    badge->getFlags().has(MessageElementFlag::BadgeChatterino);
+            }
+        }
+        EXPECT_EQ(badgeSets, (std::vector<QString>{"moderator", "subscriber"}));
+        EXPECT_TRUE(hasChatterinoBadge);
+
+        // Reconnect history can be built immediately once both catalogs exist.
+        const auto expected = message->toJson();
+        messages.reset();
+        buildHistory();
+        ASSERT_TRUE(QTest::qWaitFor(
+            [&] {
+                return messages.has_value();
+            },
+            1000));
+        ASSERT_EQ(messages->size(), 1);
+        EXPECT_EQ(messages->front()->toJson(), expected);
+    }
+}
+
+TEST(IrcMessageHandler, RecentMessagesLoadWhenBadgeRequestsFail)
+{
+    MockApplication app(QString::fromUtf8(SETTINGS_DEFAULT));
+    initializeHelix(&app.helix);
+    auto channel = std::make_shared<TwitchChannel>("pajlada");
+    TwitchChannelTestAccess::setRoomId(*channel, "11148817");
+    IHelix::FailureCallback<HelixGetGlobalBadgesError, QString> globalFailed;
+    IHelix::FailureCallback<HelixGetChannelBadgesError, QString> channelFailed;
+    EXPECT_CALL(app.helix, getGlobalBadges).WillOnce([&](auto, auto failure) {
+        globalFailed = std::move(failure);
+    });
+    EXPECT_CALL(app.helix,
+                getChannelBadges(u"11148817"_s, testing::_, testing::_))
+        .WillOnce([&](auto, auto, auto failure) {
+            channelFailed = std::move(failure);
+        });
+    app.twitchBadges.loadTwitchBadges();
+    TwitchChannelTestAccess::refreshBadges(*channel);
+
+    std::optional<std::vector<MessagePtr>> messages;
+    recentmessages::detail::buildRecentMessagesBatched(
+        QJsonArray{
+            "@historical=1;badges=moderator/1;room-id=11148817;user-id=123456;"
+            "display-name=Example;tmi-sent-ts=1790452460376 "
+            ":example!example@example.tmi.twitch.tv PRIVMSG #pajlada :hello"},
+        channel, [&](auto built) {
+            messages = std::move(built);
+        });
+    globalFailed(HelixGetGlobalBadgesError::Unknown, "");
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+    EXPECT_FALSE(messages.has_value());
+
+    channelFailed(HelixGetChannelBadgesError::Unknown, "");
+    ASSERT_TRUE(QTest::qWaitFor(
+        [&] {
+            return messages.has_value();
+        },
+        1000));
+    ASSERT_EQ(messages->size(), 1);
+    EXPECT_EQ(messages->front()->messageText, "hello");
+    EXPECT_TRUE(std::ranges::any_of(
+        messages->front()->elements, [](const auto &element) {
+            const auto *badge =
+                dynamic_cast<const BadgeElement *>(element.get());
+            return badge && badge->twitchBadgeSetID() == u"moderator"_s;
+        }));
+}
+
+TEST(IrcMessageHandler, PendingHistoryDoesNotKeepChannelAlive)
+{
+    for (const bool globalsLoaded : {false, true})
+    {
+        SCOPED_TRACE(globalsLoaded);
+        MockApplication app(QString::fromUtf8(SETTINGS_DEFAULT));
+        initializeHelix(&app.helix);
+        if (globalsLoaded)
+        {
+            app.twitchBadges.loadLocalBadges();
+        }
+        auto channel = std::make_shared<TwitchChannel>("pajlada");
+        std::weak_ptr<Channel> weak = channel;
+        bool built = false;
+        recentmessages::detail::buildRecentMessagesBatched(
+            QJsonArray{":example!example@example.tmi.twitch.tv PRIVMSG "
+                       "#pajlada :hello"},
+            channel, [&](auto) {
+                built = true;
+            });
+        channel.reset();
+        EXPECT_TRUE(weak.expired());
+        if (!globalsLoaded)
+        {
+            app.twitchBadges.loadLocalBadges();
+        }
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::MetaCall);
+        EXPECT_FALSE(built);
+    }
 }
 
 TEST(IrcMessageHandler, RecentMessagesDoNotUpdateCurrentUserState)

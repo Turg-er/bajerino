@@ -140,6 +140,19 @@ void TwitchBadges::loadLocalBadges()
     this->loaded();
 }
 
+void TwitchBadges::onLoaded(std::function<void()> callback)
+{
+    {
+        std::unique_lock lock(this->loadedMutex_);
+        if (!this->loaded_)
+        {
+            this->loadCallbacks_.push_back(std::move(callback));
+            return;
+        }
+    }
+    callback();
+}
+
 void TwitchBadges::loaded()
 {
     std::unique_lock loadedLock(this->loadedMutex_);
@@ -147,6 +160,7 @@ void TwitchBadges::loaded()
     assert(this->loaded_ == false);
 
     this->loaded_ = true;
+    auto callbacks = std::move(this->loadCallbacks_);
 
     // Flush callback queue
     std::unique_lock queueLock(this->queueMutex_);
@@ -159,6 +173,12 @@ void TwitchBadges::loaded()
         auto callback = this->callbackQueue_.front();
         this->callbackQueue_.pop();
         this->getBadgeIcon(callback.first, callback.second);
+    }
+
+    queueLock.unlock();
+    for (const auto &callback : callbacks)
+    {
+        callback();
     }
 }
 

@@ -13,11 +13,13 @@
 #include <QMap>
 #include <QString>
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <queue>
 #include <shared_mutex>
 #include <unordered_map>
+#include <vector>
 
 namespace chatterino {
 
@@ -49,6 +51,9 @@ public:
 
     void loadTwitchBadges();
 
+    /// Run once global badges or their local fallback have finished loading.
+    void onLoaded(std::function<void()> callback);
+
     /// Loads the badges shipped with Chatterino (twitch-badges.json)
     void loadLocalBadges();
 
@@ -65,6 +70,7 @@ private:
 
     std::shared_mutex loadedMutex_;
     bool loaded_ = false;
+    std::vector<std::function<void()>> loadCallbacks_;
 
     UniqueAccess<
         std::unordered_map<QString, std::unordered_map<QString, EmotePtr>>>

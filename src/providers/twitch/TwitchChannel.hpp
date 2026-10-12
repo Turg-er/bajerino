@@ -501,6 +501,10 @@ public:
 
     void addTwitchBadgeSets(const HelixChannelBadges &channelBadges);
 
+    /// Run on the GUI thread once the initial channel badge request finishes,
+    /// including when the request fails.
+    void onBadgesLoaded(std::function<void()> callback);
+
     // Cheers
     std::optional<CheerEmote> cheerEmote(const QString &string) const;
     void setCheerEmoteSets(const std::vector<HelixCheermoteSet> &cheermoteSets);
@@ -695,6 +699,7 @@ private:
 
     void refreshPubSub();
     void refreshBadges();
+    void badgesLoaded();
     void handleRoomIdChanged();
     void refreshCheerEmotes();
     void loadRecentMessages();
@@ -879,6 +884,9 @@ private:
     UniqueAccess<std::map<QString, std::map<QString, EmotePtr>>>
         badgeSets_;  // "subscribers": { "0": ... "3": ... "6": ...
     UniqueAccess<CurrentUserBadgeState> currentUserBadges_;
+    // Only accessed on the GUI thread.
+    bool badgesLoaded_ = false;
+    std::vector<std::function<void()>> badgeLoadCallbacks_;
     UniqueAccess<std::vector<std::shared_ptr<const CheerEmoteSet>>>
         cheerEmoteSets_;
     UniqueAccess<std::map<QString, ChannelPointReward>> channelPointRewards_;
