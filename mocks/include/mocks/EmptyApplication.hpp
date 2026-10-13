@@ -2,6 +2,7 @@
 
 #include "Application.hpp"
 #include "common/Args.hpp"
+#include "common/Modes.hpp"
 #include "singletons/Paths.hpp"
 #include "singletons/Updates.hpp"
 
@@ -12,7 +13,11 @@ namespace chatterino::mock {
 class EmptyApplication : public IApplication
 {
 public:
-    EmptyApplication() = default;
+    EmptyApplication()
+    {
+        this->paths_.settingsDirectory = this->settingsDir.path();
+        this->paths_.bluzyrinoDataDirectories.clear();
+    }
 
     explicit EmptyApplication(const QString &settingsData)
     {
@@ -24,6 +29,7 @@ public:
             settingsFile.close();
         }
         this->paths_.settingsDirectory = this->settingsDir.path();
+        this->paths_.bluzyrinoDataDirectories.clear();
     }
 
     ~EmptyApplication() override = default;
@@ -386,7 +392,8 @@ public:
     }
 
     QTemporaryDir settingsDir;
-    Paths paths_;
+    Modes modes_;
+    Paths paths_{modes_};
     Args args_;
 };
 

@@ -214,6 +214,8 @@ protected:
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::SmoothPixmapTransform);
 
+        const auto viewport =
+            this->parentWidget()->rect().translated(-this->pos());
         const auto headerHeight = this->headerHeight();
         const auto radius = std::max(1.0, 3.0 * this->gridScale_);
         this->forEachItem(
@@ -231,6 +233,10 @@ protected:
                             static_cast<qlonglong>(section.badges.size()))));
             },
             [&](const Badge &badge, const QRect &rect) {
+                if (!rect.intersects(viewport))
+                {
+                    return true;
+                }
                 if (badge.background.isValid())
                 {
                     painter.setPen(Qt::NoPen);

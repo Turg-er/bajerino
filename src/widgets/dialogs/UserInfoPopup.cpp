@@ -2252,7 +2252,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         this->registerMnemonicButton(this->ui_.rolesLabel, Qt::Key_R,
                                      openRoles);
 
-        auto openBadges = [this] { this->toggleUserBadges(); };
+        auto openBadges = [this] {
+            this->toggleUserBadges();
+        };
         QObject::connect(badges.getElement(), &Button::leftClicked,
                          openBadges);
         this->registerMnemonicButton(this->ui_.badgesLabel, Qt::Key_B,
@@ -4125,6 +4127,7 @@ void UserInfoPopup::requestMoreUsercardMessages(bool enableLazyLoadOnSuccess)
     }
 
     this->usercardMessagesError_.clear();
+    this->usercardMessagesAuthRequired_ = false;
     this->usercardMessagesLoading_ = true;
     this->updateUsercardMessagesVisibility();
     this->fetchMoreUsercardMessages(2, enableLazyLoadOnSuccess);
@@ -6417,6 +6420,22 @@ void UserInfoPopup::refreshIdentityBadges()
                                         MessageElementFlag::BadgeBluzyrino);
                         }
                     }
+                    if (auto *provider = getApp()->getJilChatBadges())
+                    {
+                        for (const auto &badge : provider->getBadges({userID}))
+                        {
+                            appendBadge(badge,
+                                        MessageElementFlag::BadgeJilChat);
+                        }
+                    }
+                    if (auto *provider = getApp()->getBadgeHQBadges())
+                    {
+                        for (const auto &badge : provider->getBadges({userID}))
+                        {
+                            appendBadge(badge,
+                                        MessageElementFlag::BadgeBadgeHQ);
+                        }
+                    }
                     if (auto *provider =
                             getApp()->getMoltorinoSupporterBadges())
                     {
@@ -6447,22 +6466,6 @@ void UserInfoPopup::refreshIdentityBadges()
                                 index == 0
                                     ? MessageElementFlag::BadgeHomiesCustom
                                     : MessageElementFlag::BadgeHomiesSupporter);
-                        }
-                    }
-                    if (auto *provider = getApp()->getJilChatBadges())
-                    {
-                        for (const auto &badge : provider->getBadges({userID}))
-                        {
-                            appendBadge(badge,
-                                        MessageElementFlag::BadgeJilChat);
-                        }
-                    }
-                    if (auto *provider = getApp()->getBadgeHQBadges())
-                    {
-                        for (const auto &badge : provider->getBadges({userID}))
-                        {
-                            appendBadge(badge,
-                                        MessageElementFlag::BadgeBadgeHQ);
                         }
                     }
                 }

@@ -3537,7 +3537,7 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
     const auto defaultRank = [](const QString &slot) {
         static constexpr std::array<QStringView, 15> order{
             u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa", u"bt",
-            u"bl", u"m",  u"7",  u"hc", u"hs", u"jc", u"bh",
+            u"bl", u"jc", u"bh", u"m",  u"7",  u"hc", u"hs",
         };
         return static_cast<int>(std::ranges::find(order, slot) - order.begin());
     };
