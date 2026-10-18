@@ -312,7 +312,7 @@ public:
     {
         this->hideTooltip();
         this->badges_ = std::move(badges);
-        this->updateGeometry();
+        this->syncHeight();
         this->update();
     }
 
@@ -382,6 +382,25 @@ public:
     }
 
 protected:
+    // Moving the card to a screen with different scaling redraws the badges
+    // at a new size; re-measure then, or the row keeps its old height and the
+    // badges get cut off at the bottom.
+    bool event(QEvent *event) override
+    {
+        if (event->type() == QEvent::DevicePixelRatioChange ||
+            event->type() == QEvent::ScreenChangeInternal)
+        {
+            this->syncHeight();
+        }
+        return BaseWidget::event(event);
+    }
+
+    void resizeEvent(QResizeEvent *event) override
+    {
+        BaseWidget::resizeEvent(event);
+        this->syncHeight();
+    }
+
     // Hovering a badge shows what it is, with Moltorino's own tooltip (the
     // same one chat and the Badges page use). A plain QToolTip never showed
     // in this popup.
@@ -484,9 +503,21 @@ protected:
     void scaleChangedEvent(float scale) override
     {
         BaseWidget::scaleChangedEvent(scale);
-        this->setMinimumHeight(this->rowHeight());
-        this->updateGeometry();
+        this->syncHeight();
         this->update();
+    }
+
+    /// Keeps the minimum height at what the badges need at the current width
+    /// and scale, so the layout can never squeeze the row.
+    void syncHeight()
+    {
+        const auto needed = this->heightForWidth(
+            this->width() > 0 ? this->width() : this->sizeHint().width());
+        if (this->minimumHeight() != needed)
+        {
+            this->setMinimumHeight(needed);
+        }
+        this->updateGeometry();
     }
 
 private:
