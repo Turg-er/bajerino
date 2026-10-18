@@ -3833,9 +3833,10 @@ void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
         return;
     }
     this->ui_.badgeCountLabel->setText(
+        // Same colour as the rest of the line; the underline marks the link.
         QStringLiteral("%1 global <a href=\"badges\" style=\"color: %2;\">%3</a>")
             .arg(QLocale().toString(static_cast<qlonglong>(globalBadges)),
-                 getTheme()->messages.textColors.link.name(),
+                 getTheme()->window.text.name(),
                  globalBadges == 1 ? QStringLiteral("badge")
                                    : QStringLiteral("badges")));
     this->ui_.badgeCountRow->show();
@@ -3855,12 +3856,23 @@ void UserInfoPopup::refreshBadgeCountStyle()
         static_cast<int>(8 * scale), 0, static_cast<int>(8 * scale), 0);
     this->ui_.badgeCountLabel->setFont(font);
     this->ui_.badgeProfileButton->setFont(font);
-    const auto link = getTheme()->messages.textColors.link.name();
+    // A small boxed icon button, in the card's text colour.
+    const auto *theme = getTheme();
+    const auto text = theme->window.text;
+    auto border = text;
+    border.setAlphaF(0.35);
+    auto hover = text;
+    hover.setAlphaF(0.12);
+    const auto px = [scale](int v) {
+        return QString::number(std::max(1, static_cast<int>(v * scale)));
+    };
     this->ui_.badgeProfileButton->setStyleSheet(
-        QStringLiteral("QPushButton { border: none; background: transparent; "
-                       "color: %1; padding: 0 2px; }"
-                       "QPushButton:hover { color: %2; }")
-            .arg(link, getTheme()->window.text.name()));
+        QStringLiteral("QPushButton { color: %1; background: transparent; "
+                       "border: 1px solid %2; border-radius: %3px; "
+                       "padding: %4px %5px; }"
+                       "QPushButton:hover { background: %6; }")
+            .arg(text.name(), border.name(QColor::HexArgb), px(4), px(0),
+                 px(5), hover.name(QColor::HexArgb)));
 }
 
 void UserInfoPopup::showActivityPage(ActivityPage page)
