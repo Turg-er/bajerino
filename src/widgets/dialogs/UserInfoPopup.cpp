@@ -455,6 +455,18 @@ protected:
 
     void paintEvent(QPaintEvent *) override
     {
+        // The badges are drawn at the window's current scale, which can
+        // change (e.g. while the card is dragged around) without this row
+        // being told. If the row is now shorter than the badges need, grow
+        // it right after this paint instead of drawing them cut off.
+        if (this->minimumHeight() !=
+            this->heightForWidth(std::max(1, this->width())))
+        {
+            QTimer::singleShot(0, this, [this] {
+                this->syncHeight();
+            });
+        }
+
         QPainter painter(this);
         const auto height = this->badgeSize();
         const auto spacing = this->badgeSpacing();
