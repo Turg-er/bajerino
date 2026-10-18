@@ -71,6 +71,7 @@
 #include "util/LayoutCreator.hpp"
 #include "util/PostToThread.hpp"
 #include "util/Twitch.hpp"
+#include "widgets/TooltipWidget.hpp"
 #include "widgets/buttons/DrawnButton.hpp"
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/PixmapButton.hpp"
@@ -144,6 +145,9 @@
 #include <utility>
 
 namespace {
+
+/// How tall the Badges page gets: the card grows to make room for it.
+constexpr int LOGICAL_BADGES_PAGE_HEIGHT = 420;
 
 /// The "open in a new tab" icon: a rounded box, open at the top right, with
 /// an arrow pointing out of it. Drawn rather than shipped as an image so it
@@ -292,6 +296,8 @@ public:
         QString tooltip;
         MessageElementFlags flags;
         std::shared_ptr<const TikTokBadgeArtwork> tiktok;
+        // FFZ badges are transparent glyphs drawn on a colour, as in chat.
+        QColor background{};
     };
 
     explicit UsercardBadgeStrip(QWidget *parent)
@@ -304,6 +310,7 @@ public:
 
     void setBadges(std::vector<Badge> badges)
     {
+        this->hideTooltip();
         this->badges_ = std::move(badges);
         this->updateGeometry();
         this->update();
@@ -375,23 +382,56 @@ public:
     }
 
 protected:
-    bool event(QEvent *event) override
+    // Hovering a badge shows what it is, with Moltorino's own tooltip (the
+    // same one chat and the Badges page use). A plain QToolTip never showed
+    // in this popup.
+    void mouseMoveEvent(QMouseEvent *event) override
     {
-        if (event->type() != QEvent::ToolTip)
-        {
-            return BaseWidget::event(event);
-        }
-
-        const auto *helpEvent = static_cast<QHelpEvent *>(event);
-        const auto index = this->badgeIndexAt(helpEvent->pos());
+        const auto index = this->badgeIndexAt(event->pos());
         if (!index || this->badges_[*index].tooltip.isEmpty())
         {
-            return BaseWidget::event(event);
+            this->hideTooltip();
+            BaseWidget::mouseMoveEvent(event);
+            return;
         }
+        if (this->tooltipWidget_ == nullptr)
+        {
+            this->tooltipWidget_ = new TooltipWidget(this);
+        }
+        if (index != this->hoveredIndex_)
+        {
+            this->hoveredIndex_ = index;
+            const auto &badge = this->badges_[*index];
+            this->tooltipWidget_->setOne(TooltipEntry::scaled(
+                badge.emote->images.getImage3(), badge.tooltip, 1.0F,
+                TOOLTIP_IMAGE_SIZE));
+            this->tooltipWidget_->setWordWrap(true);
+        }
+        this->tooltipWidget_->moveTo(
+            event->globalPosition().toPoint() + QPoint(16, 16),
+            widgets::BoundsChecking::CursorPosition);
+        this->tooltipWidget_->show();
+    }
 
-        QToolTip::showText(helpEvent->globalPos(),
-                           this->badges_[*index].tooltip, this);
-        return true;
+    void leaveEvent(QEvent *event) override
+    {
+        this->hideTooltip();
+        BaseWidget::leaveEvent(event);
+    }
+
+    void hideEvent(QHideEvent *event) override
+    {
+        this->hideTooltip();
+        BaseWidget::hideEvent(event);
+    }
+
+    void hideTooltip()
+    {
+        this->hoveredIndex_.reset();
+        if (this->tooltipWidget_ != nullptr)
+        {
+            this->tooltipWidget_->hide();
+        }
     }
 
     void paintEvent(QPaintEvent *) override
@@ -422,6 +462,15 @@ protected:
             }
             else if (const auto pixmap = image->pixmapOrLoad())
             {
+                if (badge.background.isValid())
+                {
+                    painter.setRenderHint(QPainter::Antialiasing);
+                    painter.setPen(Qt::NoPen);
+                    painter.setBrush(badge.background);
+                    const auto radius = std::max(1.0, 2.0 * this->scale());
+                    painter.drawRoundedRect(QRectF(x, y, width, height),
+                                            radius, radius);
+                }
                 painter.setRenderHint(
                     QPainter::SmoothPixmapTransform,
                     badge.flags.has(MessageElementFlag::BadgeMoltorino));
@@ -445,6 +494,7 @@ private:
     static constexpr int LOGICAL_BADGE_SPACING = 3;
     static constexpr int LOGICAL_ROW_HEIGHT = 22;
     static constexpr int LOGICAL_PREFERRED_WIDTH = 420;
+    static constexpr int TOOLTIP_IMAGE_SIZE = 72;
 
     int badgeSize() const
     {
@@ -527,6 +577,8 @@ private:
     }
 
     std::vector<Badge> badges_;
+    TooltipWidget *tooltipWidget_ = nullptr;
+    std::optional<size_t> hoveredIndex_;
 };
 
 class UsercardPaintButton final : public Button
@@ -3979,6 +4031,29 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     this->ui_.rolesLabel->setToolTip(
         rolesShown ? "Return to recent messages" : "View roles and channels");
     this->ui_.badgesLabel->setText(badgesShown ? "<u>Badges</u>" : "Badges");
+
+    // Give the Badges page more room by growing the card downwards, and put
+    // it back afterwards unless the card was resized in the meantime.
+    if (badgesShown)
+    {
+        const int wanted = qRound(LOGICAL_BADGES_PAGE_HEIGHT * this->scale());
+        const int have = this->ui_.activityStack->height();
+        if (have > 0 && have < wanted && this->heightBeforeBadges_ == 0)
+        {
+            this->heightBeforeBadges_ = this->height();
+            this->heightWithBadges_ = this->height() + (wanted - have);
+            this->resize(this->width(), this->heightWithBadges_);
+        }
+    }
+    else if (this->heightBeforeBadges_ > 0)
+    {
+        if (this->height() == this->heightWithBadges_)
+        {
+            this->resize(this->width(), this->heightBeforeBadges_);
+        }
+        this->heightBeforeBadges_ = 0;
+        this->heightWithBadges_ = 0;
+    }
     this->ui_.badgesLabel->setToolTip(
         badgesShown ? "Return to recent messages" : "View badge collection");
 
@@ -6644,8 +6719,11 @@ void UserInfoPopup::refreshIdentityBadges()
                 }
                 const auto *tiktokBadge =
                     dynamic_cast<const TikTokBadgeElement *>(badge);
+                const auto *ffzBadge =
+                    dynamic_cast<const FfzBadgeElement *>(badge);
                 badges.push_back({badge->getEmote(), badge->getTooltip(), flags,
-                                  tiktokBadge ? tiktokBadge->artwork() : nullptr});
+                                  tiktokBadge ? tiktokBadge->artwork() : nullptr,
+                                  ffzBadge ? ffzBadge->getColor() : QColor{}});
             }
         }
     }

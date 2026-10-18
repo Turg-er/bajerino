@@ -114,6 +114,10 @@ private:
     void updateUserRolesContext();
     void updateUserBadgesContext();
     void updateBadgeCountRow(qsizetype globalBadges);
+    // While the Badges page is open the card grows downwards so a big
+    // collection isn't squeezed into a few rows; it shrinks back afterwards.
+    int heightBeforeBadges_ = 0;
+    int heightWithBadges_ = 0;
     void refreshBadgeCountStyle();
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
