@@ -120,6 +120,8 @@ private:
     int heightWithBadges_ = 0;
     void refreshBadgeCountStyle();
     void refitToContent();
+    bool refitPending_ = false;
+    QSize lastRefitMinimum_;
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
     bool moderatorCommentsActionAvailable() const;

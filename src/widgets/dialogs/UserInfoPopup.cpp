@@ -2836,6 +2836,22 @@ bool UserInfoPopup::event(QEvent *event)
         return result;
     }
 #endif
+    if (event->type() == QEvent::LayoutRequest)
+    {
+        const bool result = DraggablePopup::event(event);
+        // Something in the card grew (a row loaded in, the badge row wrapped).
+        // The window's minimum is set by hand, so the layout can't grow it
+        // itself and the bottom of the message list would be cut off.
+        const auto needed = this->minimumSizeHint();
+        if ((needed.height() > this->height() ||
+             needed.width() > this->width()) &&
+            needed != this->lastRefitMinimum_)
+        {
+            this->lastRefitMinimum_ = needed;
+            this->refitToContent();
+        }
+        return result;
+    }
     return DraggablePopup::event(event);
 }
 
@@ -4018,8 +4034,15 @@ void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
 // layout has caught up.
 void UserInfoPopup::refitToContent()
 {
+    if (this->refitPending_)
+    {
+        return;
+    }
+    this->refitPending_ = true;
     QTimer::singleShot(0, this, [this] {
-        this->applyPopupSize(this->sizeHint());
+        this->refitPending_ = false;
+        this->applyPopupSize(
+            this->sizeHint().expandedTo(this->minimumSizeHint()));
     });
 }
 
