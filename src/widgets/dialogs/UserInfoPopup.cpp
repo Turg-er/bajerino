@@ -120,6 +120,7 @@
 #include <QMouseEvent>
 #include <QMovie>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPointer>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -143,6 +144,47 @@
 #include <utility>
 
 namespace {
+
+/// The "open in a new tab" icon: a rounded box, open at the top right, with
+/// an arrow pointing out of it. Drawn rather than shipped as an image so it
+/// matches the theme's text colour and stays sharp at any scale.
+QIcon externalLinkIcon(const QColor &color, int size, qreal dpr)
+{
+    QPixmap pixmap(QSize(size, size) * dpr);
+    pixmap.setDevicePixelRatio(dpr);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    // Laid out on a 24-unit square.
+    const qreal u = size / 24.0;
+    painter.scale(u, u);
+    QPen pen(color, 2.2);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    QPainterPath box;
+    box.moveTo(11, 5.5);
+    box.lineTo(7, 5.5);
+    box.quadTo(4, 5.5, 4, 8.5);
+    box.lineTo(4, 17);
+    box.quadTo(4, 20, 7, 20);
+    box.lineTo(15.5, 20);
+    box.quadTo(18.5, 20, 18.5, 17);
+    box.lineTo(18.5, 13);
+    painter.drawPath(box);
+
+    QPainterPath arrow;
+    arrow.moveTo(14, 4);
+    arrow.lineTo(20, 4);
+    arrow.lineTo(20, 10);
+    arrow.moveTo(20, 4);
+    arrow.lineTo(11.5, 12.5);
+    painter.drawPath(arrow);
+    painter.end();
+    return QIcon(pixmap);
+}
 constexpr QStringView TEXT_FOLLOWERS = u"Followers: %1";
 constexpr QStringView TEXT_CREATED = u"Created: %1";
 constexpr QStringView TEXT_TITLE = u"%1's Usercard - #%2";
@@ -2169,7 +2211,7 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
                 label->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
                 label->setOpenExternalLinks(false);
                 rowLayout->addWidget(label, 0, Qt::AlignVCenter);
-                auto *open = new QPushButton(QStringLiteral("\u2197"), row);
+                auto *open = new QPushButton(row);
                 open->setFlat(true);
                 open->setAutoDefault(false);
                 open->setCursor(Qt::PointingHandCursor);
@@ -3856,23 +3898,23 @@ void UserInfoPopup::refreshBadgeCountStyle()
         static_cast<int>(8 * scale), 0, static_cast<int>(8 * scale), 0);
     this->ui_.badgeCountLabel->setFont(font);
     this->ui_.badgeProfileButton->setFont(font);
-    // A small boxed icon button, in the card's text colour.
-    const auto *theme = getTheme();
-    const auto text = theme->window.text;
-    auto border = text;
-    border.setAlphaF(0.35);
+    // The "open in new tab" icon, sized to the text, in the card's text
+    // colour, with a faint highlight on hover.
+    const auto text = getTheme()->window.text;
     auto hover = text;
     hover.setAlphaF(0.12);
-    const auto px = [scale](int v) {
-        return QString::number(std::max(1, static_cast<int>(v * scale)));
-    };
+    const int iconSize = std::max(10, static_cast<int>(
+                                          QFontMetrics(font).height() * 0.8));
+    this->ui_.badgeProfileButton->setIcon(
+        externalLinkIcon(text, iconSize, this->devicePixelRatioF()));
+    this->ui_.badgeProfileButton->setIconSize(QSize(iconSize, iconSize));
     this->ui_.badgeProfileButton->setStyleSheet(
-        QStringLiteral("QPushButton { color: %1; background: transparent; "
-                       "border: 1px solid %2; border-radius: %3px; "
-                       "padding: %4px %5px; }"
-                       "QPushButton:hover { background: %6; }")
-            .arg(text.name(), border.name(QColor::HexArgb), px(4), px(0),
-                 px(5), hover.name(QColor::HexArgb)));
+        QStringLiteral("QPushButton { background: transparent; border: none; "
+                       "border-radius: %1px; padding: %2px; }"
+                       "QPushButton:hover { background: %3; }")
+            .arg(QString::number(std::max(2, static_cast<int>(3 * scale))),
+                 QString::number(std::max(1, static_cast<int>(2 * scale))),
+                 hover.name(QColor::HexArgb)));
 }
 
 void UserInfoPopup::showActivityPage(ActivityPage page)
