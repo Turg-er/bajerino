@@ -134,6 +134,7 @@
 #include <QVBoxLayout>
 #include <QWidgetAction>
 
+#include <tuple>
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -2156,6 +2157,42 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             }
             vbox.emplace<Label>("").assign(&this->ui_.statusLabel);
             vbox.emplace<Label>("").assign(&this->ui_.chatterCountLabel);
+            {
+                // "269 global badges": "badges" opens the Badges page, and
+                // the small arrow opens their BadgeHQ profile. Filled in once
+                // the BadgeHQ profile loads (updateBadgeCountRow).
+                auto *row = new QWidget;
+                auto *rowLayout = new QHBoxLayout(row);
+                rowLayout->setSpacing(4);
+                auto *label = new QLabel(row);
+                label->setTextFormat(Qt::RichText);
+                label->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+                label->setOpenExternalLinks(false);
+                rowLayout->addWidget(label, 0, Qt::AlignVCenter);
+                auto *open = new QPushButton(QStringLiteral("\u2197"), row);
+                open->setFlat(true);
+                open->setAutoDefault(false);
+                open->setCursor(Qt::PointingHandCursor);
+                open->setToolTip("Open BadgeHQ Profile");
+                rowLayout->addWidget(open, 0, Qt::AlignVCenter);
+                rowLayout->addStretch(1);
+                row->hide();
+                vbox->addWidget(row);
+                this->ui_.badgeCountRow = row;
+                this->ui_.badgeCountLabel = label;
+                this->ui_.badgeProfileButton = open;
+                QObject::connect(label, &QLabel::linkActivated, this,
+                                 [this](const QString &) {
+                                     this->showActivityPage(
+                                         ActivityPage::Badges);
+                                 });
+                QObject::connect(open, &QPushButton::clicked, this, [this] {
+                    if (this->ui_.badgesView != nullptr)
+                    {
+                        this->ui_.badgesView->openProfile();
+                    }
+                });
+            }
             createUsercardStatusRow(vbox, &this->ui_.followageRow,
                                     &this->ui_.followageIcon,
                                     &this->ui_.followageLabel);
@@ -2192,6 +2229,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         roles->hide();
         auto badges = user.emplace<LabelButton>("Badges", this)
                           .assign(&this->ui_.badgesLabel);
+        // Underlined while open, rather than renamed to "Messages", so the
+        // Badges tab never disappears; clicking it again goes back.
+        badges->enableRichText();
         badges->setToolTip("View badge collection");
         badges->hide();
         auto notesAction = user.emplace<LabelButton>("Notes", this)
@@ -2452,6 +2492,11 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
     activityStack->addWidget(this->ui_.rolesView);
     this->ui_.badgesView = new UserBadgesView(activityStack);
     this->ui_.badgesView->refreshStyle(this->scale());
+    std::ignore = this->ui_.badgesView->globalBadgeCountChanged.connect(
+        [this](qsizetype count) {
+            this->updateBadgeCountRow(count);
+        });
+    this->refreshBadgeCountStyle();
     activityStack->addWidget(this->ui_.badgesView);
     activityStack->setCurrentWidget(messagesPage);
     layout->addWidget(activityStack);
@@ -2618,6 +2663,7 @@ void UserInfoPopup::themeChangedEvent()
     this->ui_.logsView->refreshStyle(this->scale());
     this->ui_.rolesView->refreshStyle(this->scale());
     this->ui_.badgesView->refreshStyle(this->scale());
+    this->refreshBadgeCountStyle();
 }
 
 bool UserInfoPopup::event(QEvent *event)
@@ -3757,11 +3803,64 @@ void UserInfoPopup::updateUserBadgesContext()
     this->ui_.badgesLabel->setVisible(
         available && placement == UsercardActionPlacement::Bar);
     this->ui_.badgesView->setContext(available ? this->userName_ : QString{});
+    // The global badge count under the chatter count needs the BadgeHQ
+    // profile, so it's only fetched while BadgeHQ badges are turned on.
+    if (available && getSettings()->showBadgesBadgeHQ)
+    {
+        this->ui_.badgesView->prefetch();
+    }
+    else
+    {
+        this->updateBadgeCountRow(-1);
+    }
     if (!available && this->ui_.activityStack->currentWidget() ==
                           this->ui_.badgesView)
     {
         this->showActivityPage(ActivityPage::Messages);
     }
+}
+
+void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
+{
+    if (this->ui_.badgeCountRow == nullptr)
+    {
+        return;
+    }
+    if (globalBadges < 0 || !this->userBadgesActionAvailable() ||
+        !getSettings()->showBadgesBadgeHQ)
+    {
+        this->ui_.badgeCountRow->hide();
+        return;
+    }
+    this->ui_.badgeCountLabel->setText(
+        QStringLiteral("%1 global <a href=\"badges\" style=\"color: %2;\">%3</a>")
+            .arg(QLocale().toString(static_cast<qlonglong>(globalBadges)),
+                 getTheme()->messages.textColors.link.name(),
+                 globalBadges == 1 ? QStringLiteral("badge")
+                                   : QStringLiteral("badges")));
+    this->ui_.badgeCountRow->show();
+}
+
+void UserInfoPopup::refreshBadgeCountStyle()
+{
+    if (this->ui_.badgeCountRow == nullptr)
+    {
+        return;
+    }
+    const auto scale = this->scale();
+    const auto font =
+        getApp()->getFonts()->getFont(FontStyle::UiMedium, scale);
+    // Lined up with the Label rows above it, which pad 8px on the left.
+    this->ui_.badgeCountRow->layout()->setContentsMargins(
+        static_cast<int>(8 * scale), 0, static_cast<int>(8 * scale), 0);
+    this->ui_.badgeCountLabel->setFont(font);
+    this->ui_.badgeProfileButton->setFont(font);
+    const auto link = getTheme()->messages.textColors.link.name();
+    this->ui_.badgeProfileButton->setStyleSheet(
+        QStringLiteral("QPushButton { border: none; background: transparent; "
+                       "color: %1; padding: 0 2px; }"
+                       "QPushButton:hover { color: %2; }")
+            .arg(link, getTheme()->window.text.name()));
 }
 
 void UserInfoPopup::showActivityPage(ActivityPage page)
@@ -3825,7 +3924,7 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     this->ui_.rolesLabel->setText(rolesShown ? "Messages" : "Roles");
     this->ui_.rolesLabel->setToolTip(
         rolesShown ? "Return to recent messages" : "View roles and channels");
-    this->ui_.badgesLabel->setText(badgesShown ? "Messages" : "Badges");
+    this->ui_.badgesLabel->setText(badgesShown ? "<u>Badges</u>" : "Badges");
     this->ui_.badgesLabel->setToolTip(
         badgesShown ? "Return to recent messages" : "View badge collection");
 
