@@ -119,6 +119,7 @@ private:
     int heightBeforeBadges_ = 0;
     int heightWithBadges_ = 0;
     void refreshBadgeCountStyle();
+    void refitToContent();
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
     bool moderatorCommentsActionAvailable() const;

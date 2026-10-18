@@ -291,6 +291,10 @@ protected:
 class UsercardBadgeStrip final : public BaseWidget
 {
 public:
+    /// Called when the row's height changes, so the usercard can re-fit
+    /// its window (like it does when other rows appear).
+    std::function<void()> onHeightChanged;
+
     struct Badge {
         EmotePtr emote;
         QString tooltip;
@@ -525,7 +529,8 @@ protected:
     {
         const auto needed = this->heightForWidth(
             this->width() > 0 ? this->width() : this->sizeHint().width());
-        if (this->minimumHeight() != needed)
+        const bool changed = this->minimumHeight() != needed;
+        if (changed)
         {
             this->setMinimumHeight(needed);
         }
@@ -538,6 +543,10 @@ protected:
             row->setFixedHeight(needed);
         }
         this->updateGeometry();
+        if (changed && this->onHeightChanged)
+        {
+            this->onHeightChanged();
+        }
     }
 
 private:
@@ -2237,6 +2246,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
 
             auto *badgeStrip = new UsercardBadgeStrip(badgeRow);
             this->ui_.identityBadges = badgeStrip;
+            badgeStrip->onHeightChanged = [this] {
+                this->refitToContent();
+            };
             badgeLayout->addWidget(badgeStrip, 0, Qt::AlignVCenter);
             badgeLayout->addStretch(1);
             vbox->addWidget(badgeRow);
@@ -3974,10 +3986,15 @@ void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
     {
         return;
     }
+    const bool wasVisible = this->ui_.badgeCountRow->isVisibleTo(this);
     if (globalBadges < 0 || !this->userBadgesActionAvailable() ||
         !getSettings()->showBadgesBadgeHQ)
     {
         this->ui_.badgeCountRow->hide();
+        if (wasVisible)
+        {
+            this->refitToContent();
+        }
         return;
     }
     this->ui_.badgeCountLabel->setText(
@@ -3988,6 +4005,22 @@ void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
                  globalBadges == 1 ? QStringLiteral("badge")
                                    : QStringLiteral("badges")));
     this->ui_.badgeCountRow->show();
+    if (!wasVisible)
+    {
+        this->refitToContent();
+    }
+}
+
+// Rows that arrive after the card opened (the badge count from BadgeHQ, a
+// badge row that grows) make the content taller than the size the card was
+// given, and the layout then squashes the header so rows overlap. Re-fit the
+// window the same way the card does when its other rows appear, once the
+// layout has caught up.
+void UserInfoPopup::refitToContent()
+{
+    QTimer::singleShot(0, this, [this] {
+        this->applyPopupSize(this->sizeHint());
+    });
 }
 
 void UserInfoPopup::refreshBadgeCountStyle()
