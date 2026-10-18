@@ -529,6 +529,14 @@ protected:
         {
             this->setMinimumHeight(needed);
         }
+        // The row around the strip is fixed-height; keep it exactly as tall
+        // as the badges need.
+        if (auto *row = this->parentWidget();
+            row != nullptr && (row->minimumHeight() != needed ||
+                               row->maximumHeight() != needed))
+        {
+            row->setFixedHeight(needed);
+        }
         this->updateGeometry();
     }
 
@@ -2216,8 +2224,11 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             vbox->addWidget(handleRow);
 
             auto *badgeRow = new BaseWidget(this);
+            // Fixed height (set by the strip, see syncHeight): when the rows
+            // below load in and the card runs out of room, the layout must
+            // not take that room from the badges and cut them off.
             badgeRow->setSizePolicy(QSizePolicy::Expanding,
-                                    QSizePolicy::Preferred);
+                                    QSizePolicy::Fixed);
             badgeRow->hide();
             auto *badgeLayout = new QHBoxLayout(badgeRow);
             badgeLayout->setContentsMargins(8, 0, 0, 0);
