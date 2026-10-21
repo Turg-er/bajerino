@@ -10,7 +10,6 @@
 #include "common/network/NetworkPrivate.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
-#include "singletons/Paths.hpp"
 #include "util/AbandonObject.hpp"
 #include "util/DebugCount.hpp"
 
@@ -93,6 +92,8 @@ void NetworkTask::run()
 
     QObject::connect(this->reply_, &QNetworkReply::finished, this,
                      &NetworkTask::finished);
+    QObject::connect(this->reply_, &QObject::destroyed, this,
+                     &QObject::deleteLater);
 
     if (this->data_->cancellation.stop_possible())
     {
@@ -100,7 +101,7 @@ void NetworkTask::run()
             QMetaObject::invokeMethod(
                 this,
                 [this] {
-                    if (!this->reply_->isFinished())
+                    if (this->reply_ && !this->reply_->isFinished())
                     {
                         this->reply_->abort();
                     }
@@ -265,20 +266,7 @@ void NetworkTask::writeToCache(const QByteArray &bytes) const
             return;
         }
 
-        auto *app = tryGetApp();
-        if (!app)
-        {
-            if (diagnostics::mayLogUrl(data->request.url()))
-            {
-                qCDebug(chatterinoHTTP)
-                    << "Skipping cache write for" << data->request.url()
-                    << "because app is null";
-            }
-            return;
-        }
-
-        QSaveFile cachedFile(app->getPaths().cacheDirectory() + "/" +
-                             data->getHash());
+        QSaveFile cachedFile(data->cacheFilePath);
 
         if (cachedFile.open(QIODevice::WriteOnly) &&
             cachedFile.write(bytes) == bytes.size())
@@ -292,6 +280,12 @@ void NetworkTask::timeout()
 {
     AbandonObject guard(this);
 
+    if (!this->reply_)
+    {
+        return;
+    }
+
+    // prevent abort() from calling finished()
     QObject::disconnect(this->reply_, &QNetworkReply::finished, this,
                         &NetworkTask::finished);
     this->reply_->abort();
@@ -350,7 +344,7 @@ void NetworkTask::finished()
         this->timer_->stop();
     }
 
-    auto *reply = this->reply_;
+    auto *reply = this->reply_.data();
     auto status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
     auto etag = reply->rawHeader("ETag");
 

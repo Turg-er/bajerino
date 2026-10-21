@@ -11,6 +11,10 @@
 #include "widgets/helper/NotebookTab.hpp"
 #include "widgets/splits/Split.hpp"
 
+#include <QFontMetrics>
+
+#include <algorithm>
+
 namespace chatterino {
 
 SwitchSplitItem::SwitchSplitItem(SplitContainer *container, Split *split)
@@ -39,6 +43,7 @@ void SwitchSplitItem::paint(QPainter *painter, const QRect &rect) const
 
     painter->setRenderHint(QPainter::Antialiasing, true);
 
+    // TODO(leon): Right pen/brush/font settings?
     painter->setPen(getApp()->getThemes()->splits.header.text);
     painter->setBrush(Qt::SolidPattern);
     painter->setFont(
@@ -49,18 +54,21 @@ void SwitchSplitItem::paint(QPainter *painter, const QRect &rect) const
 
     if (this->split_)
     {
-
+        // Draw channel name and name of the containing tab
         const auto availableTextWidth = rect.width() - iconRect.width();
-        QRect leftTextRect =
-            QRect(iconRect.topRight(),
-                  QSize(0.3 * availableTextWidth, iconRect.height()));
+        const auto &channelName = this->split_->getChannel()->getName();
+        const auto channelNameWidth =
+            std::min(painter->fontMetrics().horizontalAdvance(channelName),
+                     availableTextWidth);
+        QRect leftTextRect = QRect(iconRect.topRight(),
+                                   QSize(channelNameWidth, iconRect.height()));
 
         painter->drawText(leftTextRect, Qt::AlignLeft | Qt::AlignVCenter,
-                          this->split_->getChannel()->getName());
+                          channelName);
 
-        QRect rightTextRect =
-            QRect(leftTextRect.topRight(),
-                  QSize(0.7 * availableTextWidth, iconRect.height()));
+        QRect rightTextRect = QRect(
+            leftTextRect.topRight(),
+            QSize(availableTextWidth - channelNameWidth, iconRect.height()));
 
         painter->setFont(
             getApp()->getFonts()->getFont(FontStyle::UiMedium, 1.0));
@@ -69,7 +77,7 @@ void SwitchSplitItem::paint(QPainter *painter, const QRect &rect) const
     }
     else if (!this->split_ && this->container_)
     {
-
+        // Only draw name of tab
         QRect textRect =
             QRect(iconRect.topRight(),
                   QSize(rect.width() - iconRect.width(), iconRect.height()));
@@ -86,4 +94,4 @@ QSize SwitchSplitItem::sizeHint(const QRect &rect) const
     return QSize(rect.width(), ICON_SIZE.height());
 }
 
-}
+}  // namespace chatterino

@@ -62,6 +62,11 @@ public:
     pajlada::Signals::NoArgSignal userListUpdated;
     pajlada::Signals::NoArgSignal currentUserNameChanged;
 
+    /// Fired when the IRC server sends a "Login authentication failed" notice,
+    /// indicating the current OAuth token has expired.
+    pajlada::Signals::NoArgSignal loginExpired;
+    pajlada::Signals::NoArgSignal loginRestored;
+
     SignalVector<std::shared_ptr<TwitchAccount>> accounts;
 
     pajlada::Signals::Signal<void *, ExpectedStr<void>> emotesReloaded;

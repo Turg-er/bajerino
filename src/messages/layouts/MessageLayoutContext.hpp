@@ -59,7 +59,6 @@ struct MessagePreferences {
     Qt::BrushStyle lastMessagePattern{};
 
     bool enableRedeemedHighlight{};
-    bool enableElevatedMessageHighlight{};
     bool enableFirstMessageHighlight{};
     bool enableSubHighlight{};
     bool enableWatchStreakHighlight{};

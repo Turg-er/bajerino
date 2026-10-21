@@ -1124,7 +1124,7 @@ ExpectedStr<QJsonObject> createBundle(const QString &settingsDirectory,
         {QStringLiteral("settings"), grouped},
         {QStringLiteral("files"), files},
     };
-    if (QJsonDocument(bundle).toJson(QJsonDocument::Compact).size() >
+    if (QJsonDocument(bundle).toJson(QJsonDocument::Indented).size() >
         MAX_BUNDLE_BYTES)
     {
         return makeUnexpected(

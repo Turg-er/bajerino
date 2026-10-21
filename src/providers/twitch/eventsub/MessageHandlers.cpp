@@ -26,7 +26,8 @@ void handleModerateMessage(
     runInGuiThread([chan = chan->sharedFromThis(),
                     actor{event.moderatorUserLogin.qt()}, time] {
         chan->addOrReplaceClearChat(
-            MessageBuilder::makeClearChatMessage(time, actor), time);
+            MessageBuilder::makeClearChatMessage(time, actor, chan->getName()),
+            time);
         if (getSettings()->hideModerated)
         {
 

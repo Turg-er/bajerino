@@ -691,7 +691,7 @@ void fetchModeratedChannelsWithHelix(
             .timeout(HELIX_MODERATED_CHANNEL_TIMEOUT_MS)
             .maximumResponseSize(1024 * 1024)
             .hideRequestBody()
-            .followRedirects(true)
+            .followRedirects(false)
             .header("Accept", "application/json")
             .header("Client-ID", state->clientId)
             .header("Authorization", "Bearer " + state->oauthToken)
@@ -1248,7 +1248,7 @@ void validateWithOAuth(
         .timeout(20000)
         .maximumResponseSize(64 * 1024)
         .hideRequestBody()
-        .followRedirects(true)
+        .followRedirects(false)
         .header("Accept", "application/json")
         .header("Authorization", "OAuth " + normalizedToken)
         .onSuccess([normalizedToken, successCallback = std::move(successCallback),

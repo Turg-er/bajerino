@@ -12,6 +12,7 @@
 #include "common/UniqueAccess.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
+#include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/eventsub/SubscriptionHandle.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchEmotes.hpp"
@@ -533,6 +534,9 @@ public:
 
     pajlada::Signals::Signal<const QString &> sendWaitUpdate;
 
+    pajlada::Signals::Signal<const std::vector<HelixMinimalUser> &>
+        sharedChatStatusChanged;
+
     // Channel point rewards
     void addQueuedRedemption(const QString &rewardId,
                              const QString &originalContent,
@@ -579,6 +583,8 @@ public:
     void setSendWait(int seconds);
 
     bool isLoadingRecentMessages() const;
+    const std::vector<HelixMinimalUser> &getSharedChatSessionParticipants()
+        const;
 
 private:
     struct NameOptions {
@@ -656,6 +662,9 @@ private:
     /// This should only happen once per channel, whenever the ID goes from unset to set
     void handleRoomIdChanged();
 
+    void probeSharedChatSession();
+    void refreshSharedChatSessionState();
+
     /** Joins (subscribes to) a Twitch channel for updates on BTTV. */
     void joinBttvChannel() const;
 
@@ -707,11 +716,12 @@ private:
      * @param platform The platform the emote was updated on ("7TV", "BTTV", "FFZ")
      * @param actor The actor performing the update (possibly empty)
      * @param emoteName The emote's name
+     * @param now The time the update was received
      */
-    void addOrReplaceLiveUpdatesAddRemove(bool isEmoteAdd,
-                                          const QString &platform,
-                                          const QString &actor,
-                                          const QString &emoteName);
+    void addOrReplaceLiveUpdatesAddRemove(
+        bool isEmoteAdd, const QString &platform, const QString &actor,
+        const QString &emoteName,
+        const QDateTime &now = QDateTime::currentDateTime());
 
     /**
      * Tries to replace the last emote update message.
@@ -726,12 +736,14 @@ private:
      * @param platform The emote platform  ("7TV", "BTTV", "FFZ")
      * @param actor The actor performing the action (possibly empty)
      * @param emoteName The updated emote's name
+     * @param now The time the update was received
      * @return true, if the last message was replaced
      */
     bool tryReplaceLastLiveUpdateAddOrRemove(MessageFlag op,
                                              const QString &platform,
                                              const QString &actor,
-                                             const QString &emoteName);
+                                             const QString &emoteName,
+                                             const QDateTime &now);
 
     // Data
     const QString subscriptionUrl_;
@@ -876,6 +888,36 @@ private:
     std::weak_ptr<const Message> lastLiveUpdateMessage_;
     /** A list of the emotes listed in the lat live emote update message. */
     std::vector<QString> lastLiveUpdateEmoteNames_;
+
+    /**
+     * List of display names of  broadcasters participating in a
+     * shared chat session on this channel. The list does not include
+     * the broadcaster who owns the channel.
+     * This list is passed to the UI for display.
+     */
+    std::vector<HelixMinimalUser> sharedChatSessionParticipants_;
+
+    /**
+     * Set of broadcasterIDs of broadcasters participating in a
+     * shared chat session on this channel. The set does not include
+     * the broadcaster who owns the channel.
+     * This set is used to quickly determine if the participants have
+     * changed since the last query of the shared chat session state.
+     */
+    QSet<QString> sharedChatSessionParticipantIds_;
+
+    /**
+     * Timer scheduling the next check of the shared chat session state.
+     */
+    QTimer nextSharedChatSessionUpdateTimer_;
+    bool sharedChatSessionRequestPending_ = false;
+
+    /**
+     * Time when the next probe of shared chat session state triggered
+     * by reception of a shared chat message is allowed.
+     * Used to rate-limit Twitch API queries.
+     */
+    QDateTime nextSharedChatSessionProbe_;
 
     pajlada::Signals::SignalHolder signalHolder_;
 

@@ -33,7 +33,15 @@ public:
     enum class Role { Page, GroupHeader };
     explicit NotebookTab(Notebook *notebook, Role role = Role::Page);
 
-    void updateSize();
+    void refreshAndCommitSize(bool notify);
+    void commitSize(bool notify);
+    void refreshSize();
+
+    QSize minimumTabSize() const;
+    int minimumTabWidth() const;
+
+    void queueMove(QPoint to, bool animated);
+    void commitMove();
 
     QWidget *page{};
 
@@ -102,7 +110,6 @@ public:
     void tabSizeChanged();
 
     void growWidth(int width);
-    int normalTabWidth() const;
 
     Role role() const;
     const QString &groupId() const;
@@ -214,7 +221,6 @@ private:
     bool isInLastRow_{};
     bool isFirstVisible_{};
     bool isLastVisible_{};
-    int mouseWheelDelta_ = 0;
     NotebookTabLocation tabLocation_ = NotebookTabLocation::Top;
 
     HighlightState highlightState_ = HighlightState::None;
@@ -227,6 +233,10 @@ private:
     QAction *alwaysVisibleAction_{};
 
     int growWidth_ = 0;
+    QSize computedMinimumSize;
+
+    QPoint queuedMove;
+    bool queuedMoveAnimated = false;
 
     QMenu menu_;
     QMenu *tabGroupMenu_{};

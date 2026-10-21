@@ -22,6 +22,7 @@
 #include "providers/seventv/SeventvAPI.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
 #include "providers/seventv/SeventvEventAPI.hpp"
+#include "providers/twitch/api/Helix.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
 #include "util/BoostJsonWrap.hpp"
@@ -392,7 +393,11 @@ bool KickChannel::updateLiveStatus(bool live, const QString &title)
         {
             this->addMessage(
                 MessageBuilder::makeLiveMessage(
-                    this->getDisplayName(), QString::number(this->userID()),
+                    HelixMinimalUser{
+                        .id = QString::number(this->userID()),
+                        .login = this->getName(),
+                        .displayName = this->getDisplayName(),
+                    },
                     title,
                     {MessageFlag::System,
                      MessageFlag::DoNotTriggerNotification}),
@@ -401,8 +406,11 @@ bool KickChannel::updateLiveStatus(bool live, const QString &title)
         else
         {
             this->addMessage(
-                MessageBuilder::makeOfflineSystemMessage(
-                    this->getDisplayName(), QString::number(this->userID())),
+                MessageBuilder::makeOfflineSystemMessage(HelixMinimalUser{
+                    .id = QString::number(this->userID()),
+                    .login = this->getName(),
+                    .displayName = this->getDisplayName(),
+                }),
                 MessageContext::Original);
         }
         this->liveStatusChanged.invoke();
@@ -835,13 +843,15 @@ void KickChannel::addOrReplaceSeventvAddRemove(bool isEmoteAdd,
     if (isEmoteAdd)
     {
         msg = MessageBuilder(liveUpdatesAddEmoteMessage, "7TV", actor,
-                             this->lastSeventvEmoteNames_)
+                             this->lastSeventvEmoteNames_,
+                             QDateTime::currentDateTime())
                   .release();
     }
     else
     {
         msg = MessageBuilder(liveUpdatesRemoveEmoteMessage, "7TV", actor,
-                             this->lastSeventvEmoteNames_)
+                             this->lastSeventvEmoteNames_,
+                             QDateTime::currentDateTime())
                   .release();
     }
     this->lastSeventvMessage_ = msg;
@@ -853,10 +863,10 @@ bool KickChannel::tryReplaceLastSeventvAddOrRemove(MessageFlag op,
                                                    const QString &actor,
                                                    const QString &emoteName)
 {
+    auto now = QDateTime::currentDateTime();
     auto last = this->lastSeventvMessage_.lock();
     if (!last || !last->flags.has(op) ||
-        last->parseTime < QTime::currentTime().addSecs(-5) ||
-        last->loginName != actor)
+        last->serverReceivedTime < now.addSecs(-5) || last->loginName != actor)
     {
         return false;
     }
@@ -871,6 +881,7 @@ bool KickChannel::tryReplaceLastSeventvAddOrRemove(MessageFlag op,
                 "7TV",
                 last->loginName,
                 this->lastSeventvEmoteNames_,
+                now,
             };
         }
 
@@ -879,6 +890,7 @@ bool KickChannel::tryReplaceLastSeventvAddOrRemove(MessageFlag op,
             "7TV",
             last->loginName,
             this->lastSeventvEmoteNames_,
+            now,
         };
     };
 

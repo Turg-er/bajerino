@@ -334,7 +334,7 @@ void Scrollbar::printCurrentState(const QString &prefix) const
         << " }";
 }
 
-void Scrollbar::paintEvent(QPaintEvent * )
+void Scrollbar::paintEvent(QPaintEvent * /*event*/)
 {
     bool mouseOver = this->mouseOverLocation_ != MouseLocation::Outside;
     int xOffset =
@@ -346,19 +346,18 @@ void Scrollbar::paintEvent(QPaintEvent * )
     bool enableRedeemedHighlights = getSettings()->enableRedeemedHighlight;
     bool enableFirstMessageHighlights =
         getSettings()->enableFirstMessageHighlight;
-    bool enableElevatedMessageHighlights =
-        getSettings()->enableElevatedMessageHighlight;
 
     if (this->shouldShowThumb())
     {
         this->thumbRect_.setX(xOffset);
 
+        // mouse over thumb
         if (this->mouseDownLocation_ == MouseLocation::InsideThumb)
         {
             painter.fillRect(this->thumbRect_,
                              this->theme->scrollbars.thumbSelected);
         }
-
+        // mouse not over thumb
         else
         {
             painter.fillRect(this->thumbRect_, this->theme->scrollbars.thumb);
@@ -390,12 +389,6 @@ void Scrollbar::paintEvent(QPaintEvent * )
 
             if (highlight.isFirstMessageHighlight() &&
                 !enableFirstMessageHighlights)
-            {
-                continue;
-            }
-
-            if (highlight.isElevatedMessageHighlight() &&
-                !enableElevatedMessageHighlights)
             {
                 continue;
             }

@@ -11,7 +11,11 @@
 #include "providers/twitch/TwitchEmotes.hpp"
 #include "util/IrcHelpers.hpp"
 
+#include "util/Helpers.hpp"
+
 #include <QCache>
+#include <span>
+#include <utility>
 #include <QUrl>
 
 #include <algorithm>
@@ -58,74 +62,72 @@ std::pair<QString, QString> sharedBadgePair(const QString &badge)
     return pair;
 }
 
-void appendTwitchEmoteOccurrences(const QString &emote,
-                                  std::vector<TwitchEmoteOccurrence> &vec,
-                                  const std::vector<int> &correctPositions,
-                                  const QString &originalMessage,
+void appendTwitchEmoteOccurrences(QStringView emote,
+                                  std::vector<TwitchEmoteOccurrence> &out,
+                                  std::span<const int> codepointToUtf16Idx,
+                                  QStringView originalMessage,
                                   int messageOffset)
 {
     auto *app = getApp();
-    if (!emote.contains(':'))
+
+    auto [idRef, ranges] = splitOnce(emote, u':');
+    if (ranges.empty())
     {
         return;
     }
+    // FIXME: Add an EmoteIdView.
+    auto id = EmoteId{idRef.toString()};
 
-    auto parameters = emote.split(':');
-
-    if (parameters.length() < 2)
+    for (const auto occurrence : ranges.tokenize(u','))
     {
-        return;
-    }
-
-    auto id = EmoteId{parameters.at(0)};
-
-    auto occurrences = parameters.at(1).split(',');
-
-    for (const QString &occurrence : occurrences)
-    {
-        auto coords = occurrence.split('-');
-
-        if (coords.length() < 2)
+        auto [fromStr, toStr] = splitOnce(occurrence, u'-');
+        bool fromOk = false;
+        bool toOk = false;
+        int from = fromStr.toInt(&fromOk);
+        int to = toStr.toInt(&toOk);
+        if (!fromOk || !toOk || messageOffset < 0)
         {
-            return;
+            qCDebug(chatterinoTwitch) << "Invalid emote range:" << occurrence;
+            continue;
         }
-
-        auto from = coords.at(0).toUInt() - messageOffset;
-        auto to = coords.at(1).toUInt() - messageOffset;
-        auto maxPositions = correctPositions.size();
-        if (from > to || to >= maxPositions)
-        {
-
-            qCDebug(chatterinoTwitch)
-                << "Emote coords" << from << "-" << to << "are out of range ("
-                << maxPositions << ")";
-            return;
-        }
-
-        auto start = correctPositions[from];
-        auto end = correctPositions[to];
-        if (start > end || start < 0 || end > originalMessage.length())
-        {
-
-            qCDebug(chatterinoTwitch) << "Emote coords" << from << "-" << to
-                                      << "are out of range after offsets ("
-                                      << originalMessage.length() << ")";
-            return;
-        }
-
-        auto name = EmoteName{originalMessage.mid(start, end - start + 1)};
-        TwitchEmoteOccurrence emoteOccurrence{
-            start,
-            end,
-            app->getEmotes()->getTwitchEmotes()->getOrCreateEmote(id, name),
-            name,
-        };
-        if (emoteOccurrence.ptr == nullptr)
+        if (from > to || from < messageOffset)
         {
             qCDebug(chatterinoTwitch)
-                << "nullptr" << emoteOccurrence.name.string;
+                << "Out of bounds emote range:" << occurrence
+                << "offset:" << messageOffset;
+            continue;
         }
-        vec.push_back(std::move(emoteOccurrence));
+        to -= messageOffset;
+        from -= messageOffset;
+        if (std::cmp_greater_equal(to, codepointToUtf16Idx.size() - 1))
+        {
+            qCDebug(chatterinoTwitch)
+                << "Out of bounds emote range:" << occurrence
+                << "max-codepoints:" << codepointToUtf16Idx.size();
+            return;
+        }
+
+        auto start = codepointToUtf16Idx[from];
+        auto end = codepointToUtf16Idx[to + 1] - 1;
+        assert(start <= end && end < originalMessage.length() &&
+               "Bad codepointToUtf16Idx list");
+
+        auto name = EmoteName{
+            originalMessage.sliced(start, end - start + 1).toString()};
+        auto ptr =
+            app->getEmotes()->getTwitchEmotes()->getOrCreateEmote(id, name);
+        if (!ptr)
+        {
+            qCDebug(chatterinoTwitch) << "Invalid emote:" << id.string;
+            continue;
+        }
+
+        out.emplace_back(TwitchEmoteOccurrence{
+            .start = start,
+            .end = end,
+            .ptr = ptr,
+            .name = name,
+        });
     }
 }
 
@@ -269,17 +271,17 @@ void appendTwitchGifOccurrences(const QString &gifToken,
 
 namespace chatterino {
 
-std::unordered_map<QString, QString> parseBadgeInfoTag(const QVariantMap &tags)
+std::unordered_map<QString, QString> parseBadgeInfoTag(Communi::TagsRef tags)
 {
     std::unordered_map<QString, QString> infoMap;
 
-    auto infoIt = tags.constFind("badge-info");
-    if (infoIt == tags.end())
+    auto infoIt = tags.get("badge-info");
+    if (!infoIt)
     {
         return infoMap;
     }
 
-    auto info = infoIt.value().toString().split(',', Qt::SkipEmptyParts);
+    auto info = infoIt->split(',', Qt::SkipEmptyParts);
 
     for (const QString &badge : info)
     {
@@ -289,18 +291,18 @@ std::unordered_map<QString, QString> parseBadgeInfoTag(const QVariantMap &tags)
     return infoMap;
 }
 
-std::vector<TwitchBadge> parseBadgeTag(const QVariantMap &tags,
+std::vector<TwitchBadge> parseBadgeTag(Communi::TagsRef tags,
                                        const QString &tagName)
 {
     std::vector<TwitchBadge> b;
 
-    auto badgesIt = tags.constFind(tagName);
-    if (badgesIt == tags.end())
+    auto badgesIt = tags.get(tagName);
+    if (!badgesIt)
     {
         return b;
     }
 
-    auto badges = badgesIt.value().toString().split(',', Qt::SkipEmptyParts);
+    auto badges = badgesIt->split(',', Qt::SkipEmptyParts);
 
     for (const QString &badge : badges)
     {
@@ -316,22 +318,22 @@ std::vector<TwitchBadge> parseBadgeTag(const QVariantMap &tags,
     return b;
 }
 
-std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(const QVariantMap &tags,
-                                                     const QString &content,
+std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(Communi::TagsRef tags,
+                                                     QStringView content,
                                                      int messageOffset)
 {
 
     std::vector<TwitchEmoteOccurrence> twitchEmotes;
 
-    auto emotesTag = tags.find("emotes");
+    auto emotesTag = tags.get("emotes");
 
-    if (emotesTag == tags.end())
+    if (!emotesTag)
     {
         return twitchEmotes;
     }
 
-    QStringList emoteString = emotesTag.value().toString().split('/');
     std::vector<int> correctPositions;
+    correctPositions.reserve(content.size() + 1);
     for (int i = 0; i < content.size(); ++i)
     {
         if (!content.at(i).isLowSurrogate())
@@ -339,7 +341,8 @@ std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(const QVariantMap &tags,
             correctPositions.push_back(i);
         }
     }
-    for (const QString &emote : emoteString)
+    correctPositions.push_back(static_cast<int>(content.size()));
+    for (const auto emote : emotesTag->tokenize(u'/'))
     {
         appendTwitchEmoteOccurrences(emote, twitchEmotes, correctPositions,
                                      content, messageOffset);
@@ -348,20 +351,19 @@ std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(const QVariantMap &tags,
     return twitchEmotes;
 }
 
-std::vector<TwitchGifOccurrence> parseTwitchGifs(const QVariantMap &tags,
+std::vector<TwitchGifOccurrence> parseTwitchGifs(Communi::TagsRef tags,
                                                  const QString &content,
                                                  int messageOffset)
 {
     std::vector<TwitchGifOccurrence> twitchGifs;
 
-    auto gifsTag = tags.find("gifs");
-    if (gifsTag == tags.end())
+    auto gifsTag = tags.get("gifs");
+    if (!gifsTag)
     {
         return twitchGifs;
     }
 
-    const auto gifStrings =
-        gifsTag.value().toString().split(',', Qt::SkipEmptyParts);
+    const auto gifStrings = (*gifsTag).split(',', Qt::SkipEmptyParts);
     if (gifStrings.isEmpty())
     {
         return twitchGifs;

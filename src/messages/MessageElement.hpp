@@ -10,7 +10,6 @@
 #include "messages/MessageColor.hpp"
 #include "providers/links/LinkInfo.hpp"
 #include "singletons/Fonts.hpp"
-#include "util/DebugCount.hpp"
 
 #include <magic_enum/magic_enum.hpp>
 #include <pajlada/signals/signalholder.hpp>
@@ -177,6 +176,18 @@ enum class MessageElementFlag : int64_t {
 
     NoUsernamePaint = (1LL << 54),
 
+    /// The timestamp in the header (i.e. top part of the "Announcement" message)
+    HeaderTimestamp = (1LL << 55),
+
+    /// Applied to all elements of the announcement header
+    AnnouncementHeader = (1LL << 56),
+
+    /// Applied to all elements of subscription and resubscription headers
+    SubscriptionHeader = (1LL << 57),
+
+    /// Applied to all elements of watch streak headers
+    WatchStreakHeader = (1LL << 58),
+
     Default = Timestamp | Badges | Username | BitsStatic | EmoteImage |
               BitsAmount | Text | AlwaysShow,
 };
@@ -211,6 +222,11 @@ public:
 
     virtual std::unique_ptr<MessageElement> clone() const = 0;
 
+    /// When this element is added to a container, this decides whether the flag check
+    /// should require the context flags to contain all flags of this element (true), as opposed
+    /// to the context flag containing at least one of the flags of this element (false).
+    bool exhaustiveFlags = false;
+
     /// The type name for this message element. Used for Lua plugins.
     ///
     /// This must be unique per element. It should return the static `TYPE`
@@ -224,6 +240,11 @@ protected:
 
     void cloneFrom(const MessageElement &source);
     virtual const QString &getDefaultTooltip() const;
+
+    /// Checks if the given flags from the layout context matches the flags of this element.
+    ///
+    /// Takes `exhaustiveFlags` into consideration.
+    bool matchesFlags(MessageElementFlags contextFlags) const;
 
 private:
     struct Metadata;
@@ -502,9 +523,11 @@ class MentionElement : public TextElement
 public:
     static constexpr std::string_view TYPE = "mention";
 
-    explicit MentionElement(const QString &displayName, QString loginName_,
-                            MessageColor fallbackColor_,
-                            MessageColor userColor_);
+    explicit MentionElement(
+        const QString &displayName, QString loginName_,
+        MessageColor fallbackColor_, MessageColor userColor_,
+        MessageElementFlags messageFlags = MessageElementFlags{
+            MessageElementFlag::Text, MessageElementFlag::Mention});
     /// Deprioritized ctor allowing us to pass through a potentially invalid userColor_
     ///
     /// If the userColor_ is invalid, we fall back to the fallbackColor_
@@ -769,6 +792,7 @@ public:
 
     TimestampElement();
     TimestampElement(QTime time_);
+    TimestampElement(QTime time_, MessageElementFlags extraFlags);
     ~TimestampElement() override = default;
 
     void addToContainer(MessageLayoutContainer &container,

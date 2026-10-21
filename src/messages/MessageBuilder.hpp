@@ -3,6 +3,7 @@
 #include "common/Aliases.hpp"
 #include "common/Outcome.hpp"
 #include "messages/MessageColor.hpp"
+#include "messages/MessageElement.hpp"
 #include "messages/MessageFlag.hpp"
 
 #include <IrcMessage>
@@ -32,6 +33,7 @@ class Channel;
 class TwitchChannel;
 class MessageThread;
 class IgnorePhrase;
+struct HelixMinimalUser;
 struct HelixVip;
 using HelixModerator = HelixVip;
 struct ChannelPointReward;
@@ -104,11 +106,11 @@ public:
                    const QDateTime &time);
 
     MessageBuilder(LiveUpdatesAddEmoteMessageTag, const QString &platform,
-                   const QString &actor,
-                   const std::vector<QString> &emoteNames);
+                   const QString &actor, const std::vector<QString> &emoteNames,
+                   const QDateTime &time);
     MessageBuilder(LiveUpdatesRemoveEmoteMessageTag, const QString &platform,
-                   const QString &actor,
-                   const std::vector<QString> &emoteNames);
+                   const QString &actor, const std::vector<QString> &emoteNames,
+                   const QDateTime &time);
     MessageBuilder(LiveUpdatesUpdateEmoteMessageTag, const QString &platform,
                    const QString &actor, const QString &emoteName,
                    const QString &oldEmoteName);
@@ -146,7 +148,9 @@ public:
         return pointer;
     }
 
-    void appendOrEmplaceText(const QString &text, MessageColor color);
+    MessageElement *appendOrEmplaceText(
+        const QString &text, MessageColor color,
+        MessageElementFlags messageFlags = MessageElementFlag::Text);
     void appendOrEmplaceSystemTextAndUpdate(const QString &text,
                                             QString &toUpdate);
 
@@ -173,13 +177,11 @@ public:
     static MessagePtr makeChannelPointRewardMessage(
         const ChannelPointReward &reward, bool isMod, bool isBroadcaster);
 
-    static MessagePtr makeLiveMessage(const QString &channelName,
-                                      const QString &channelID,
+    static MessagePtr makeLiveMessage(const HelixMinimalUser &channel,
                                       const QString &title,
                                       MessageFlags extraFlags = {});
 
-    static MessagePtr makeOfflineSystemMessage(const QString &channelName,
-                                               const QString &channelID);
+    static MessagePtr makeOfflineSystemMessage(const HelixMinimalUser &channel);
     static MessagePtr makeHostingSystemMessage(const QString &channelName,
                                                bool hostOn);
     static MessagePtr makeDeletionMessageFromIRC(
@@ -191,8 +193,6 @@ public:
         QString prefix, const std::vector<HelixModerator> &users,
         Channel *channel, MessageFlags extraFlags = {});
 
-    static MessagePtr buildHypeChatMessage(Communi::IrcPrivateMessage *message);
-
     static std::pair<MessagePtrMut, HighlightAlert> makeIrcMessage(
         Channel *channel, const Communi::IrcMessage *ircMessage,
         const MessageParseArgs &args, QString content,
@@ -203,9 +203,10 @@ public:
     static MessagePtrMut makeSystemMessageWithUser(
         const QString &text, const QString &loginName,
         const QString &displayName, const MessageColor &userColor,
-        const QTime &time, const Communi::IrcMessage &ircMessage);
+        const QTime &time, const Communi::IrcMessage &ircMessage,
+        TwitchChannel *channel);
 
-    static MessagePtrMut makeSubgiftMessage(const QVariantMap &tags,
+    static MessagePtrMut makeSubgiftMessage(Communi::TagsRef tags,
                                             const QTime &time,
                                             TwitchChannel *channel);
 
@@ -213,6 +214,7 @@ public:
 
     static MessagePtrMut makeClearChatMessage(const QDateTime &now,
                                               const QString &actor,
+                                              const QString &channelName,
                                               uint32_t count = 1);
 
 private:
@@ -239,37 +241,44 @@ private:
     std::unique_ptr<MessageElement> releaseBack();
 
     void parse();
-    void parseUsernameColor(const QVariantMap &tags, const QString &userID);
+    void parseUsernameColor(Communi::TagsRef tags, const QString &userID);
     void parseUsername(const Communi::IrcMessage *ircMessage,
                        TwitchChannel *twitchChannel,
                        bool trimSubscriberUsername);
-    void parseMessageID(const QVariantMap &tags);
-    void parseMessageTags(const QVariantMap &tags);
+    void parseMessageID(Communi::TagsRef tags);
+    void appendOrEmplaceTextWithUser(
+        TwitchChannel *channel, const QString &userID,
+        const QString &userLoginName, const QString &userDisplayName,
+        const QString &userColorString, const QString &messageText,
+        MessageElementFlags mentionFlags, MessageElementFlags textFlags);
+    /// Parses most of the message flags based on the given tags
+    void parseMessageTags(Communi::TagsRef tags, TwitchChannel *channel,
+                          bool hasContent);
 
-    static QString parseRoomID(const QVariantMap &tags,
+    static QString parseRoomID(Communi::TagsRef tags,
                                TwitchChannel *twitchChannel);
 
-    TwitchChannel *parseSharedChatInfo(const QVariantMap &tags,
+    TwitchChannel *parseSharedChatInfo(Communi::TagsRef tags,
                                        TwitchChannel *twitchChannel);
 
-    void parseThread(const QVariantMap &tags, const Channel *channel,
+    void parseThread(Communi::TagsRef tags, const Channel *channel,
                      const std::shared_ptr<MessageThread> &thread,
                      const MessagePtr &parent);
 
-    HighlightAlert parseHighlights(const QVariantMap &tags,
+    HighlightAlert parseHighlights(Communi::TagsRef tags,
                                    const QString &originalMessage,
                                    const MessageParseArgs &args);
 
     void appendChannelName(const Channel *channel);
     void appendPronoun(Channel *channel, bool historical);
-    void appendUsername(const QVariantMap &tags, const MessageParseArgs &args);
+    void appendUsername(Communi::TagsRef tags, const MessageParseArgs &args);
 
     void addWords(const QStringList &words,
                   const std::vector<TwitchEmoteOccurrence> &twitchEmotes,
                   const std::vector<TwitchGifOccurrence> &twitchGifs,
                   TextState &state, int gigantifiedEmoteStart = -1);
 
-    void appendTwitchBadges(const QVariantMap &tags,
+    void appendTwitchBadges(Communi::TagsRef tags,
                             TwitchChannel *twitchChannel);
     void appendChatterinoBadges(const QString &userID);
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);

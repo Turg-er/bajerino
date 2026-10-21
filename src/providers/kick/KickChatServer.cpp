@@ -396,7 +396,9 @@ void KickChatServer::onChatroomClear(KickChannel *channel,
     recording::publicEvent(*channel,
                            {{"kind", "chatCleared"}, {"text", "Chat cleared"}});
     auto now = QDateTime::currentDateTime();
-    auto clear = KickMessageBuilder::makeClearChatMessage(now, {});
+    auto clear =
+        KickMessageBuilder::makeClearChatMessage(now, {}, channel->getName());
+    clear->platform = MessagePlatform::Kick;
     channel->disableAllMessages();
     channel->addOrReplaceClearChat(clear, now);
 }

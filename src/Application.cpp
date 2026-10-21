@@ -409,6 +409,13 @@ void Application::initialize(Settings &settings, const Modes &modes,
     this->initialized = true;
 }
 
+void Application::connect()
+{
+    assert(this->initialized);
+
+    this->twitch->connect();
+}
+
 int Application::run()
 {
     QTimer::singleShot(0, this->chatRecordings.get(), [this] {
@@ -416,28 +423,12 @@ int Application::run()
     });
     assert(this->initialized);
 
-    this->twitch->connect();
+    this->connect();
 
     if (!this->args_.isFramelessEmbed)
     {
         this->windows->getMainWindow().show();
     }
-
-    getSettings()->enableBTTVChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllBTTVChannelEmotes();
-        },
-        false);
-    getSettings()->enableFFZChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllFFZChannelEmotes();
-        },
-        false);
-    getSettings()->enableSevenTVChannelEmotes.connect(
-        [this] {
-            this->twitch->reloadAllSevenTVChannelEmotes();
-        },
-        false);
 
     QTimer::singleShot(2500, qApp, [] {
         getMoltorinoPresence()->startHeartbeat();

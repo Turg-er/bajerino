@@ -1302,8 +1302,13 @@ QRegion ImageLayoutElement::paintAnimatedImage(
     return {};
 }
 
-int ImageLayoutElement::getMouseOverIndex(QPointF /*abs*/) const
+int ImageLayoutElement::getMouseOverIndex(QPointF abs) const
 {
+    if (abs.x() >= this->getRect().center().x())
+    {
+        return static_cast<int>(this->getSelectionIndexCount());
+    }
+
     return 0;
 }
 
@@ -1867,13 +1872,16 @@ QRegion LayeredImageLayoutElement::paintModified(
     painter.setWorldTransform(transform, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-    std::vector<AnimatedShadowLayer> shadowLayers;
-    shadowLayers.reserve(frames.size());
-    for (const auto &[pixmap, target] : frames)
+    if (paintShadow)
     {
-        shadowLayers.push_back({&pixmap, target});
+        std::vector<AnimatedShadowLayer> shadowLayers;
+        shadowLayers.reserve(frames.size());
+        for (const auto &[pixmap, target] : frames)
+        {
+            shadowLayers.push_back({&pixmap, target});
+        }
+        (void)paintAnimatedShadow(painter, shadowLayers, shadow);
     }
-    (void)paintAnimatedShadow(painter, shadowLayers, shadow);
     for (const auto &[pixmap, target] : frames)
     {
         const auto snapped = snapRectToDevicePixels(target, painter);
@@ -1895,8 +1903,13 @@ QRegion LayeredImageLayoutElement::paintModified(
     return paintedRegion;
 }
 
-int LayeredImageLayoutElement::getMouseOverIndex(QPointF /*abs*/) const
+int LayeredImageLayoutElement::getMouseOverIndex(QPointF abs) const
 {
+    if (abs.x() >= this->getRect().center().x())
+    {
+        return static_cast<int>(this->getSelectionIndexCount());
+    }
+
     return 0;
 }
 
@@ -2249,11 +2262,14 @@ QRegion TextLayoutElement::paintMatchTextPaints(
     for (auto &highlight : *this->fragmentHighlights_)
     {
         auto paint = highlight.textPaint;
-        if (!paint && !highlight.match.paintID.isEmpty())
+        if (!highlight.match.paintID.isEmpty())
         {
-            paint = getApp()->getSeventvPaints()->getPaintByID(
-                highlight.match.paintID);
-            highlight.textPaint = paint;
+            if (const auto current = getApp()->getSeventvPaints()->getPaintByID(
+                    highlight.match.paintID))
+            {
+                paint = current;
+                highlight.textPaint = current;
+            }
         }
         if (!paint || paint->animated() != animated)
         {
@@ -2552,8 +2568,13 @@ QRegion TextIconLayoutElement::paintAnimated(QPainter & /*painter*/,
     return {};
 }
 
-int TextIconLayoutElement::getMouseOverIndex(QPointF /*abs*/) const
+int TextIconLayoutElement::getMouseOverIndex(QPointF abs) const
 {
+    if (abs.x() >= this->getRect().center().x())
+    {
+        return static_cast<int>(this->getSelectionIndexCount());
+    }
+
     return 0;
 }
 
@@ -2695,8 +2716,13 @@ QRegion ReplyCurveLayoutElement::paintAnimated(QPainter & /*painter*/,
     return {};
 }
 
-int ReplyCurveLayoutElement::getMouseOverIndex(QPointF /*abs*/) const
+int ReplyCurveLayoutElement::getMouseOverIndex(QPointF abs) const
 {
+    if (abs.x() >= this->getRect().center().x())
+    {
+        return static_cast<int>(this->getSelectionIndexCount());
+    }
+
     return 0;
 }
 

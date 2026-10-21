@@ -7,8 +7,11 @@
 #    include "util/WindowsHelper.hpp"
 #elif defined(Q_OS_UNIX) and !defined(Q_OS_DARWIN)
 #    include "util/XDGHelper.hpp"
+#elif defined(Q_OS_DARWIN)
+#    include "util/MacOsHelpers.h"
 #endif
 
+#include <QDir>
 #include <QFileInfo>
 #include <QProcess>
 #include <QVariant>
@@ -55,6 +58,8 @@ QString getDefaultBrowserExecutable()
     }();
 
     return defaultBrowser;
+#elif defined(Q_OS_DARWIN)
+    return getMacOSDefaultBrowserPath();
 #else
     return {};
 #endif
@@ -70,17 +75,23 @@ QString getPrivateSwitch(const QString &browserExecutable)
         {"librewolf", "-private-window"},
         {"waterfox", "-private-window"},
         {"icecat", "-private-window"},
+        {"zen", "-private-window"},
         {"chrome", "-incognito"},
+        {"google chrome", "-incognito"},
+        {"google chrome beta", "-incognito"},
+        {"google chrome canary", "-incognito"},
         {"google-chrome-stable", "-incognito"},
         {"vivaldi", "-incognito"},
-        {"opera", "-newprivatetab"},
+        {"opera", "-incognito"},
         {"msedge", "-inprivate"},
         {"chromium", "-incognito"},
         {"brave", "-incognito"},
+        {"brave browser", "-incognito"},
+        {"microsoft edge", "-inprivate"},
     };
 
     auto lowercasedBrowserExecutable =
-        QFileInfo(browserExecutable).baseName().toLower();
+        QFileInfo(QDir::cleanPath(browserExecutable)).baseName().toLower();
 
 #ifdef Q_OS_WINDOWS
     if (lowercasedBrowserExecutable.endsWith(".exe"))

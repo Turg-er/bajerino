@@ -9,6 +9,7 @@
 #    include "common/websockets/WebSocketPool.hpp"
 #    include "controllers/commands/CommandContext.hpp"
 #    include "controllers/plugins/Plugin.hpp"
+#    include "util/FunctionRef.hpp"
 
 #    include <boost/signals2/signal.hpp>
 #    include <pajlada/signals/signal.hpp>
@@ -16,6 +17,7 @@
 #    include <QFileInfo>
 #    include <QJsonArray>
 #    include <QJsonObject>
+#    include <QObject>
 #    include <QString>
 #    include <sol/forward.hpp>
 
@@ -30,7 +32,7 @@ namespace chatterino {
 class Settings;
 class Paths;
 
-class PluginController
+class PluginController : public QObject
 {
     const Paths &paths;
 
@@ -44,7 +46,11 @@ public:
 
     Plugin *getPluginByStatePtr(lua_State *L);
 
-    const std::map<QString, std::unique_ptr<Plugin>> &plugins() const;
+    /// Run `cb` on every loaded plugin, including those with load errors
+    void forEachPlugin(
+        FunctionRef<void(const std::unique_ptr<Plugin> &)>) const;
+
+    const std::map<QString, AnyPlugin> &allPlugins() const;
 
     bool reload(const QString &id);
 
@@ -70,12 +76,17 @@ private:
 
     static void loadChatterinoLib(lua_State *l);
     bool tryLoadFromDir(const QDir &pluginDir);
-    std::map<QString, std::unique_ptr<Plugin>> plugins_;
+
+    void queueChangeNotification();
+
+    std::map<QString, AnyPlugin> plugins_;
     WebSocketPool webSocketPool_;
 
     std::vector<
         std::pair<std::string, std::function<sol::object(sol::state_view)>>>
         loaders_;
+
+    bool changeNotificationQueued = false;
 
     friend class PluginControllerAccess;
 };

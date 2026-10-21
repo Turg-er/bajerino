@@ -2698,13 +2698,15 @@ void HighlightingPage::openMatchAppearanceDialog(const QModelIndex &clicked,
         !paintAllowedData.isValid() || paintAllowedData.toBool();
 
     const QPersistentModelIndex target(clicked);
+    const QPointer<EditableModelView> guardedView(view);
     QPointer<MatchAppearanceDialog> dialog =
         new MatchAppearanceDialog(this, color, style, paintID, allowPaint);
     const auto cleanup = qScopeGuard([dialog] {
         delete dialog;
     });
     const auto result = dialog->exec();
-    if (!dialog || result != QDialog::Accepted || !target.isValid())
+    if (!dialog || !guardedView || result != QDialog::Accepted ||
+        !target.isValid())
     {
         return;
     }
@@ -2741,13 +2743,15 @@ void HighlightingPage::openChannelScopeDialog(const QModelIndex &clicked,
                    Qt::DisplayRole)
             .toString();
     const QPersistentModelIndex target(clicked);
+    const QPointer<EditableModelView> guardedView(view);
     QPointer<ChannelScopeDialog> dialog =
         new ChannelScopeDialog(this, ruleName, scope);
     const auto cleanup = qScopeGuard([dialog] {
         delete dialog;
     });
     const auto result = dialog->exec();
-    if (!dialog || result != QDialog::Accepted || !target.isValid())
+    if (!dialog || !guardedView || result != QDialog::Accepted ||
+        !target.isValid())
     {
         return;
     }

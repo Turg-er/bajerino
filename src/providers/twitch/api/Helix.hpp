@@ -35,6 +35,16 @@ using ResultCallback = std::function<void(T...)>;
 
 class CancellationToken;
 
+enum UsernameDisplayMode : int;
+
+struct HelixMinimalUser {
+    QString id;
+    QString login;
+    QString displayName;
+
+    [[nodiscard]] QString formatted(UsernameDisplayMode mode) const;
+};
+
 struct HelixUser {
     QString id;
     QString login;
@@ -624,6 +634,21 @@ struct HelixPredictions {
     }
 };
 
+struct HelixSharedChatSession {
+    QStringList participantIds;
+
+    explicit HelixSharedChatSession(const QJsonObject &jsonObject)
+    {
+        const auto &participants = jsonObject.value("participants").toArray();
+        for (const auto p : participants)
+        {
+            const auto broadcasterId =
+                p.toObject().value("broadcaster_id").toString();
+            this->participantIds.push_back(broadcasterId);
+        }
+    }
+};
+
 struct HelixStartCommercialResponse {
 
     int length;
@@ -1083,6 +1108,20 @@ public:
         const QString &messageID, ResultCallback<> successCallback,
         FailureCallback<HelixPinMessageError, QString> failureCallback) = 0;
 
+    // https://dev.twitch.tv/docs/api/reference/#get-shared-chat-session
+    virtual void getSharedChatSession(
+        QString broadcasterID,
+        ResultCallback<HelixSharedChatSession> successCallback,
+        FailureCallback<HelixGetSharedChatSessionError, QString>
+            failureCallback) = 0;
+
+    // https://dev.twitch.tv/docs/api/reference/#get-moderated-channels
+    virtual void getModeratedChannels(
+        QString userID,
+        ResultCallback<QSet</* logins */ QString>> successCallback,
+        FailureCallback<QString> failureCallback,
+        CancellationToken &&token) = 0;
+
     virtual void update(QString clientId, QString oauthToken) = 0;
 
 protected:
@@ -1428,6 +1467,19 @@ public:
         const QString &broadcasterID, const QString &moderatorID,
         const QString &messageID, ResultCallback<> successCallback,
         FailureCallback<HelixPinMessageError, QString> failureCallback) final;
+
+    // https://dev.twitch.tv/docs/api/reference/#get-shared-chat-session
+    void getSharedChatSession(
+        QString broadcasterID,
+        ResultCallback<HelixSharedChatSession> successCallback,
+        FailureCallback<HelixGetSharedChatSessionError, QString>
+            failureCallback) final;
+
+    void getModeratedChannels(
+        QString userID,
+        ResultCallback<QSet</* logins */ QString>> successCallback,
+        FailureCallback<QString> failureCallback,
+        CancellationToken &&token) final;
 
     void update(QString clientId, QString oauthToken) final;
 

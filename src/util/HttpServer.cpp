@@ -183,7 +183,7 @@ HttpServer::HttpServer(uint16_t port, QObject *parent)
     QObject::connect(this->server_, &QTcpServer::newConnection, this, [this] {
         while (auto *conn = this->server_->nextPendingConnection())
         {
-            if (this->findChildren<QTcpSocket *>().size() >= 8)
+            if (this->findChildren<QTcpSocket *>().size() > 8)
             {
                 conn->abort();
                 conn->deleteLater();

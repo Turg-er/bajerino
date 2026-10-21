@@ -8,6 +8,7 @@
 #include "messages/ImageSet.hpp"
 
 #include <boost/unordered/unordered_flat_map.hpp>
+#include <QStringList>
 
 #include <cstdint>
 #include <functional>
@@ -79,6 +80,7 @@ struct Emote {
     EmoteAuthor author;
 
     std::optional<EmoteName> baseName;
+    QStringList tags;
 
     uint32_t modifierFlags{};
     EmoteModifierPlacement modifierPlacement = EmoteModifierPlacement::None;

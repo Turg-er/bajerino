@@ -2,6 +2,7 @@
 
 #include "Application.hpp"
 #include "common/Literals.hpp"
+#include "messages/MessageElement.hpp"
 #include "messages/MessageThread.hpp"
 #include "providers/colors/ColorProvider.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
@@ -115,18 +116,6 @@ ScrollbarHighlight Message::getScrollBarHighlight() const
         };
     }
 
-    if (this->flags.has(MessageFlag::ElevatedMessage))
-    {
-        return {
-            ColorProvider::instance().color(
-                ColorType::ElevatedMessageHighlight),
-            ScrollbarHighlight::Default,
-            false,
-            false,
-            true,
-        };
-    }
-
     if (this->flags.has(MessageFlag::FirstMessage))
     {
         return {
@@ -170,6 +159,27 @@ ScrollbarHighlight Message::getScrollBarHighlight() const
     }
 
     return {};
+}
+
+QString Message::getHeaderText() const
+{
+    QStringList headerWords;
+    for (const auto &element : this->elements)
+    {
+        const auto flags = element->getFlags();
+        if (flags.has(MessageElementFlag::Text) &&
+            flags.hasAny(MessageElementFlag::AnnouncementHeader,
+                         MessageElementFlag::SubscriptionHeader,
+                         MessageElementFlag::WatchStreakHeader))
+        {
+            if (const auto *text =
+                    dynamic_cast<const TextElement *>(element.get()))
+            {
+                headerWords.append(text->words());
+            }
+        }
+    }
+    return headerWords.join(' ');
 }
 
 std::shared_ptr<Message> Message::clone() const

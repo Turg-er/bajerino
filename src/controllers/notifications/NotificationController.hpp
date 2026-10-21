@@ -42,6 +42,7 @@ public:
 
     struct NotificationPayload {
         QString channelId;
+        QString streamId;
         QString channelName;
         QString displayName;
         QString title;
@@ -52,7 +53,7 @@ public:
         bool isDuplicateBroadcast = false;
     };
 
-    void notifyChannelLive(const NotificationPayload &payload) const;
+    void notifyChannelLive(const NotificationPayload &payload);
 
     void notifyTwitchChannelOffline(const QString &id) const;
 
@@ -72,6 +73,9 @@ private:
     };
 
     std::map<QString, FakeChannel, QCompareCaseInsensitive> fakeChannels_;
+
+    /// Maps channel IDs to their most recently notified stream IDs
+    std::map<QString, QString> lastNotifiedStreamIds_;
 
     QTimer liveStatusTimer_;
 

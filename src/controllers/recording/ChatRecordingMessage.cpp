@@ -346,7 +346,9 @@ QJsonObject normalizeTwitch(const Channel &channel, const Message &message,
             metadata.insert(key, tags.value(key).toString());
         }
     }
-    auto record = normalizeMessage(channel, message, originalText, metadata);
+    const auto &text =
+        originalText.isEmpty() ? message.messageText : originalText;
+    auto record = normalizeMessage(channel, message, text, metadata);
     if (record.isEmpty())
     {
         return record;
@@ -391,7 +393,7 @@ QJsonObject normalizeTwitch(const Channel &channel, const Message &message,
     QHash<const Emote *, QString> emoteIds;
     std::vector<QJsonObject> spans;
 
-    for (const auto &emote : parseTwitchEmotes(tags, originalText, 0))
+    for (const auto &emote : parseTwitchEmotes(Communi::TagsRef{tags}, text, 0))
     {
         if (emote.ptr)
         {
@@ -445,6 +447,15 @@ QJsonObject normalizeTwitch(const Channel &channel, const Message &message,
     std::ranges::sort(spans, [](const auto &a, const auto &b) {
         return a.value("start").toInt() < b.value("start").toInt();
     });
+    if (const auto headerText = message.getHeaderText(); !headerText.isEmpty())
+    {
+        const auto prefix = headerText + '\n';
+        record.insert("text", prefix + text);
+        for (auto &span : spans)
+        {
+            span.insert("start", span.value("start").toInt() + prefix.size());
+        }
+    }
     QJsonArray ordered;
     for (const auto &span : spans)
     {

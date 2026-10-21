@@ -262,6 +262,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         false, "Choose which tabs are visible in the notebook");
 
     SettingWidget::dropdown("Tab style", s.tabStyle)->addTo(layout);
+    SettingWidget::checkbox("Extend wrapped tabs", s.growWrappedNotebookLines)
+        ->setTooltip("When horizontal tabs are wrapped, extend the line for "
+                     "the whole width of the window.")
+        ->addTo(layout);
 
     layout.addWidget(new FontSettingWidget(s.chatFontFamily, s.chatFontSize,
                                            s.chatFontWeight),
@@ -586,6 +590,21 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                                    : args.value;
         },
         true, "a = am/pm, zzz = milliseconds");
+
+    SettingWidget::checkbox("Show header timestamps", s.showHeaderTimestamps)
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Show announcement header",
+                            s.showAnnouncementHeader)
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Show subscription header",
+                            s.showSubscriptionHeader)
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Show watch streak header", s.showWatchStreakHeader)
+        ->addTo(layout);
+
     layout.addDropdown<int>(
         "Limit message height",
         {"Never", "2 lines", "3 lines", "4 lines", "5 lines"},
@@ -1767,6 +1786,15 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "these mentions will never be stripped.")
         ->addTo(layout);
 
+    SettingWidget::dropdown("Twitch read connection mode (requires restart)",
+                            s.twitchReadConnectionMode)
+        ->setTooltip(
+            "Authenticated joins as your logged in user. Anonymous "
+            "reads without joining as that account. Anonymous (parallel) "
+            "uses multiple connections to join many channels faster. "
+            "Sending messages still uses your logged in account.")
+        ->addTo(layout);
+
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
         ->setTooltip("'Helix' will use Twitch's Helix API to send messages. "
                      "'IRC' will use IRC to send messages.")
@@ -1781,6 +1809,14 @@ void GeneralPage::initLayout(GeneralPageView &layout)
                             s.disableTabRenamingOnClick)
         ->setTooltip("Prevents the rename dialog from opening when a tab is "
                      "double-clicked")
+        ->addTo(layout);
+
+    SettingWidget::intInput(
+        "Shared chat session status refresh interval",
+        s.sharedChatSessionRefreshInterval,
+        {.min = 5, .max = 999, .singleStep = 1, .suffix = "s"})
+        ->setTooltip("How often Moltorino polls the Twitch API for the "
+                     "shared chat session status.")
         ->addTo(layout);
 
     layout.addStretch();

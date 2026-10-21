@@ -19,10 +19,16 @@ class Window;
 class QuickSwitcherPopup : public BasePopup
 {
 public:
-
+    /**
+     * @brief   Construct a new QuickSwitcherPopup.
+     *
+     * @param   parent  Parent window of the popup. The popup will be placed
+     *                  in the center of the window.
+     */
     explicit QuickSwitcherPopup(Window *parent);
 
 protected:
+    void showEvent(QShowEvent *event) override;
     void themeChangedEvent() override;
 
 public Q_SLOTS:
@@ -43,4 +49,4 @@ private:
     void initWidgets();
 };
 
-}
+}  // namespace chatterino

@@ -21,7 +21,6 @@ enum class ColorType {
     RedeemedHighlight,
     WatchStreak,
     FirstMessageHighlight,
-    ElevatedMessageHighlight,
     ThreadMessageHighlight,
 
     SelfMessageHighlight,

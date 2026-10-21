@@ -30,6 +30,7 @@
 #include <vector>
 
 class QMenu;
+class QMimeData;
 
 namespace chatterino {
 
@@ -388,6 +389,9 @@ protected:
     bool lastHistorySearchBackwards_ = false;
     bool lastHistorySearchLoop_ = false;
     int prevIndexBeforeSearch_ = 0;
+
+private:
+    void handleImagePaste(const QMimeData *source);
 
 private Q_SLOTS:
     void editTextChanged();

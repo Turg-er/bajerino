@@ -561,17 +561,8 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
 
     if (ctx.preferences.showHighlights)
     {
-        if (this->message_->flags.has(MessageFlag::ElevatedMessage) &&
-            ctx.preferences.enableElevatedMessageHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::ElevatedMessageHighlight),
-                ctx.highlightOpacityAdjustment);
-        }
-
-        else if (this->message_->flags.has(MessageFlag::FirstMessage) &&
-                 ctx.preferences.enableFirstMessageHighlight)
+        if (this->message_->flags.has(MessageFlag::FirstMessage) &&
+            ctx.preferences.enableFirstMessageHighlight)
         {
             backgroundColor = blendThemeHighlight(
                 backgroundColor,

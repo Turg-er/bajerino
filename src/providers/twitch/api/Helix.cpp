@@ -10,6 +10,7 @@
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/QLogging.hpp"
+#include "singletons/Settings.hpp"
 #include "util/CancellationToken.hpp"
 #include "util/QMagicEnum.hpp"
 
@@ -28,6 +29,30 @@ constexpr auto NUM_CHATTERS_TO_FETCH = 1000;
 }
 
 namespace chatterino {
+
+QString HelixMinimalUser::formatted(UsernameDisplayMode mode) const
+{
+    const bool hasLocalizedName =
+        this->displayName.compare(this->login, Qt::CaseInsensitive) != 0;
+
+    switch (mode)
+    {
+        case UsernameDisplayMode::Username:
+            return this->login;
+
+        case UsernameDisplayMode::LocalizedName:
+            return hasLocalizedName ? this->displayName : this->login;
+
+        default:
+        case UsernameDisplayMode::UsernameAndLocalizedName:
+            if (hasLocalizedName)
+            {
+                return this->login + QStringLiteral(" (") + this->displayName +
+                       QStringLiteral(")");
+            }
+            return this->login;
+    }
+}
 
 using namespace literals;
 
@@ -3807,6 +3832,114 @@ void Helix::createEventSubSubscription(
             }
         })
         .execute();
+}
+
+void Helix::getSharedChatSession(
+    QString broadcasterID,
+    ResultCallback<HelixSharedChatSession> successCallback,
+    FailureCallback<HelixGetSharedChatSessionError, QString> failureCallback)
+{
+    using Error = HelixGetSharedChatSessionError;
+
+    this->makeGet("shared_chat/session", {{u"broadcaster_id"_s, broadcasterID}})
+        .onSuccess([successCallback](const NetworkResult &result) {
+            if (result.status() != 200)
+            {
+                qCWarning(chatterinoTwitch)
+                    << "Success result for getting shared chat session was "
+                    << result.formatError() << " but we expected it to be 200";
+            }
+
+            const auto response = result.parseJson();
+            const auto data = response["data"_L1].toArray();
+            successCallback(HelixSharedChatSession(
+                data.isEmpty() ? QJsonObject{} : data.first().toObject()));
+        })
+        .onError([failureCallback](const NetworkResult &result) -> void {
+            if (!result.status())
+            {
+                failureCallback(Error::Unknown, result.formatError());
+                return;
+            }
+
+            const auto obj = result.parseJson();
+            auto message = obj["message"].toString();
+
+            switch (*result.status())
+            {
+                case 400: {
+                    failureCallback(Error::InvalidBroadcasterId, message);
+                }
+                break;
+
+                case 401: {
+                    if (message.startsWith("Missing scope",
+                                           Qt::CaseInsensitive))
+                    {
+                        failureCallback(Error::UserMissingScope, message);
+                    }
+                    else
+                    {
+                        failureCallback(Error::UserNotAuthorized, message);
+                    }
+                }
+                break;
+
+                case 500: {
+                    if (message.isEmpty())
+                    {
+                        failureCallback(Error::Unknown,
+                                        "Twitch internal server error");
+                    }
+                    else
+                    {
+                        failureCallback(Error::Unknown, message);
+                    }
+                }
+                break;
+
+                default: {
+                    qCWarning(chatterinoTwitch)
+                        << "Helix get shared chat session, unhandled error "
+                           "data:"
+                        << result.formatError() << result.getData() << obj;
+                    failureCallback(Error::Forwarded, message);
+                }
+            }
+        })
+        .execute();
+}
+
+void Helix::getModeratedChannels(QString userID,
+                                 ResultCallback<QSet<QString>> successCallback,
+                                 FailureCallback<QString> failureCallback,
+                                 CancellationToken &&token)
+{
+    this->paginate(
+        "moderation/channels", {{"first", "100"}, {"user_id", userID}},
+        [cb = std::move(successCallback), ids = QSet<QString>{}](
+            const QJsonObject &page, HelixPaginationState state) mutable {
+            const auto data = page["data"_L1].toArray();
+            for (const auto user : data)
+            {
+                auto login =
+                    user.toObject().value("broadcaster_login").toString();
+                if (!login.isEmpty())
+                {
+                    ids.insert(std::move(login));
+                }
+            }
+
+            if (state.done)
+            {
+                cb(std::move(ids));
+            }
+            return true;
+        },
+        [cb = std::move(failureCallback)](const NetworkResult &res) {
+            cb(res.formatError());
+        },
+        std::move(token));
 }
 
 QDebug &operator<<(QDebug &dbg,

@@ -61,6 +61,8 @@ set(SOURCE_FILES
         common/network/NetworkPrivate.hpp
         common/network/NetworkRequest.cpp
         common/network/NetworkRequest.hpp
+        common/network/RetryingGet.cpp
+        common/network/RetryingGet.hpp
         common/network/NetworkResult.cpp
         common/network/NetworkResult.hpp
         common/network/NetworkTask.cpp
@@ -848,6 +850,8 @@ set(SOURCE_FILES
         util/SettingsTransfer.hpp
         util/SharedPtrElementLess.hpp
         util/SignalListener.hpp
+        util/TabHistory.cpp
+        util/TabHistory.hpp
         util/StreamLink.cpp
         util/StreamLink.hpp
         util/ThreadGuard.hpp

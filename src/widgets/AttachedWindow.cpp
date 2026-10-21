@@ -177,11 +177,13 @@ void AttachedWindow::attachToHwnd(void *_attachedPtr)
 
     this->attached_ = true;
 
+    //auto hwnd = HWND(this->winId());
     auto attached = HWND(_attachedPtr);
 
+    // FAST TIMER - used to resize/reorder windows
     this->timer_.setInterval(1);
     QObject::connect(&this->timer_, &QTimer::timeout, [this, attached] {
-
+        // check process id
         if (!this->validProcessName_)
         {
             DWORD processId;
@@ -198,9 +200,10 @@ void AttachedWindow::attachToHwnd(void *_attachedPtr)
 
             if (!getSettings()->attachExtensionToAnyProcess)
             {
-
+                // We don't attach to non-browser processes by default.
                 if (!qfilename.endsWith("chrome.exe") &&
                     !qfilename.endsWith("firefox.exe") &&
+                    !qfilename.endsWith("zen.exe") &&
                     !qfilename.endsWith("vivaldi.exe") &&
                     !qfilename.endsWith("opera.exe") &&
                     !qfilename.endsWith("msedge.exe") &&
@@ -222,6 +225,7 @@ void AttachedWindow::attachToHwnd(void *_attachedPtr)
 
     this->timer_.start();
 
+    // SLOW TIMER - used to hide taskbar behind fullscreen window
     this->slowTimer_.setInterval(2000);
     QObject::connect(&this->slowTimer_, &QTimer::timeout, [this, attached] {
         if (this->fullscreen_)

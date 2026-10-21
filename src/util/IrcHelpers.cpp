@@ -12,29 +12,29 @@ using namespace chatterino;
 
 QDateTime calculateMessageTimeBase(const Communi::IrcMessage *message)
 {
-
-    if (message->tags().contains("historical"))
+    if (message->tags().has("historical"))
     {
         bool customReceived = false;
-        auto ts =
-            message->tags().value("rm-received-ts").toLongLong(&customReceived);
+        auto ts = message->tags()
+                      .getOrEmpty("rm-received-ts")
+                      .toLongLong(&customReceived);
         if (!customReceived)
         {
-            ts = message->tags().value("tmi-sent-ts").toLongLong();
+            ts = message->tags().getOrEmpty("tmi-sent-ts").toLongLong();
         }
 
         return QDateTime::fromMSecsSinceEpoch(ts);
     }
 
-    if (message->tags().contains("tmi-sent-ts"))
+    if (message->tags().has("tmi-sent-ts"))
     {
-        auto ts = message->tags().value("tmi-sent-ts").toLongLong();
+        auto ts = message->tags().getOrEmpty("tmi-sent-ts").toLongLong();
         return QDateTime::fromMSecsSinceEpoch(ts);
     }
 
-    if (message->tags().contains("time"))
+    if (message->tags().has("time"))
     {
-        QString timedate = message->tags().value("time").toString();
+        QString timedate = message->tags().getOrEmpty("time");
 
         auto date = QDateTime::fromString(timedate, Qt::ISODate);
         date.setTimeZone(QTimeZone::utc());

@@ -18,6 +18,7 @@
 #include "singletons/Settings.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/DebugCount.hpp"
+#include "util/Helpers.hpp"
 #include "util/MemoryReclaimer.hpp"
 #include "util/PostToThread.hpp"
 
@@ -46,6 +47,31 @@ constexpr int64_t IMAGE_POOL_MAX_BYTES = 256LL * 1024 * 1024;
 constexpr int64_t IMAGE_POOL_TARGET_BYTES = 192LL * 1024 * 1024;
 constexpr auto IMAGE_POOL_ACTIVE_IMAGE_GRACE = std::chrono::seconds(5);
 constexpr auto STREAMING_GIF_RECENT_PAINT = std::chrono::seconds(2);
+
+namespace {
+
+std::pair<QSize, bool> limitedAutoScaleSize(
+    QSize original, std::optional<uint16_t> optAutoScale)
+{
+    if (!optAutoScale)
+    {
+        return {original, false};
+    }
+    // 2x ought to be enough for everyone.
+    int maxAutoScale = *optAutoScale * 2;
+    int minDim = std::max(std::min(original.width(), original.height()), 1);
+    if (minDim <= maxAutoScale)
+    {
+        return {original, false};
+    }
+    return {
+        original.scaled({maxAutoScale, maxAutoScale},
+                        Qt::KeepAspectRatioByExpanding),
+        true,
+    };
+}
+
+}  // namespace
 
 namespace chatterino::detail {
 
@@ -329,7 +355,7 @@ std::optional<QPixmap> Frames::first() const
 
 QList<Frame> readFrames(QImageReader &reader, const Url &url,
                         bool firstFrameOnly, int maxFrameDimension,
-                        int minimumFrameDuration)
+                        int minimumFrameDuration, std::optional<QSize> rescale)
 {
     QList<Frame> frames;
     const auto imageCount = firstFrameOnly ? 1 : reader.imageCount();
@@ -355,6 +381,15 @@ QList<Frame> readFrames(QImageReader &reader, const Url &url,
                 duration = 100;
             }
             duration = std::max(20, duration);
+
+            if (rescale)
+            {
+                assert(!isGuiThread());
+                // We're not on the main thread - put some effort into scaling.
+                pixmap = pixmap.scaled(*rescale, Qt::IgnoreAspectRatio,
+                                       Qt::SmoothTransformation);
+            }
+
             if (!frames.empty() && duration < minimumFrameDuration &&
                 frames.back().duration < minimumFrameDuration &&
                 !(index == imageCount - 1 && frames.size() == 1))
@@ -418,7 +453,8 @@ void assignFrames(std::weak_ptr<Image> weak, QList<Frame> parsed,
                 auto actualSize = firstFrame->size();
                 shared->scale_ =
                     static_cast<qreal>(*shared->autoScale_) /
-                    std::max({actualSize.width(), actualSize.height(), 1});
+                    std::max(std::min(actualSize.width(), actualSize.height()),
+                             1);
             }
         }
         if (shared->emotePicker_)
@@ -1212,7 +1248,7 @@ void Image::failStreamingGif(QString reason, std::uint64_t loadGeneration)
 
 void Image::initializeStreamingGif(QByteArray data,
                                    std::uint64_t loadGeneration,
-                                   bool gifFallback)
+                                   bool gifFallback, int frameDimension)
 {
     assertInGuiThread();
     if (this->loadGeneration_.load(std::memory_order_relaxed) != loadGeneration)
@@ -1221,7 +1257,8 @@ void Image::initializeStreamingGif(QByteArray data,
     }
     this->clearStreamingGif();
     this->streamingGifPlayer_ = std::make_unique<detail::StreamingGif>(
-        std::move(data), this->maxFrameDimension_,
+        std::move(data),
+        frameDimension > 0 ? frameDimension : this->maxFrameDimension_,
         this->emotePicker_ ? detail::PickerImageReservation::PER_IMAGE
                            : Image::maxBytesRam,
         this->firstFrameOnly_,
@@ -1254,8 +1291,9 @@ void Image::initializeStreamingGif(QByteArray data,
             if (image->autoScale_)
             {
                 image->scale_ = qreal(*image->autoScale_) /
-                                std::max(player.current().width(),
-                                         player.current().height());
+                                std::max(std::min(player.current().width(),
+                                                  player.current().height()),
+                                         1);
             }
             image->animated_ = !player.finished();
             image->failureReason_ = player.error();
@@ -1424,16 +1462,21 @@ void Image::actuallyLoad(bool gifFallback)
             return;
         }
 
-        auto decodedFrameSize = size;
+        auto [limitedSize, needsLimit] =
+            limitedAutoScaleSize(size, shared->autoScale_);
+        auto decodedFrameSize = limitedSize;
         if (shared->maxFrameDimension_ > 0 &&
-            (size.width() > shared->maxFrameDimension_ ||
-             size.height() > shared->maxFrameDimension_))
+            (decodedFrameSize.width() > shared->maxFrameDimension_ ||
+             decodedFrameSize.height() > shared->maxFrameDimension_))
         {
             decodedFrameSize.scale(shared->maxFrameDimension_,
                                    shared->maxFrameDimension_,
                                    Qt::KeepAspectRatio);
             decodedFrameSize.setWidth(std::max(1, decodedFrameSize.width()));
             decodedFrameSize.setHeight(std::max(1, decodedFrameSize.height()));
+        }
+        if (decodedFrameSize != size)
+        {
             reader.setScaledSize(decodedFrameSize);
         }
 
@@ -1472,14 +1515,17 @@ void Image::actuallyLoad(bool gifFallback)
             const auto scale =
                 shared->cacheScale_ * std::max(size.width(), size.height()) /
                 std::max(decodedFrameSize.width(), decodedFrameSize.height());
+            const auto frameDimension =
+                std::max(decodedFrameSize.width(), decodedFrameSize.height());
             postToGuiThread([weak, loadGeneration, reservation, scale,
+                             frameDimension,
                              data = result.getData()]() mutable {
                 if (auto image = weak.lock();
                     image && image->loadGeneration_.load() == loadGeneration)
                 {
                     image->scale_ = scale;
-                    image->initializeStreamingGif(std::move(data),
-                                                  loadGeneration);
+                    image->initializeStreamingGif(
+                        std::move(data), loadGeneration, false, frameDimension);
                 }
             });
             return;
@@ -1503,7 +1549,8 @@ void Image::actuallyLoad(bool gifFallback)
         auto parsed = detail::readFrames(
             reader, shared->url(), shared->firstFrameOnly_,
             shared->maxFrameDimension_,
-            shared->emotePicker_ && !shared->smoothPicker_ ? 67 : 0);
+            shared->emotePicker_ && !shared->smoothPicker_ ? 67 : 0,
+            makeConditionedOptional(needsLimit, decodedFrameSize));
         if (parsed.empty())
         {
             markEmpty(shared, "Failed to decode frames (" +

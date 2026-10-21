@@ -1626,7 +1626,7 @@ QString sendSpam(const CommandContext &ctx)
         ctx.channel->addSystemMessage(spamUsage());
         return "";
     }
-    if (message.size() > MAX_CHAT_MESSAGE_LENGTH)
+    if (codepointLength(message) > MAX_CHAT_MESSAGE_LENGTH)
     {
         ctx.channel->addSystemMessage(
             "That message is too long. Use 500 characters or fewer.");

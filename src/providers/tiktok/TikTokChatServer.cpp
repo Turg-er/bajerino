@@ -523,7 +523,7 @@ WebSocketHandle TikTokChatServer::connectRoom(
     const auto cookie = this->guestCookie();
     if (cookie.isEmpty())
     {
-        if (this->guestRetryAt_ <= now)
+        if (!this->bootstrapping_ && this->guestRetryAt_ <= now)
         {
             this->bootstrap();
         }

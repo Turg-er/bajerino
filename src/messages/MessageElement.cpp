@@ -328,12 +328,19 @@ void MessageElement::cloneFrom(const MessageElement &source)
     this->flags_ = source.flags_;
     this->trailingSpace = source.trailingSpace;
     this->hasTooltipOverride_ = source.hasTooltipOverride_;
+    this->exhaustiveFlags = source.exhaustiveFlags;
+}
+
+bool MessageElement::matchesFlags(MessageElementFlags contextFlags) const
+{
+    return this->exhaustiveFlags ? contextFlags.hasAll(this->getFlags())
+                                 : contextFlags.hasAny(this->getFlags());
 }
 
 QJsonObject MessageElement::toJson() const
 {
     const auto link = this->metadata_ ? this->metadata_->link : Link{};
-    return {
+    QJsonObject msg{
         {"trailingSpace"_L1, this->trailingSpace},
         {
             "link"_L1,
@@ -345,6 +352,13 @@ QJsonObject MessageElement::toJson() const
         {"tooltip"_L1, this->getTooltip()},
         {"flags"_L1, qmagicenum::enumFlagsName(this->flags_.value())},
     };
+
+    if (this->exhaustiveFlags)
+    {
+        msg["exhaustiveFlags"_L1] = this->exhaustiveFlags;
+    }
+
+    return msg;
 }
 
 // IMAGE
@@ -352,12 +366,13 @@ ImageElement::ImageElement(ImagePtr image, MessageElementFlags flags)
     : MessageElement(flags)
     , image_(std::move(image))
 {
+    assert(image_ != nullptr);
 }
 
 void ImageElement::addToContainer(MessageLayoutContainer &container,
                                   const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         container.addElement(new ImageLayoutElement(
             *this, this->image_, this->image_->size() * container.getScale()));
@@ -403,7 +418,7 @@ CircularImageElement::CircularImageElement(ImagePtr image, int padding,
 void CircularImageElement::addToContainer(MessageLayoutContainer &container,
                                           const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         if (this->getFlags().has(MessageElementFlag::ReplyButton))
         {
@@ -506,7 +521,7 @@ void EmoteElement::setStaticPreview(bool enabled)
 void EmoteElement::addToContainer(MessageLayoutContainer &container,
                                   const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasNone(this->getFlags()))
+    if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -868,7 +883,7 @@ void LayeredEmoteElement::addModifier(const EmotePtr &modifier)
 void LayeredEmoteElement::addToContainer(MessageLayoutContainer &container,
                                          const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         const bool tracksMessageText =
             getSettings()->highlightMatchedFragments && ctx.showHighlights() &&
@@ -1281,7 +1296,7 @@ void BadgeElement::addToContainer(MessageLayoutContainer &container,
     {
         const auto *settings = getSettings();
         const auto enabled =
-            ctx.flags.hasAny(elementFlags) &&
+            this->matchesFlags(ctx.flags) &&
             ((isHomiesSupporter &&
               settings->showBadgesHomiesSupporter.getValue()) ||
              (isHomiesCustom &&
@@ -1292,7 +1307,7 @@ void BadgeElement::addToContainer(MessageLayoutContainer &container,
             return;
         }
     }
-    else if (!ctx.flags.hasAny(elementFlags))
+    else if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -1576,6 +1591,10 @@ ChannelNameElement::ChannelNameElement(
 void ChannelNameElement::addToContainer(MessageLayoutContainer &container,
                                         const MessageLayoutContext &ctx)
 {
+    if (this->exhaustiveFlags && !this->matchesFlags(ctx.flags))
+    {
+        return;
+    }
     if (!ctx.flags.has(MessageElementFlag::ChannelAvatar))
     {
         TextElement::addToContainer(container, ctx);
@@ -1619,7 +1638,7 @@ AutoModActionElement::AutoModActionElement(AutoModActionKind kind,
 void AutoModActionElement::addToContainer(MessageLayoutContainer &container,
                                           const MessageLayoutContext &ctx)
 {
-    if (!ctx.flags.hasAny(this->getFlags()))
+    if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -1759,7 +1778,7 @@ void TextElement::addWordsToContainer(const QStringList &words,
         }
     }
 
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         if (this->getFlags().has(MessageElementFlag::RepeatedMessageCounter))
         {
@@ -1791,8 +1810,14 @@ void TextElement::addWordsToContainer(const QStringList &words,
             ctx.showHighlights() && ctx.message.highlightMatches &&
             (this->getFlags().has(MessageElementFlag::Text) ||
              ctx.trackMessageText) &&
-            !this->getFlags().has(MessageElementFlag::IgnoreExactMatch) &&
-            !this->getFlags().has(MessageElementFlag::RepliedMessage);
+            !this->getFlags().hasAny({
+                MessageElementFlag::IgnoreExactMatch,
+                MessageElementFlag::RepliedMessage,
+                MessageElementFlag::HeaderTimestamp,
+                MessageElementFlag::AnnouncementHeader,
+                MessageElementFlag::SubscriptionHeader,
+                MessageElementFlag::WatchStreakHeader,
+            });
 
         for (qsizetype wordIndex = 0; wordIndex < words.size(); ++wordIndex)
         {
@@ -2210,7 +2235,7 @@ PronounElement::PronounElement(QString username)
 void PronounElement::addToContainer(MessageLayoutContainer &container,
                                     const MessageLayoutContext &ctx)
 {
-    if (!ctx.flags.hasAny(this->getFlags()))
+    if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -2265,7 +2290,7 @@ void SingleLineTextElement::addToContainer(MessageLayoutContainer &container,
 {
     auto *app = getApp();
 
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         auto metrics =
             app->getFonts()->getFontMetrics(this->style_, container.getScale());
@@ -2523,9 +2548,9 @@ QStringList LinkElement::original() const
 
 MentionElement::MentionElement(const QString &displayName, QString loginName_,
                                MessageColor fallbackColor_,
-                               MessageColor userColor_)
-    : TextElement(displayName,
-                  {MessageElementFlag::Text, MessageElementFlag::Mention})
+                               MessageColor userColor_,
+                               MessageElementFlags messageFlags)
+    : TextElement(displayName, messageFlags)
     , fallbackColor_(fallbackColor_)
     , userColor_(userColor_)
     , userLoginName_(std::move(loginName_))
@@ -2634,9 +2659,13 @@ TimestampElement::TimestampElement()
 }
 
 TimestampElement::TimestampElement(QTime time)
-    : TextElement(TimestampElement::formatTime(time),
-                  MessageElementFlag::Timestamp, MessageColor::Timestamp,
-                  FontStyle::TimestampMedium)
+    : TimestampElement(time, MessageElementFlag::Timestamp)
+{
+}
+
+TimestampElement::TimestampElement(QTime time, MessageElementFlags flags)
+    : TextElement(TimestampElement::formatTime(time), flags,
+                  MessageColor::Timestamp, FontStyle::TimestampMedium)
     , time_(time)
 {
 }
@@ -2644,7 +2673,7 @@ TimestampElement::TimestampElement(QTime time)
 void TimestampElement::addToContainer(MessageLayoutContainer &container,
                                       const MessageLayoutContext &ctx)
 {
-    if (!ctx.flags.has(MessageElementFlag::Timestamp))
+    if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -2825,6 +2854,10 @@ TwitchModerationElement::~TwitchModerationElement() = default;
 void TwitchModerationElement::addToContainer(MessageLayoutContainer &container,
                                              const MessageLayoutContext &ctx)
 {
+    if (this->exhaustiveFlags && !this->matchesFlags(ctx.flags))
+    {
+        return;
+    }
     const bool inModerationMode =
         ctx.flags.has(MessageElementFlag::ModeratorTools);
     auto *settings = getSettings();
@@ -3031,7 +3064,7 @@ LinebreakElement::LinebreakElement(MessageElementFlags flags)
 void LinebreakElement::addToContainer(MessageLayoutContainer &container,
                                       const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         container.breakLine();
     }
@@ -3067,7 +3100,7 @@ ScalingImageElement::ScalingImageElement(ImageSet images,
 void ScalingImageElement::addToContainer(MessageLayoutContainer &container,
                                          const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         const auto &image =
             this->images_.getImageOrLoaded(container.getImageScale());
@@ -3121,7 +3154,7 @@ void ReplyCurveElement::addToContainer(MessageLayoutContainer &container,
     static const int radius = 6;         // Radius of the top left corner
     static const int margin = 2;         // Top/Left/Bottom margin
 
-    if (ctx.flags.hasAny(this->getFlags()))
+    if (this->matchesFlags(ctx.flags))
     {
         float scale = container.getScale();
         container.addElement(

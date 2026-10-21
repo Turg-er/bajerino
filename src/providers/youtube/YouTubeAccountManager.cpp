@@ -549,6 +549,7 @@ void YouTubeAccountManager::getAccessTokenForAccount(
     std::weak_ptr<YouTubeAccount> weakAccount = account;
     std::weak_ptr<char> lifetime = this->lifetimeToken_;
     auto refreshed = [this, lifetime, channelID, generation,
+                      rejectedRefreshToken = refreshToken,
                       weakAccount = std::move(weakAccount)](
                          Expected<YouTubeTokenResponse, YouTubeApiError>
                              result) mutable {
@@ -572,6 +573,7 @@ void YouTubeAccountManager::getAccessTokenForAccount(
             {
                 this->accountsRequiringReconnect_.insert(channelID);
                 account->clearTokens();
+                this->beginCredentialCleanup(channelID, rejectedRefreshToken);
                 this->userListUpdated.invoke();
                 this->finishTokenRefresh(
                     channelID, generation,
@@ -691,7 +693,9 @@ bool YouTubeAccountManager::requireReconnect(const QString &channelID,
     }
 
     this->accountsRequiringReconnect_.insert(channelID);
+    const auto refreshToken = account->refreshToken();
     account->clearTokens();
+    this->beginCredentialCleanup(channelID, refreshToken);
     this->userListUpdated.invoke();
     return true;
 }

@@ -368,7 +368,8 @@ auto formatOfflineTooltip(const TwitchChannel::StreamStatus &s)
         .arg(s.title.toHtmlEscaped());
 }
 
-auto formatTitle(const TwitchChannel::StreamStatus &s, Settings &settings)
+auto formatTitle(const TwitchChannel::StreamStatus &s, Settings &settings,
+                 const std::vector<HelixMinimalUser> &sharedChatParticipants)
 {
     auto title = QString();
 
@@ -383,7 +384,22 @@ auto formatTitle(const TwitchChannel::StreamStatus &s, Settings &settings)
     }
     else
     {
-        title += " (live)";
+        if (sharedChatParticipants.empty())
+        {
+            title += " (live)";
+        }
+        else
+        {
+            const auto mode = getSettings()->usernameDisplayMode.getEnum();
+            QStringList names;
+            for (const auto &p : sharedChatParticipants)
+            {
+                auto name = p.formatted(mode);
+                names.push_back(std::move(name));
+            }
+
+            title += " (live with " + names.join(", ") + ")";
+        }
     }
 
     // description
@@ -540,6 +556,12 @@ SplitHeader::SplitHeader(Split *split)
     getSettings()->headerGame.connect(_, this->managedConnections_);
     getSettings()->thumbnailSizeStream.connect(_, this->managedConnections_);
     getSettings()->headerUptime.connect(_, this->managedConnections_);
+    getSettings()->usernameDisplayMode.connect(
+        [this] {
+            this->updateChannelText();
+            this->updateSharedChatButton();
+        },
+        this->managedConnections_, false);
     getSettings()->showFollowButtonInSplitHeader.connect(
         [this](bool enabled, auto) {
             if (enabled)
@@ -1448,6 +1470,11 @@ void SplitHeader::handleChannelChanged()
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(selected.get()))
         {
             this->channelConnections_.managedConnect(
+                twitchChannel->sharedChatStatusChanged, [this](const auto &) {
+                    this->syncSharedChatParticipants();
+                    this->updateChannelText();
+                });
+            this->channelConnections_.managedConnect(
                 twitchChannel->streamStatusChanged, [this]() {
                     this->updateChannelText();
                 });
@@ -1552,6 +1579,7 @@ void SplitHeader::handleChannelChanged()
 
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
+        this->syncSharedChatParticipants();
         this->channelConnections_.managedConnect(
             twitchChannel->messageAppended,
             [this](const MessagePtr &message, const auto &) {
@@ -1665,6 +1693,44 @@ void SplitHeader::applySharedChatFilter()
     this->sharedChatFilterActive_ = true;
 }
 
+void SplitHeader::syncSharedChatParticipants()
+{
+    auto *channel =
+        dynamic_cast<TwitchChannel *>(this->split_->getChannel().get());
+    if (!channel)
+    {
+        return;
+    }
+    QSet<QString> ids{channel->roomId()};
+    auto *users = getApp()->getTwitchUsers();
+    for (const auto &participant : channel->getSharedChatSessionParticipants())
+    {
+        ids.insert(participant.id);
+        this->sharedChatSources_.insert(participant.id,
+                                        users->resolveID({participant.id}));
+    }
+    for (auto it = this->sharedChatSources_.begin();
+         it != this->sharedChatSources_.end();)
+    {
+        if (!ids.contains(it.key()))
+        {
+            this->hiddenSharedChatSources_.remove(it.key());
+            it = this->sharedChatSources_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    if (this->hiddenSharedChatSources_.size() ==
+        this->sharedChatSources_.size())
+    {
+        this->hiddenSharedChatSources_.clear();
+    }
+    this->applySharedChatFilter();
+    this->updateSharedChatButton();
+}
+
 void SplitHeader::updateSharedChatButton()
 {
     if (!getSettings()->showSharedChatChannelSelector ||
@@ -1694,7 +1760,9 @@ void SplitHeader::updateSharedChatButton()
             text = QStringLiteral("One chat");
             if (user && !user->displayName.trimmed().isEmpty())
             {
-                text = user->displayName.trimmed();
+                text = HelixMinimalUser{it.key(), user->name, user->displayName}
+                           .formatted(
+                               getSettings()->usernameDisplayMode.getEnum());
             }
             else if (user && !user->name.trimmed().isEmpty())
             {
@@ -1759,7 +1827,9 @@ std::unique_ptr<QMenu> SplitHeader::createSharedChatMenu()
         QString label;
         if (user && !user->displayName.trimmed().isEmpty())
         {
-            label = user->displayName.trimmed();
+            label =
+                HelixMinimalUser{it.key(), user->name, user->displayName}
+                    .formatted(getSettings()->usernameDisplayMode.getEnum());
         }
         else if (user && !user->name.trimmed().isEmpty())
         {
@@ -2043,7 +2113,10 @@ void SplitHeader::updateChannelText()
                 this->lastThumbnail_.restart();
             }
             this->tooltipText_ = formatTooltip(*streamStatus, this->thumbnail_);
-            title += formatTitle(*streamStatus, *getSettings());
+
+            title +=
+                formatTitle(*streamStatus, *getSettings(),
+                            twitchChannel->getSharedChatSessionParticipants());
         }
         else
         {
@@ -2088,7 +2161,7 @@ void SplitHeader::updateChannelText()
                 this->lastThumbnail_.restart();
             }
             this->tooltipText_ = formatTooltip(twitch, this->thumbnail_, true);
-            title += formatTitle(twitch, *getSettings());
+            title += formatTitle(twitch, *getSettings(), {});
         }
         else
         {

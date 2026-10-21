@@ -4429,12 +4429,14 @@ void UserInfoPopup::updateUserData()
             user.displayName, this->underlyingChannel_->getName()));
         if (getSettings()->showUsercardCreatedDate)
         {
-            this->ui_.createdDateLabel->setText(
-                TEXT_CREATED.arg(user.createdAt.section("T", 0, 0)));
+            auto createdAt =
+                QDateTime::fromString(user.createdAt, Qt::ISODateWithMs);
+            auto createdStr =
+                createdAt.toLocalTime().date().toString(Qt::ISODate);
+            this->ui_.createdDateLabel->setText(TEXT_CREATED.arg(createdStr));
             this->ui_.createdDateLabel->setToolTip(
-                formatLongFriendlyDuration(
-                    QDateTime::fromString(user.createdAt, Qt::ISODateWithMs),
-                    QDateTime::currentDateTimeUtc()) +
+                formatLongFriendlyDuration(createdAt,
+                                           QDateTime::currentDateTimeUtc()) +
                 u" ago"_s);
             this->ui_.createdDateLabel->setMouseTracking(true);
             this->ui_.createdDateLabel->setVisible(true);
@@ -5072,6 +5074,13 @@ void UserInfoPopup::updateKickUserData()
                                const KickPrivateChannelInfo &channel) {
         self->kickUserSlug_ = channel.slug;
 
+        const bool distinctSlug = channel.user.username.compare(
+                                      channel.slug, Qt::CaseInsensitive) != 0;
+        self->ui_.localizedNameLabel->setText(channel.slug);
+        self->ui_.localizedNameLabel->setProperty("copy-text", channel.slug);
+        self->ui_.localizedNameLabel->setVisible(distinctSlug);
+        self->ui_.localizedNameCopyButton->setVisible(distinctSlug);
+
         if (self->userName_ != channel.user.username)
         {
             self->userName_ = channel.user.username;
@@ -5099,7 +5108,8 @@ void UserInfoPopup::updateKickUserData()
         if (getSettings()->showUsercardCreatedDate)
         {
             self->ui_.createdDateLabel->setText(TEXT_CREATED.arg(
-                channel.chatroom.createdAt.date().toString(Qt::ISODate)));
+                channel.chatroom.createdAt.toLocalTime().date().toString(
+                    Qt::ISODate)));
             self->ui_.createdDateLabel->setToolTip(
                 formatLongFriendlyDuration(channel.chatroom.createdAt,
                                            QDateTime::currentDateTimeUtc()) +

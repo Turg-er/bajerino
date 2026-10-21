@@ -70,6 +70,7 @@ private:
     void resetSharedChatFilter();
     void recordSharedChatSource(const std::shared_ptr<const Message> &message);
     void updateSharedChatButton();
+    void syncSharedChatParticipants();
     void applySharedChatFilter();
     std::unique_ptr<QMenu> createSharedChatMenu();
     void initializeLayout();

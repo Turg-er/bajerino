@@ -1068,7 +1068,7 @@ void UserLogsView::updateStatus()
                       .arg(this->allHistoryQuery_));
         return;
     }
-    if (this->mode_ == Mode::Period &&
+    if (this->mode_ == Mode::Period && !this->loadingPage_ &&
         this->selectedPeriod_ >= 0 && page.messages.isEmpty())
     {
         this->statusLabel_->setText("No messages in this period.");

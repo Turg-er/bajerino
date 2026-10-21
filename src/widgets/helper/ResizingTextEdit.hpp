@@ -25,6 +25,8 @@ public:
 
     bool hasHeightForWidth() const override;
     bool isFirstWord() const;
+    /// Ignore this prefix when determining the first word for completion.
+    void setIgnoredCompletionPrefix(const QString &prefix);
 
     pajlada::Signals::Signal<QKeyEvent *> keyPressed;
     pajlada::Signals::NoArgSignal focused;
@@ -63,6 +65,7 @@ private:
     QString textUnderCursor(bool *hadSpace = nullptr) const;
 
     QCompleter *completer_ = nullptr;
+    QString ignoredCompletionPrefix_;
     pajlada::Signals::SignalHolder connections_;
 
     bool completionInProgress_ = false;

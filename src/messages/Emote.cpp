@@ -18,11 +18,11 @@ using namespace literals;
 bool operator==(const Emote &a, const Emote &b)
 {
     return std::tie(a.homePage, a.name, a.tooltip, a.images, a.zeroWidth, a.id,
-                    a.author, a.baseName, a.modifierFlags, a.modifierPlacement,
-                    a.modifierSource) ==
+                    a.author, a.baseName, a.tags, a.modifierFlags,
+                    a.modifierPlacement, a.modifierSource) ==
            std::tie(b.homePage, b.name, b.tooltip, b.images, b.zeroWidth, b.id,
-                    b.author, b.baseName, b.modifierFlags, b.modifierPlacement,
-                    b.modifierSource);
+                    b.author, b.baseName, b.tags, b.modifierFlags,
+                    b.modifierPlacement, b.modifierSource);
 }
 
 bool operator!=(const Emote &a, const Emote &b)
@@ -101,7 +101,7 @@ EmotePtr cachedOrMakeEmotePtr(Emote &&emote, WeakEmoteCache &cache,
         size_t{0}, id.string, emote.name.string, emote.tooltip.string,
         emote.homePage.string, emote.id.string, emote.author.string,
         emote.zeroWidth, emote.baseName.has_value(),
-        emote.baseName ? emote.baseName->string : QString{},
+        emote.baseName ? emote.baseName->string : QString{}, emote.tags,
         emote.modifierFlags, static_cast<uint8_t>(emote.modifierPlacement),
         static_cast<uint8_t>(emote.modifierSource),
         emote.images.getImage1().get(), emote.images.getImage2().get(),

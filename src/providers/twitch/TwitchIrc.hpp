@@ -8,7 +8,7 @@
 #include "providers/twitch/TwitchBadge.hpp"
 
 #include <QString>
-#include <QVariantMap>
+#include <IrcTagsRef>
 
 #include <tuple>
 #include <unordered_map>
@@ -46,17 +46,16 @@ struct TwitchGifOccurrence {
     }
 };
 
-std::unordered_map<QString, QString> parseBadgeInfoTag(const QVariantMap &tags);
+std::unordered_map<QString, QString> parseBadgeInfoTag(Communi::TagsRef tags);
 
-std::vector<TwitchBadge> parseBadgeTag(const QVariantMap &tags,
+std::vector<TwitchBadge> parseBadgeTag(Communi::TagsRef tags,
                                        const QString &tagName = "badges");
 
-std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(const QVariantMap &tags,
-                                                     const QString &content,
+std::vector<TwitchEmoteOccurrence> parseTwitchEmotes(Communi::TagsRef tags,
+                                                     QStringView content,
                                                      int messageOffset);
 
-std::vector<TwitchGifOccurrence> parseTwitchGifs(const QVariantMap &tags,
+std::vector<TwitchGifOccurrence> parseTwitchGifs(Communi::TagsRef tags,
                                                  const QString &content,
                                                  int messageOffset);
-
-}
+}  // namespace chatterino

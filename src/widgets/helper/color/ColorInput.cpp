@@ -26,17 +26,17 @@ int fromHex(char c) noexcept
 
 QColor parseHexColor(const QString &text)
 {
-    if (text.length() == 5)
+    if (text.length() == 5)  // #rgba
     {
         auto alphaHex = fromHex(text[4].toLatin1());
         QStringView v(text);
         v.chop(1);
         QColor col(v);
-        col.setAlpha(alphaHex);
+        col.setAlpha((alphaHex << 4) | alphaHex);
         return col;
     }
     QColor col(text);
-    if (col.isValid() && text.length() == 9)
+    if (col.isValid() && text.length() == 9)  // #rrggbbaa
     {
         auto rgba = col.rgba();
         auto alpha = rgba & 0xff;

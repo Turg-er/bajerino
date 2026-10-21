@@ -2539,6 +2539,7 @@ QWidget *VanityDialog::buildSevenTVConnectionHeader(
 {
     auto *rowWidget = new QWidget(parent);
     rowWidget->setObjectName(QStringLiteral("VanityConnectionRow"));
+    rowWidget->setProperty("disconnectedText", disconnectedText);
     auto *row = new QHBoxLayout(rowWidget);
     row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(6);
@@ -2715,7 +2716,8 @@ void VanityDialog::refreshStyle()
             QFrame#VanityDialogSeparator {
                 background: %4;
             }
-            QWidget#VanityPreviewFrame {
+            QWidget#VanityPreviewFrame,
+            QWidget#VanitySection {
                 background: %5;
                 border: 1px solid %4;
                 border-radius: 2px;

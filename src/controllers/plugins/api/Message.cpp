@@ -11,6 +11,7 @@
 #    include "messages/Message.hpp"
 #    include "messages/MessageElement.hpp"
 
+#    include <QJsonDocument>
 #    include <sol/sol.hpp>
 
 namespace {
@@ -225,6 +226,10 @@ std::unique_ptr<MessageElement> elementFromTable(const sol::table &tbl)
     assert(el);
 
     el->setTrailingSpace(tbl.get_or("trailing_space", true));
+    if (auto exhaustiveFlags = tbl.get<std::optional<bool>>("exhaustive_flags"))
+    {
+        el->exhaustiveFlags = *exhaustiveFlags;
+    }
 
     auto link = tbl.get<sol::optional<Link>>("link");
     if (link)
@@ -601,6 +606,10 @@ void createUserType(sol::table &c2)
         "type", sol::property([](const ElementRef &el) {
             return el.cref().type();
         }),
+        "to_json",
+        [](const ElementRef &el) {
+            return QJsonDocument(el.cref().toJson()).toJson();
+        },
         "flags", sol::property([](const ElementRef &el) {
             return el.cref().getFlags().value();
         }),
@@ -621,6 +630,9 @@ void createUserType(sol::table &c2)
                 }
                 setLinkOn(&el.ref(), link);
             }),
+        "exhaustive_flags", sol::property([](const ElementRef &el) {
+            return el.cref().exhaustiveFlags;
+        }),
         "tooltip",
         sol::property(
             [](const ElementRef &el) {

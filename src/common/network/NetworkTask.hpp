@@ -5,6 +5,7 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
 #include <QTimer>
 
 #include <functional>
@@ -45,7 +46,7 @@ private:
     void writeToCache(const QByteArray &bytes) const;
 
     std::shared_ptr<NetworkData> data_;
-    QNetworkReply *reply_{};
+    QPointer<QNetworkReply> reply_;
     QTimer *timer_{};
     std::optional<std::stop_callback<std::function<void()>>> cancellation_;
 

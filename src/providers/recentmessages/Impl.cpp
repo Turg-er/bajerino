@@ -57,7 +57,7 @@ std::optional<MergeCandidate> inspectMessage(const QString &raw)
         return std::nullopt;
     }
 
-    auto tags = message->tags();
+    auto tags = message->tags().raw();
     bool hasSentTimestamp = false;
     auto timestamp =
         tags.value(QStringLiteral("tmi-sent-ts")).toLongLong(&hasSentTimestamp);
@@ -167,12 +167,13 @@ public:
                 Communi::IrcMessage::fromData(content.toUtf8(), nullptr));
             if (message != nullptr)
             {
-                if (message->tags().contains("rm-received-ts"))
+                if (message->tags().has("rm-received-ts"))
                 {
-                    const auto msgDate =
-                        QDateTime::fromMSecsSinceEpoch(
-                            message->tags().value("rm-received-ts").toLongLong())
-                            .date();
+                    const auto msgDate = QDateTime::fromMSecsSinceEpoch(
+                                             message->tags()
+                                                 .getOrEmpty("rm-received-ts")
+                                                 .toLongLong())
+                                             .date();
 
                     if (msgDate != channel->lastDate_)
                     {

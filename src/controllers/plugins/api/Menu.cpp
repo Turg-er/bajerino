@@ -36,7 +36,7 @@ QAction *findAction(const QMenu &menu, int oneBasedIndex)
     }
     const auto index = oneBasedIndex - 1;
     const auto actions = menu.actions();
-    if (index >= actions.size())
+    if (index < 0 || index >= actions.size())
     {
         return nullptr;
     }

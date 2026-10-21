@@ -5,6 +5,8 @@
 #include "common/Common.hpp"
 #include "providers/irc/IrcConnection2.hpp"
 #include "util/RatelimitBucket.hpp"
+#include "util/CancellationToken.hpp"
+#include <QSet>
 
 #include <IrcMessage>
 #include <pajlada/signals/signal.hpp>
@@ -21,6 +23,7 @@
 
 namespace chatterino {
 
+enum class TwitchReadConnectionMode : uint8_t;
 class Settings;
 class Paths;
 class TwitchChannel;
@@ -200,9 +203,9 @@ protected:
     void onAnonymousReadConnected(IrcConnection *connection);
     void onWriteConnected(IrcConnection *connection);
     void onDisconnected();
-    void onAnonymousDisconnected();
+    void onAnonymousDisconnected(IrcConnection *connection);
     void markChannelsConnected();
-    void markAnonymousChannelsConnected();
+    void markAnonymousChannelsConnected(IrcConnection *connection);
     void ensureAnonymousReadConnection();
 
     std::shared_ptr<Channel> getCustomChannel(const QString &channelname);
@@ -214,6 +217,11 @@ private:
     void handleReadBlock(Communi::IrcMessage *message);
     void clearAnonymousFallbacks();
     void partUnusedAnonymousChannel(const QString &name);
+    bool usesAnonymousReads(const TwitchChannel &channel) const;
+    IrcConnection *anonymousConnectionFor(const QString &name);
+    void configureAnonymousConnection(IrcConnection *connection);
+    RatelimitBucket *joinBucket(bool anonymous, const QString &name);
+    void refreshModeratedChannels();
 
     void onMessageSendRequested(const std::shared_ptr<TwitchChannel> &channel,
                                 const QString &message, bool &sent);
@@ -244,10 +252,14 @@ private:
     QObjectPtr<IrcConnection> writeConnection_ = nullptr;
     QObjectPtr<IrcConnection> readConnection_ = nullptr;
     QObjectPtr<IrcConnection> anonymousReadConnection_ = nullptr;
-    bool anonymousReadConnectionStarted_ = false;
+    const TwitchReadConnectionMode readConnectionMode_;
+    QHash<QString, IrcConnection *> anonymousReadAssignments_;
+    QHash<IrcConnection *, RatelimitBucket *> anonymousJoinBuckets_;
+    QSet<IrcConnection *> startedAnonymousReadConnections_;
+    QSet</* login */ QString> moderatedChannels_;
+    ScopedCancellationToken moderatedChannelsToken_;
 
     QObjectPtr<RatelimitBucket> joinBucket_;
-    QObjectPtr<RatelimitBucket> anonymousJoinBucket_;
     QHash<QString, PendingJoin> joinAttempts_;
     QHash<QString, PendingJoin> anonymousJoinAttempts_;
     QTimer joinRetryTimer_;

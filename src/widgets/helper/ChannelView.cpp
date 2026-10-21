@@ -2438,11 +2438,11 @@ void ChannelView::invalidateBuffers()
     this->update();
 }
 
-void ChannelView::queueLayout()
+void ChannelView::queueLayout(bool disableAnimation)
 {
     if (this->isVisible())
     {
-        this->performLayout();
+        this->performLayout(/*causedByScrollbar=*/false, disableAnimation);
     }
     else
     {
@@ -2501,7 +2501,7 @@ void ChannelView::keyPressEvent(QKeyEvent *event)
     BaseWidget::keyPressEvent(event);
 }
 
-void ChannelView::performLayout(bool causedByScrollbar, bool causedByShow)
+void ChannelView::performLayout(bool causedByScrollbar, bool disableAnimation)
 {
     // BenchmarkGuard benchmark("layout");
 
@@ -2527,7 +2527,7 @@ void ChannelView::performLayout(bool causedByScrollbar, bool causedByShow)
     this->layoutVisibleMessages(messages);
 
     /// Update scrollbar
-    this->updateScrollbar(messages, causedByScrollbar, causedByShow);
+    this->updateScrollbar(messages, causedByScrollbar, disableAnimation);
 
     this->goToBottom_->setText(this->followTop_ ? u"More messages above"_s
                                                 : u"More messages below"_s);
@@ -2673,7 +2673,7 @@ void ChannelView::layoutVisibleMessages(
 }
 
 void ChannelView::updateScrollbar(const std::vector<MessageLayoutPtr> &messages,
-                                  bool causedByScrollbar, bool causedByShow)
+                                  bool causedByScrollbar, bool disableAnimation)
 {
     if (messages.size() == 0)
     {
@@ -2730,7 +2730,7 @@ void ChannelView::updateScrollbar(const std::vector<MessageLayoutPtr> &messages,
         showScrollbar && !causedByScrollbar)
     {
         this->scrollToFollowedEdge(
-            !causedByShow &&
+            !disableAnimation &&
             getSettings()->enableSmoothScrollingNewMessages.getValue());
     }
 }
@@ -3548,6 +3548,7 @@ void ChannelView::setChannel(const ChannelPtr &underlyingChannel,
 
         this->channelConnections_.managedConnect(
             underlyingChannel->messagesCleared, [this] {
+                this->setAutoModReviewSelectedKey({});
                 this->clearMessages();
             });
     }
@@ -5379,7 +5380,7 @@ void ChannelView::resizeEvent(QResizeEvent * /*event*/)
 
     this->scrollBar_->raise();
 
-    this->queueLayout();
+    this->queueLayout(/*disableAnimation=*/true);
 
     this->update();
 }
@@ -5988,9 +5989,9 @@ void ChannelView::drawMessages(QPainter &painter, const QRegion &area)
                       getApp()->getTwitch()->getMentionsChannel(),
 
         .y = this->verticalOffset_ -
-             static_cast<int>(
+             static_cast<int>(std::round(
                  messagesSnapshot[start]->getHeight() *
-                 (fmod(this->scrollBar_->getRelativeCurrentValue(), 1))),
+                 (fmod(this->scrollBar_->getRelativeCurrentValue(), 1)))),
         .messageIndex = start,
         .isLastReadMessage = false,
         .isCollapsed = this->collapseMessages_,

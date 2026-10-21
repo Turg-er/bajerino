@@ -57,6 +57,12 @@ QString stringifyAutomodReason(const lib::automod::AutomodReason &reason,
     return reason.category.qt() % u" level " % QString::number(reason.level);
 }
 
+QString stringifyAutomodReason(const std::string &reason,
+                               QStringView /* message */)
+{
+    return QString::fromStdString(reason).replace(u'_', u' ');
+}
+
 QString stringifyAutomodReason(const lib::automod::BlockedTermReason &reason,
                                QStringView message)
 {
@@ -332,6 +338,13 @@ void fillAutoModReason(automod::HoldData &data,
         appendTwitchMatch(data, boundary, details);
     }
     mergeAdjacentTwitchMatches(data);
+}
+
+void fillAutoModReason(automod::HoldData &data, const std::string &reason)
+{
+    data.reasonCategory =
+        displayAutoModCategory(QString::fromStdString(reason));
+    data.reasonSummary = data.reasonCategory;
 }
 
 void fillAutoModReason(automod::HoldData &data,

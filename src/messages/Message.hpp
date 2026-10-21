@@ -117,6 +117,8 @@ struct Message {
     bool isHiddenByClientNonce() const;
     bool usesTwitchGigantifyPresentation() const;
 
+    QString getHeaderText() const;
+
     std::shared_ptr<ChannelPointReward> reward = nullptr;
     QString sharedChatSourceId;
     uint32_t bits{0};

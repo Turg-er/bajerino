@@ -19,6 +19,8 @@
 #include "widgets/splits/SplitContainer.hpp"
 #include "widgets/Window.hpp"
 
+#include <QShowEvent>
+
 namespace {
 
 using namespace chatterino;
@@ -98,31 +100,48 @@ void QuickSwitcherPopup::updateSuggestions(const QString &text)
 {
     this->switcherModel_.clear();
 
-    for (auto *sc : openPages(this->window))
+    const auto pages = text.isEmpty()
+                           ? this->window->getNotebook().getVisitHistoryPages()
+                           : std::vector<QWidget *>{};
+    auto open = openPages(this->window);
+    QList<SplitContainer *> ordered;
+    for (auto *page : pages)
     {
-        const QString &tabTitle = sc->getTab()->getTitle();
-        const auto splits = sc->getSplits();
-
-        for (auto *split : splits)
+        auto *container = dynamic_cast<SplitContainer *>(page);
+        if (open.contains(container) && !ordered.contains(container))
         {
-            if (split->getChannel()->getName().contains(text,
-                                                        Qt::CaseInsensitive))
+            ordered.append(container);
+        }
+    }
+    for (auto *page : open)
+    {
+        if (!ordered.contains(page))
+        {
+            ordered.append(page);
+        }
+    }
+    for (auto *sc : ordered)
+    {
+        bool matched = false;
+        if (!text.isEmpty())
+        {
+            for (auto *split : sc->getSplits())
             {
-                auto item = std::make_unique<SwitchSplitItem>(sc, split);
-                this->switcherModel_.addItem(std::move(item));
-
-                goto nextPage;
+                if (split->getChannel()->getName().contains(
+                        text, Qt::CaseInsensitive))
+                {
+                    this->switcherModel_.addItem(
+                        std::make_unique<SwitchSplitItem>(sc, split));
+                    matched = true;
+                    break;
+                }
             }
         }
-
-        if (tabTitle.contains(text, Qt::CaseInsensitive))
+        if (!matched &&
+            sc->getTab()->getTitle().contains(text, Qt::CaseInsensitive))
         {
-            auto item = std::make_unique<SwitchSplitItem>(sc);
-            this->switcherModel_.addItem(std::move(item));
-            continue;
+            this->switcherModel_.addItem(std::make_unique<SwitchSplitItem>(sc));
         }
-
-    nextPage:;
     }
 
     if (!text.isEmpty())
@@ -139,7 +158,16 @@ void QuickSwitcherPopup::updateSuggestions(const QString &text)
 
     QTimer::singleShot(0, this, [this] {
         this->adjustSize();
+        QTimer::singleShot(0, this, [this] {
+            this->ui_.list->doItemsLayout();
+        });
     });
+}
+
+void QuickSwitcherPopup::showEvent(QShowEvent *event)
+{
+    BasePopup::showEvent(event);
+    this->updateSuggestions(this->ui_.searchEdit->text());
 }
 
 void QuickSwitcherPopup::themeChangedEvent()

@@ -27,12 +27,12 @@
 #include "providers/youtube/YouTubeChatServer.hpp"
 #include "providers/youtube/YouTubeTypes.hpp"
 #include "singletons/Fonts.hpp"
-#include "singletons/ImageUploader.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/ThemeCustomization.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/CustomPlayer.hpp"
+#include "util/IncognitoBrowser.hpp"
 #include "util/MultiChannel.hpp"
 #include "util/StreamLink.hpp"
 #include "widgets/ChatterListWidget.hpp"
@@ -510,73 +510,6 @@ void Split::initializeInputConnections()
                                            // Forward textEdit's focusLost event
                                            this->focusLost.invoke();
                                        });
-
-    // this connection can be ignored since the SplitInput is owned by this Split
-    std::ignore = this->input_->ui_.textEdit->imagePasted.connect(
-        [this](const QMimeData *original) {
-            if (!getSettings()->imageUploaderEnabled)
-            {
-                return;
-            }
-
-            auto channel = this->getChannel();
-            auto *imageUploader = getApp()->getImageUploader();
-
-            auto [images, imageProcessError] =
-                imageUploader->getImages(original);
-            if (images.empty())
-            {
-                channel->addSystemMessage(
-                    QString(
-                        "An error occurred trying to process your image: %1")
-                        .arg(imageProcessError));
-                return;
-            }
-
-            if (getSettings()->askOnImageUpload.getValue())
-            {
-                QMessageBox msgBox(this->window());
-                msgBox.setWindowTitle("Moltorino");
-                msgBox.setText("Image upload");
-                msgBox.setInformativeText(
-                    "You are uploading an image to a 3rd party service not in "
-                    "control of the Moltorino team. You may not be able to "
-                    "remove the image from the site. Are you okay with this?");
-                auto *cancel = msgBox.addButton(QMessageBox::Cancel);
-                auto *yes = msgBox.addButton(QMessageBox::Yes);
-                auto *yesDontAskAgain = msgBox.addButton("Yes, don't ask again",
-                                                         QMessageBox::YesRole);
-
-                msgBox.setDefaultButton(QMessageBox::Yes);
-                msgBox.exec();
-
-                auto *clickedButton = msgBox.clickedButton();
-                if (clickedButton == yesDontAskAgain)
-                {
-                    getSettings()->askOnImageUpload.setValue(false);
-                }
-                else if (clickedButton == yes)
-                {
-                    // Continue with image upload
-                }
-                else if (clickedButton == cancel)
-                {
-                    // Not continuing with image upload
-                    return;
-                }
-                else
-                {
-                    // An unknown "button" was pressed - handle it as if cancel was pressed
-                    // cancel is already handled as the "escape" option, so this should never happen
-                    qCWarning(chatterinoImageuploader)
-                        << "Unhandled button pressed:" << clickedButton;
-                    return;
-                }
-            }
-
-            QPointer<ResizingTextEdit> edit = this->input_->ui_.textEdit;
-            imageUploader->upload(std::move(images), channel, edit);
-        });
 }
 
 void Split::setSendWaitStatus(QString text)
@@ -2600,8 +2533,15 @@ void Split::openChannelInBrowserPlayer(ChannelPtr channel)
 {
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
-        QDesktopServices::openUrl(
-            QUrl(TWITCH_PLAYER_URL.arg(twitchChannel->getName())));
+        const auto playerUrl = TWITCH_PLAYER_URL.arg(twitchChannel->getName());
+        if (getSettings()->openLinksIncognito && supportsIncognitoLinks())
+        {
+            openLinkIncognito(playerUrl);
+        }
+        else
+        {
+            QDesktopServices::openUrl(QUrl(playerUrl));
+        }
     }
 }
 

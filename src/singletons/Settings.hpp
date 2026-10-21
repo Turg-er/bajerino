@@ -88,6 +88,12 @@ enum UsernameRightClickBehavior : int {
     ContextMenu = 3,
 };
 
+enum class TwitchReadConnectionMode : uint8_t {
+    Authenticated,
+    Anonymous,
+    AnonymousParallel,
+};
+
 enum class ChatSendProtocol : int {
     Default = 0,
     IRC = 1,
@@ -139,6 +145,22 @@ constexpr std::optional<std::string_view> qmagicenumDisplayName(
         case EmoteTooltipScale::Large:
         case EmoteTooltipScale::Huge:
             return {};
+    }
+}
+
+constexpr std::optional<std::string_view> qmagicenumDisplayName(
+    TwitchReadConnectionMode value) noexcept
+{
+    switch (value)
+    {
+        case TwitchReadConnectionMode::Authenticated:
+            return "Authenticated (default)";
+
+        case TwitchReadConnectionMode::Anonymous:
+            return {};
+
+        case TwitchReadConnectionMode::AnonymousParallel:
+            return "Anonymous (parallel)";
     }
 }
 
@@ -196,6 +218,22 @@ public:
 
     /// Appearance
     BoolSetting showTimestamps = {"/appearance/messages/showTimestamps", true};
+    BoolSetting showHeaderTimestamps = {
+        "/appearance/messages/header/showTimestamps",
+        false,
+    };
+    BoolSetting showAnnouncementHeader = {
+        "/appearance/messages/announcements/showHeader",
+        true,
+    };
+    BoolSetting showSubscriptionHeader = {
+        "/appearance/messages/subscriptions/showHeader",
+        true,
+    };
+    BoolSetting showWatchStreakHeader = {
+        "/appearance/messages/watchstreaks/showHeader",
+        true,
+    };
     BoolSetting animationsWhenFocused = {
         "/appearance/enableAnimationsWhenFocused", false};
     BoolSetting hideMessageTimestampsWhenLive = {
@@ -240,6 +278,10 @@ public:
     EnumSetting<NotebookTabVisibility> tabVisibility = {
         "/appearance/tabVisibility",
         NotebookTabVisibility::AllTabs,
+    };
+    BoolSetting growWrappedNotebookLines = {
+        "/appearance/growWrappedNotebookLines",
+        false,
     };
 
     //    BoolSetting collapseLongMessages =
@@ -513,6 +555,9 @@ public:
         false,
     };
 
+    IntSetting sharedChatSessionRefreshInterval = {
+        "/behaviour/sharedChatSessionRefreshInterval", 60};
+
     /// Emotes
     BoolSetting scaleEmotesByLineHeight = {"/emotes/scaleEmotesByLineHeight",
                                            false};
@@ -693,17 +738,6 @@ public:
     //        "/highlighting/firstMessageHighlightSoundUrl", ""};
     QStringSetting firstMessageHighlightColor = {
         "/highlighting/firstMessageHighlightColor", ""};
-
-    BoolSetting enableElevatedMessageHighlight = {
-        "/highlighting/elevatedMessageHighlight/highlighted", true};
-    //    BoolSetting enableElevatedMessageHighlightSound = {
-    //        "/highlighting/elevatedMessageHighlight/enableSound", false};
-    //    BoolSetting enableElevatedMessageHighlightTaskbar = {
-    //        "/highlighting/elevatedMessageHighlight/enableTaskbarFlashing", false};
-    //    QStringSetting elevatedMessageHighlightSoundUrl = {
-    //        "/highlighting/elevatedMessageHighlight/soundUrl", ""};
-    QStringSetting elevatedMessageHighlightColor = {
-        "/highlighting/elevatedMessageHighlight/color", ""};
 
     BoolSetting enableSubHighlight = {
         "/highlighting/subHighlight/subsHighlighted", true};
@@ -887,6 +921,10 @@ public:
     };
     BoolSetting displaySevenTVAnimatedProfile = {
         "/misc/displaySevenTVAnimatedProfile", true};
+
+    EnumStringSetting<TwitchReadConnectionMode> twitchReadConnectionMode = {
+        "/misc/x-7tv/twitchReadConnectionMode",
+        TwitchReadConnectionMode::Authenticated};
 
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};

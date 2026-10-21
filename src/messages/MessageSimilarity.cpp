@@ -20,6 +20,7 @@ float relativeSimilarity(QStringView str1, QStringView str2)
 {
     using SizeType = QStringView::size_type;
 
+    // Longest Common Substring Problem
     std::vector<std::vector<int>> tree(str1.size(),
                                        std::vector<int>(str2.size(), 0));
     int z = 0;
@@ -47,6 +48,7 @@ float relativeSimilarity(QStringView str1, QStringView str2)
         }
     }
 
+    // ensure that no div by 0
     if (z == 0)
     {
         return 0.F;
@@ -66,7 +68,7 @@ float inMessages(const MessagePtr &msg, const T &messages)
          messages | std::views::reverse |
              std::views::take(getSettings()->hideSimilarMaxMessagesToCheck))
     {
-        if (prevMsg->parseTime.secsTo(QTime::currentTime()) >=
+        if (prevMsg->serverReceivedTime.secsTo(msg->serverReceivedTime) >=
             getSettings()->hideSimilarMaxDelay)
         {
             break;
@@ -84,7 +86,7 @@ float inMessages(const MessagePtr &msg, const T &messages)
     return similarityPercent;
 }
 
-}
+}  // namespace
 
 namespace chatterino {
 
@@ -117,4 +119,4 @@ void setSimilarityFlags(const MessagePtr &message, const T &messages)
 template void setSimilarityFlags<std::vector<MessagePtr>>(
     const MessagePtr &msg, const std::vector<MessagePtr> &messages);
 
-}
+}  // namespace chatterino

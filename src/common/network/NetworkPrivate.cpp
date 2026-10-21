@@ -83,19 +83,7 @@ void loadCached(std::shared_ptr<NetworkData> &&data)
         return;
     }
 
-    auto *app = tryGetApp();
-    if (!app)
-    {
-        if (diagnostics::mayLogUrl(data->request.url()))
-        {
-            qCDebug(chatterinoHTTP)
-                << "Skipping cached network load " << data->request.url()
-                << "because app is about to quit";
-        }
-        return;
-    }
-
-    QFile cachedFile(app->getPaths().cacheDirectory() + "/" + data->getHash());
+    QFile cachedFile(data->cacheFilePath);
 
     if (!cachedFile.exists() || !cachedFile.open(QIODevice::ReadOnly))
     {
@@ -290,6 +278,20 @@ void load(std::shared_ptr<NetworkData> &&data)
 {
     if (data->cache)
     {
+        auto *app = tryGetApp();
+        if (!app)
+        {
+            if (diagnostics::mayLogUrl(data->request.url()))
+            {
+                qCDebug(chatterinoHTTP)
+                    << "Skipping cached network load " << data->request.url()
+                    << "because app is about to quit";
+            }
+            return;
+        }
+
+        data->cacheFilePath =
+            app->getPaths().cacheDirectory() + "/" + data->getHash();
         std::ignore = QtConcurrent::run([data = std::move(data)]() mutable {
             loadCached(std::move(data));
         });
