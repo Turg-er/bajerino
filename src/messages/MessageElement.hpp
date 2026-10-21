@@ -773,6 +773,12 @@ public:
     FfzBadgeElement(const EmotePtr &data, MessageElementFlags flags_,
                     QColor color_);
 
+    /// The colour FFZ draws behind its (transparent) badge glyph.
+    const QColor &getColor() const
+    {
+        return this->color;
+    }
+
     std::unique_ptr<MessageElement> clone() const override;
 
     QJsonObject toJson() const override;

@@ -113,6 +113,15 @@ private:
     void updateUserLogsContext();
     void updateUserRolesContext();
     void updateUserBadgesContext();
+    void updateBadgeCountRow(qsizetype globalBadges);
+    // While the Badges page is open the card grows downwards so a big
+    // collection isn't squeezed into a few rows; it shrinks back afterwards.
+    int heightBeforeBadges_ = 0;
+    int heightWithBadges_ = 0;
+    void refreshBadgeCountStyle();
+    void refitToContent();
+    bool refitPending_ = false;
+    QSize lastRefitMinimum_;
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
     bool moderatorCommentsActionAvailable() const;
@@ -334,6 +343,10 @@ private:
         QLabel *subageIcon = nullptr;
         Label *subageLabel = nullptr;
         Label *chatterCountLabel = nullptr;
+        // "N global badges" under the chatter count, from BadgeHQ.
+        QWidget *badgeCountRow = nullptr;
+        QLabel *badgeCountLabel = nullptr;
+        QPushButton *badgeProfileButton = nullptr;
         Label *lastLiveLabel = nullptr;
         QWidget *userColorRow = nullptr;
         QWidget *userColorSwatch = nullptr;

@@ -396,12 +396,16 @@ UserBadgesGrid::Section parseSection(const QString &title,
         {
             name = object.value("name").toString();
         }
+        auto badgeUrl = url;
         if (object.value("founder").toBool())
         {
             name = QStringLiteral("Founder");
+            // The profile lists the Founder badge's still artwork (the site
+            // animates it itself); show the animated badge instead.
+            badgeUrl = imageUrl(QStringLiteral("/badges/founder.webp"));
         }
         name = name.left(256);
-        if (url.isEmpty() || name.isEmpty())
+        if (badgeUrl.isEmpty() || name.isEmpty())
         {
             continue;
         }
@@ -415,7 +419,7 @@ UserBadgesGrid::Section parseSection(const QString &title,
         }
 
         section.badges.push_back({
-            .image = Image::fromUrl(Url{url}),
+            .image = Image::fromUrl(Url{badgeUrl}),
             .tooltip =
                 badgeTooltip(titlePrefix + name,
                              object.value("description").toString().left(512)),
@@ -449,7 +453,7 @@ UserBadgesView::UserBadgesView(QWidget *parent)
     this->retryButton_->setAutoDefault(false);
     this->retryButton_->hide();
     statusRow->addWidget(this->retryButton_);
-    this->profileButton_ = new QPushButton("Open on BadgeHQ", this);
+    this->profileButton_ = new QPushButton("Open BadgeHQ Profile", this);
     this->profileButton_->setAutoDefault(false);
     this->profileButton_->setToolTip("Open this user's BadgeHQ profile");
     statusRow->addWidget(this->profileButton_);
@@ -519,6 +523,14 @@ void UserBadgesView::deactivate()
     this->activated_ = false;
 }
 
+void UserBadgesView::prefetch()
+{
+    if (!this->loaded_ && !this->loading_ && validLogin(this->login_))
+    {
+        this->load();
+    }
+}
+
 void UserBadgesView::refreshStyle(float scale)
 {
     const auto font = getApp()->getFonts()->getFont(FontStyle::UiMedium, scale);
@@ -561,6 +573,7 @@ void UserBadgesView::reset()
     this->loading_ = false;
     this->grid_->setSections({});
     this->updateStatus();
+    this->globalBadgeCountChanged.invoke(-1);
 }
 
 void UserBadgesView::load()
@@ -642,6 +655,13 @@ void UserBadgesView::applyProfile(const QByteArray &payload)
         std::ranges::move(section.badges, std::back_inserter(other.badges));
     };
     appendOther(parseSection({}, root.value("bttvBadges")));
+    // A developer wears the Developer badge next to their supporter badge.
+    if (const auto developer = root.value("developerBadge");
+        developer.isObject())
+    {
+        appendOther(parseSection({}, QJsonArray{developer},
+                                 QStringLiteral("BadgeHQ ")));
+    }
     appendOther(parseSection({}, root.value("badgehqBadges"),
                              QStringLiteral("BadgeHQ ")));
     appendOther(parseSection({}, root.value("chatterinoBadges")));
@@ -664,6 +684,8 @@ void UserBadgesView::applyProfile(const QByteArray &payload)
     this->loaded_ = true;
     this->grid_->setSections(std::move(sections));
     this->updateStatus();
+    this->globalBadgeCountChanged.invoke(
+        root.value("twitchBadges").toArray().size());
 }
 
 void UserBadgesView::updateStatus()

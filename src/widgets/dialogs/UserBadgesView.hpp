@@ -1,5 +1,6 @@
 #pragma once
 
+#include <pajlada/signals/signal.hpp>
 #include <pajlada/signals/signalholder.hpp>
 #include <QString>
 #include <QWidget>
@@ -17,8 +18,9 @@ class UserBadgesGrid;
 /// Shows every badge a Twitch user owns, grouped by provider.
 ///
 /// The collection comes from the user's public BadgeHQ profile. Nothing is
-/// requested until the view is activated, so opening a usercard alone never
-/// contacts BadgeHQ.
+/// requested until the view is activated or prefetch() is called (the
+/// usercard does that only while BadgeHQ badges are enabled, to show the
+/// global badge count).
 class UserBadgesView final : public QWidget
 {
 public:
@@ -27,14 +29,20 @@ public:
     void setContext(const QString &login);
     void activate();
     void deactivate();
+    /// Loads the profile without showing the view, so the global badge count
+    /// can be shown on the usercard.
+    void prefetch();
     void refreshStyle(float scale);
+    void openProfile() const;
+
+    /// How many global Twitch badges the user owns, or -1 when unknown.
+    pajlada::Signals::Signal<qsizetype> globalBadgeCountChanged;
 
 private:
     void reset();
     void load();
     void applyProfile(const QByteArray &payload);
     void updateStatus();
-    void openProfile() const;
 
     QString login_;
     QString error_;

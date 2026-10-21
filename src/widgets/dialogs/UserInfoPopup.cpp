@@ -71,6 +71,7 @@
 #include "util/LayoutCreator.hpp"
 #include "util/PostToThread.hpp"
 #include "util/Twitch.hpp"
+#include "widgets/TooltipWidget.hpp"
 #include "widgets/buttons/DrawnButton.hpp"
 #include "widgets/buttons/LabelButton.hpp"
 #include "widgets/buttons/PixmapButton.hpp"
@@ -120,6 +121,7 @@
 #include <QMouseEvent>
 #include <QMovie>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPointer>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -134,6 +136,7 @@
 #include <QVBoxLayout>
 #include <QWidgetAction>
 
+#include <tuple>
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -142,6 +145,50 @@
 #include <utility>
 
 namespace {
+
+/// How tall the Badges page gets: the card grows to make room for it.
+constexpr int LOGICAL_BADGES_PAGE_HEIGHT = 420;
+
+/// The "open in a new tab" icon: a rounded box, open at the top right, with
+/// an arrow pointing out of it. Drawn rather than shipped as an image so it
+/// matches the theme's text colour and stays sharp at any scale.
+QIcon externalLinkIcon(const QColor &color, int size, qreal dpr)
+{
+    QPixmap pixmap(QSize(size, size) * dpr);
+    pixmap.setDevicePixelRatio(dpr);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    // Laid out on a 24-unit square.
+    const qreal u = size / 24.0;
+    painter.scale(u, u);
+    QPen pen(color, 2.2);
+    pen.setCapStyle(Qt::RoundCap);
+    pen.setJoinStyle(Qt::RoundJoin);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+
+    QPainterPath box;
+    box.moveTo(11, 5.5);
+    box.lineTo(7, 5.5);
+    box.quadTo(4, 5.5, 4, 8.5);
+    box.lineTo(4, 17);
+    box.quadTo(4, 20, 7, 20);
+    box.lineTo(15.5, 20);
+    box.quadTo(18.5, 20, 18.5, 17);
+    box.lineTo(18.5, 13);
+    painter.drawPath(box);
+
+    QPainterPath arrow;
+    arrow.moveTo(14, 4);
+    arrow.lineTo(20, 4);
+    arrow.lineTo(20, 10);
+    arrow.moveTo(20, 4);
+    arrow.lineTo(11.5, 12.5);
+    painter.drawPath(arrow);
+    painter.end();
+    return QIcon(pixmap);
+}
 constexpr QStringView TEXT_FOLLOWERS = u"Followers: %1";
 constexpr QStringView TEXT_CREATED = u"Created: %1";
 constexpr QStringView TEXT_TITLE = u"%1's Usercard - #%2";
@@ -244,11 +291,17 @@ protected:
 class UsercardBadgeStrip final : public BaseWidget
 {
 public:
+    /// Called when the row's height changes, so the usercard can re-fit
+    /// its window (like it does when other rows appear).
+    std::function<void()> onHeightChanged;
+
     struct Badge {
         EmotePtr emote;
         QString tooltip;
         MessageElementFlags flags;
         std::shared_ptr<const TikTokBadgeArtwork> tiktok;
+        // FFZ badges are transparent glyphs drawn on a colour, as in chat.
+        QColor background{};
     };
 
     explicit UsercardBadgeStrip(QWidget *parent)
@@ -261,8 +314,9 @@ public:
 
     void setBadges(std::vector<Badge> badges)
     {
+        this->hideTooltip();
         this->badges_ = std::move(badges);
-        this->updateGeometry();
+        this->syncHeight();
         this->update();
     }
 
@@ -332,27 +386,91 @@ public:
     }
 
 protected:
+    // Moving the card to a screen with different scaling redraws the badges
+    // at a new size; re-measure then, or the row keeps its old height and the
+    // badges get cut off at the bottom.
     bool event(QEvent *event) override
     {
-        if (event->type() != QEvent::ToolTip)
+        if (event->type() == QEvent::DevicePixelRatioChange ||
+            event->type() == QEvent::ScreenChangeInternal)
         {
-            return BaseWidget::event(event);
+            this->syncHeight();
         }
+        return BaseWidget::event(event);
+    }
 
-        const auto *helpEvent = static_cast<QHelpEvent *>(event);
-        const auto index = this->badgeIndexAt(helpEvent->pos());
+    void resizeEvent(QResizeEvent *event) override
+    {
+        BaseWidget::resizeEvent(event);
+        this->syncHeight();
+    }
+
+    // Hovering a badge shows what it is, with Moltorino's own tooltip (the
+    // same one chat and the Badges page use). A plain QToolTip never showed
+    // in this popup.
+    void mouseMoveEvent(QMouseEvent *event) override
+    {
+        const auto index = this->badgeIndexAt(event->pos());
         if (!index || this->badges_[*index].tooltip.isEmpty())
         {
-            return BaseWidget::event(event);
+            this->hideTooltip();
+            BaseWidget::mouseMoveEvent(event);
+            return;
         }
+        if (this->tooltipWidget_ == nullptr)
+        {
+            this->tooltipWidget_ = new TooltipWidget(this);
+        }
+        if (index != this->hoveredIndex_)
+        {
+            this->hoveredIndex_ = index;
+            const auto &badge = this->badges_[*index];
+            this->tooltipWidget_->setOne(TooltipEntry::scaled(
+                badge.emote->images.getImage3(), badge.tooltip, 1.0F,
+                TOOLTIP_IMAGE_SIZE));
+            this->tooltipWidget_->setWordWrap(true);
+        }
+        this->tooltipWidget_->moveTo(
+            event->globalPosition().toPoint() + QPoint(16, 16),
+            widgets::BoundsChecking::CursorPosition);
+        this->tooltipWidget_->show();
+    }
 
-        QToolTip::showText(helpEvent->globalPos(),
-                           this->badges_[*index].tooltip, this);
-        return true;
+    void leaveEvent(QEvent *event) override
+    {
+        this->hideTooltip();
+        BaseWidget::leaveEvent(event);
+    }
+
+    void hideEvent(QHideEvent *event) override
+    {
+        this->hideTooltip();
+        BaseWidget::hideEvent(event);
+    }
+
+    void hideTooltip()
+    {
+        this->hoveredIndex_.reset();
+        if (this->tooltipWidget_ != nullptr)
+        {
+            this->tooltipWidget_->hide();
+        }
     }
 
     void paintEvent(QPaintEvent *) override
     {
+        // The badges are drawn at the window's current scale, which can
+        // change (e.g. while the card is dragged around) without this row
+        // being told. If the row is now shorter than the badges need, grow
+        // it right after this paint instead of drawing them cut off.
+        if (this->minimumHeight() !=
+            this->heightForWidth(std::max(1, this->width())))
+        {
+            QTimer::singleShot(0, this, [this] {
+                this->syncHeight();
+            });
+        }
+
         QPainter painter(this);
         const auto height = this->badgeSize();
         const auto spacing = this->badgeSpacing();
@@ -379,6 +497,15 @@ protected:
             }
             else if (const auto pixmap = image->pixmapOrLoad())
             {
+                if (badge.background.isValid())
+                {
+                    painter.setRenderHint(QPainter::Antialiasing);
+                    painter.setPen(Qt::NoPen);
+                    painter.setBrush(badge.background);
+                    const auto radius = std::max(1.0, 2.0 * this->scale());
+                    painter.drawRoundedRect(QRectF(x, y, width, height),
+                                            radius, radius);
+                }
                 painter.setRenderHint(
                     QPainter::SmoothPixmapTransform,
                     badge.flags.has(MessageElementFlag::BadgeMoltorino));
@@ -392,9 +519,34 @@ protected:
     void scaleChangedEvent(float scale) override
     {
         BaseWidget::scaleChangedEvent(scale);
-        this->setMinimumHeight(this->rowHeight());
-        this->updateGeometry();
+        this->syncHeight();
         this->update();
+    }
+
+    /// Keeps the minimum height at what the badges need at the current width
+    /// and scale, so the layout can never squeeze the row.
+    void syncHeight()
+    {
+        const auto needed = this->heightForWidth(
+            this->width() > 0 ? this->width() : this->sizeHint().width());
+        const bool changed = this->minimumHeight() != needed;
+        if (changed)
+        {
+            this->setMinimumHeight(needed);
+        }
+        // The row around the strip is fixed-height; keep it exactly as tall
+        // as the badges need.
+        if (auto *row = this->parentWidget();
+            row != nullptr && (row->minimumHeight() != needed ||
+                               row->maximumHeight() != needed))
+        {
+            row->setFixedHeight(needed);
+        }
+        this->updateGeometry();
+        if (changed && this->onHeightChanged)
+        {
+            this->onHeightChanged();
+        }
     }
 
 private:
@@ -402,6 +554,7 @@ private:
     static constexpr int LOGICAL_BADGE_SPACING = 3;
     static constexpr int LOGICAL_ROW_HEIGHT = 22;
     static constexpr int LOGICAL_PREFERRED_WIDTH = 420;
+    static constexpr int TOOLTIP_IMAGE_SIZE = 72;
 
     int badgeSize() const
     {
@@ -484,6 +637,8 @@ private:
     }
 
     std::vector<Badge> badges_;
+    TooltipWidget *tooltipWidget_ = nullptr;
+    std::optional<size_t> hoveredIndex_;
 };
 
 class UsercardPaintButton final : public Button
@@ -2078,8 +2233,11 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             vbox->addWidget(handleRow);
 
             auto *badgeRow = new BaseWidget(this);
+            // Fixed height (set by the strip, see syncHeight): when the rows
+            // below load in and the card runs out of room, the layout must
+            // not take that room from the badges and cut them off.
             badgeRow->setSizePolicy(QSizePolicy::Expanding,
-                                    QSizePolicy::Preferred);
+                                    QSizePolicy::Fixed);
             badgeRow->hide();
             auto *badgeLayout = new QHBoxLayout(badgeRow);
             badgeLayout->setContentsMargins(8, 0, 0, 0);
@@ -2088,6 +2246,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
 
             auto *badgeStrip = new UsercardBadgeStrip(badgeRow);
             this->ui_.identityBadges = badgeStrip;
+            badgeStrip->onHeightChanged = [this] {
+                this->refitToContent();
+            };
             badgeLayout->addWidget(badgeStrip, 0, Qt::AlignVCenter);
             badgeLayout->addStretch(1);
             vbox->addWidget(badgeRow);
@@ -2156,6 +2317,42 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
             }
             vbox.emplace<Label>("").assign(&this->ui_.statusLabel);
             vbox.emplace<Label>("").assign(&this->ui_.chatterCountLabel);
+            {
+                // "269 global badges": "badges" opens the Badges page, and
+                // the small arrow opens their BadgeHQ profile. Filled in once
+                // the BadgeHQ profile loads (updateBadgeCountRow).
+                auto *row = new QWidget;
+                auto *rowLayout = new QHBoxLayout(row);
+                rowLayout->setSpacing(4);
+                auto *label = new QLabel(row);
+                label->setTextFormat(Qt::RichText);
+                label->setTextInteractionFlags(Qt::LinksAccessibleByMouse);
+                label->setOpenExternalLinks(false);
+                rowLayout->addWidget(label, 0, Qt::AlignVCenter);
+                auto *open = new QPushButton(row);
+                open->setFlat(true);
+                open->setAutoDefault(false);
+                open->setCursor(Qt::PointingHandCursor);
+                open->setToolTip("Open BadgeHQ Profile");
+                rowLayout->addWidget(open, 0, Qt::AlignVCenter);
+                rowLayout->addStretch(1);
+                row->hide();
+                vbox->addWidget(row);
+                this->ui_.badgeCountRow = row;
+                this->ui_.badgeCountLabel = label;
+                this->ui_.badgeProfileButton = open;
+                QObject::connect(label, &QLabel::linkActivated, this,
+                                 [this](const QString &) {
+                                     this->showActivityPage(
+                                         ActivityPage::Badges);
+                                 });
+                QObject::connect(open, &QPushButton::clicked, this, [this] {
+                    if (this->ui_.badgesView != nullptr)
+                    {
+                        this->ui_.badgesView->openProfile();
+                    }
+                });
+            }
             createUsercardStatusRow(vbox, &this->ui_.followageRow,
                                     &this->ui_.followageIcon,
                                     &this->ui_.followageLabel);
@@ -2192,6 +2389,9 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
         roles->hide();
         auto badges = user.emplace<LabelButton>("Badges", this)
                           .assign(&this->ui_.badgesLabel);
+        // Underlined while open, rather than renamed to "Messages", so the
+        // Badges tab never disappears; clicking it again goes back.
+        badges->enableRichText();
         badges->setToolTip("View badge collection");
         badges->hide();
         auto notesAction = user.emplace<LabelButton>("Notes", this)
@@ -2452,6 +2652,11 @@ UserInfoPopup::UserInfoPopup(bool closeAutomatically, Split *split)
     activityStack->addWidget(this->ui_.rolesView);
     this->ui_.badgesView = new UserBadgesView(activityStack);
     this->ui_.badgesView->refreshStyle(this->scale());
+    std::ignore = this->ui_.badgesView->globalBadgeCountChanged.connect(
+        [this](qsizetype count) {
+            this->updateBadgeCountRow(count);
+        });
+    this->refreshBadgeCountStyle();
     activityStack->addWidget(this->ui_.badgesView);
     activityStack->setCurrentWidget(messagesPage);
     layout->addWidget(activityStack);
@@ -2618,6 +2823,7 @@ void UserInfoPopup::themeChangedEvent()
     this->ui_.logsView->refreshStyle(this->scale());
     this->ui_.rolesView->refreshStyle(this->scale());
     this->ui_.badgesView->refreshStyle(this->scale());
+    this->refreshBadgeCountStyle();
 }
 
 bool UserInfoPopup::event(QEvent *event)
@@ -2630,6 +2836,22 @@ bool UserInfoPopup::event(QEvent *event)
         return result;
     }
 #endif
+    if (event->type() == QEvent::LayoutRequest)
+    {
+        const bool result = DraggablePopup::event(event);
+        // Something in the card grew (a row loaded in, the badge row wrapped).
+        // The window's minimum is set by hand, so the layout can't grow it
+        // itself and the bottom of the message list would be cut off.
+        const auto needed = this->minimumSizeHint();
+        if ((needed.height() > this->height() ||
+             needed.width() > this->width()) &&
+            needed != this->lastRefitMinimum_)
+        {
+            this->lastRefitMinimum_ = needed;
+            this->refitToContent();
+        }
+        return result;
+    }
     return DraggablePopup::event(event);
 }
 
@@ -3757,11 +3979,104 @@ void UserInfoPopup::updateUserBadgesContext()
     this->ui_.badgesLabel->setVisible(
         available && placement == UsercardActionPlacement::Bar);
     this->ui_.badgesView->setContext(available ? this->userName_ : QString{});
+    // The global badge count under the chatter count needs the BadgeHQ
+    // profile, so it's only fetched while BadgeHQ badges are turned on.
+    if (available && getSettings()->showBadgesBadgeHQ)
+    {
+        this->ui_.badgesView->prefetch();
+    }
+    else
+    {
+        this->updateBadgeCountRow(-1);
+    }
     if (!available && this->ui_.activityStack->currentWidget() ==
                           this->ui_.badgesView)
     {
         this->showActivityPage(ActivityPage::Messages);
     }
+}
+
+void UserInfoPopup::updateBadgeCountRow(qsizetype globalBadges)
+{
+    if (this->ui_.badgeCountRow == nullptr)
+    {
+        return;
+    }
+    const bool wasVisible = this->ui_.badgeCountRow->isVisibleTo(this);
+    if (globalBadges < 0 || !this->userBadgesActionAvailable() ||
+        !getSettings()->showBadgesBadgeHQ)
+    {
+        this->ui_.badgeCountRow->hide();
+        if (wasVisible)
+        {
+            this->refitToContent();
+        }
+        return;
+    }
+    this->ui_.badgeCountLabel->setText(
+        // Same colour as the rest of the line; the underline marks the link.
+        QStringLiteral("%1 global <a href=\"badges\" style=\"color: %2;\">%3</a>")
+            .arg(QLocale().toString(static_cast<qlonglong>(globalBadges)),
+                 getTheme()->window.text.name(),
+                 globalBadges == 1 ? QStringLiteral("badge")
+                                   : QStringLiteral("badges")));
+    this->ui_.badgeCountRow->show();
+    if (!wasVisible)
+    {
+        this->refitToContent();
+    }
+}
+
+// Rows that arrive after the card opened (the badge count from BadgeHQ, a
+// badge row that grows) make the content taller than the size the card was
+// given, and the layout then squashes the header so rows overlap. Re-fit the
+// window the same way the card does when its other rows appear, once the
+// layout has caught up.
+void UserInfoPopup::refitToContent()
+{
+    if (this->refitPending_)
+    {
+        return;
+    }
+    this->refitPending_ = true;
+    QTimer::singleShot(0, this, [this] {
+        this->refitPending_ = false;
+        this->applyPopupSize(
+            this->sizeHint().expandedTo(this->minimumSizeHint()));
+    });
+}
+
+void UserInfoPopup::refreshBadgeCountStyle()
+{
+    if (this->ui_.badgeCountRow == nullptr)
+    {
+        return;
+    }
+    const auto scale = this->scale();
+    const auto font =
+        getApp()->getFonts()->getFont(FontStyle::UiMedium, scale);
+    // Lined up with the Label rows above it, which pad 8px on the left.
+    this->ui_.badgeCountRow->layout()->setContentsMargins(
+        static_cast<int>(8 * scale), 0, static_cast<int>(8 * scale), 0);
+    this->ui_.badgeCountLabel->setFont(font);
+    this->ui_.badgeProfileButton->setFont(font);
+    // The "open in new tab" icon, sized to the text, in the card's text
+    // colour, with a faint highlight on hover.
+    const auto text = getTheme()->window.text;
+    auto hover = text;
+    hover.setAlphaF(0.12);
+    const int iconSize = std::max(10, static_cast<int>(
+                                          QFontMetrics(font).height() * 0.8));
+    this->ui_.badgeProfileButton->setIcon(
+        externalLinkIcon(text, iconSize, this->devicePixelRatioF()));
+    this->ui_.badgeProfileButton->setIconSize(QSize(iconSize, iconSize));
+    this->ui_.badgeProfileButton->setStyleSheet(
+        QStringLiteral("QPushButton { background: transparent; border: none; "
+                       "border-radius: %1px; padding: %2px; }"
+                       "QPushButton:hover { background: %3; }")
+            .arg(QString::number(std::max(2, static_cast<int>(3 * scale))),
+                 QString::number(std::max(1, static_cast<int>(2 * scale))),
+                 hover.name(QColor::HexArgb)));
 }
 
 void UserInfoPopup::showActivityPage(ActivityPage page)
@@ -3825,7 +4140,30 @@ void UserInfoPopup::showActivityPage(ActivityPage page)
     this->ui_.rolesLabel->setText(rolesShown ? "Messages" : "Roles");
     this->ui_.rolesLabel->setToolTip(
         rolesShown ? "Return to recent messages" : "View roles and channels");
-    this->ui_.badgesLabel->setText(badgesShown ? "Messages" : "Badges");
+    this->ui_.badgesLabel->setText(badgesShown ? "<u>Badges</u>" : "Badges");
+
+    // Give the Badges page more room by growing the card downwards, and put
+    // it back afterwards unless the card was resized in the meantime.
+    if (badgesShown)
+    {
+        const int wanted = qRound(LOGICAL_BADGES_PAGE_HEIGHT * this->scale());
+        const int have = this->ui_.activityStack->height();
+        if (have > 0 && have < wanted && this->heightBeforeBadges_ == 0)
+        {
+            this->heightBeforeBadges_ = this->height();
+            this->heightWithBadges_ = this->height() + (wanted - have);
+            this->resize(this->width(), this->heightWithBadges_);
+        }
+    }
+    else if (this->heightBeforeBadges_ > 0)
+    {
+        if (this->height() == this->heightWithBadges_)
+        {
+            this->resize(this->width(), this->heightBeforeBadges_);
+        }
+        this->heightBeforeBadges_ = 0;
+        this->heightWithBadges_ = 0;
+    }
     this->ui_.badgesLabel->setToolTip(
         badgesShown ? "Return to recent messages" : "View badge collection");
 
@@ -6501,8 +6839,11 @@ void UserInfoPopup::refreshIdentityBadges()
                 }
                 const auto *tiktokBadge =
                     dynamic_cast<const TikTokBadgeElement *>(badge);
+                const auto *ffzBadge =
+                    dynamic_cast<const FfzBadgeElement *>(badge);
                 badges.push_back({badge->getEmote(), badge->getTooltip(), flags,
-                                  tiktokBadge ? tiktokBadge->artwork() : nullptr});
+                                  tiktokBadge ? tiktokBadge->artwork() : nullptr,
+                                  ffzBadge ? ffzBadge->getColor() : QColor{}});
             }
         }
     }
