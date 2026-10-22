@@ -1029,6 +1029,17 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
             "Reconnect",
             h->getDisplaySequence(HotkeyCategory::Split, "reconnect"), this,
             &SplitHeader::reconnect);
+        if (twitchChannel && twitchChannel->isReadingAnonymously() &&
+            !twitchChannel->isAnonymous())
+        {
+            menu->addAction("Reconnect with your account", this, [this] {
+                if (auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+                        this->split_->getSelectedChannel()))
+                {
+                    getApp()->getTwitch()->reconnectChannel(channel, false);
+                }
+            });
+        }
     }
 
     if (twitchChannel || kickChannel)

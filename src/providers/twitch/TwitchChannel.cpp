@@ -1767,7 +1767,25 @@ void TwitchChannel::showLoginMessage()
 
 void TwitchChannel::showAnonymousReadOnlyMessage()
 {
-    this->addSystemMessage("Anonymous channels are read only.");
+    if (!this->anonymousFallback_)
+    {
+        this->addSystemMessage("Anonymous channels are read only.");
+        return;
+    }
+
+    const QString text =
+        "You are banned from this channel. Connecting anonymously to keep "
+        "reading. Reconnect after an unban to chat again.";
+    const QString reconnect = "Reconnect with your account";
+    MessageBuilder builder(systemMessage, text);
+    builder
+        .emplace<TextElement>(reconnect, MessageElementFlag::Text,
+                              MessageColor::Link)
+        ->setLink({Link::Reconnect, "account:" + this->getName()})
+        ->setTooltip("Try this after you have been unbanned.");
+    builder.message().messageText = text + ' ' + reconnect;
+    builder.message().searchText = builder.message().messageText;
+    this->addMessage(builder.release(), MessageContext::Original);
 }
 
 QString TwitchChannel::prepareMessage(const QString &message,

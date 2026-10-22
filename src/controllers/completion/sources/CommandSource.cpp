@@ -82,7 +82,6 @@ QString commandUsage(const QString &command)
         {"/hideuser", "<username>"},
         {"/host", "<username>"},
         {"/ignore", "<username>"},
-        {"/invis", "<message>"},
         {"/leadmod", "<username>"},
         {"/lockprediction", ""},
         {"/logs", "<username> [channel]"},
@@ -230,12 +229,6 @@ const QSet<QString> &youtubeModerationCommands()
         "/ban", "/delete", "/timeout", "/unban", "/untimeout",
     };
     return commands;
-}
-
-bool hasSelectedGqlAuth()
-{
-    QString ignored;
-    return MoltorinoAuth::resolveSelectedUserToken(&ignored).hasToken();
 }
 
 const QSet<QString> &currentAccountModCommands()
@@ -484,8 +477,7 @@ bool shouldHideCommand(const CommandItem &item, bool hideUnavailable,
                        bool hasGqlModeratorQueueAccess,
                        bool hasMoltorinoBroadcasterAccess,
                        bool hasMoltorinoRoleManagementAccess,
-                       bool hasBotBadgeAuth, bool hasSelectedGqlAuth,
-                       const Channel *channel)
+                       bool hasBotBadgeAuth, const Channel *channel)
 {
     if (!item.builtIn)
     {
@@ -515,15 +507,6 @@ bool shouldHideCommand(const CommandItem &item, bool hideUnavailable,
     if (command == "/chatwarnings" && !hasCurrentAccountModRights)
     {
         return true;
-    }
-
-    if (command == "/invis")
-    {
-        if (isYouTubeChannel)
-        {
-            return true;
-        }
-        return !hasSelectedGqlAuth;
     }
 
     if (isYouTubeChannel)
@@ -749,13 +732,6 @@ void CommandSource::update(const QString &query)
             needsMoltorinoRoleManagementAccess(this->output_) &&
             hasMoltorinoRoleManagementAccess(this->channel_);
         const bool botBadgeAuth = hasBotBadgeAuth();
-        const bool selectedGqlAuth =
-            std::any_of(this->output_.begin(), this->output_.end(),
-                        [](const auto &item) {
-                            return item.builtIn &&
-                                   normalizedCommand(item) == "/invis";
-                        }) &&
-            hasSelectedGqlAuth();
         this->output_.erase(
             std::remove_if(
                 this->output_.begin(), this->output_.end(),
@@ -766,7 +742,7 @@ void CommandSource::update(const QString &query)
                         moltorinoAccess, gqlModeratorQueueAccess,
                         moltorinoBroadcasterAccess,
                         moltorinoRoleManagementAccess, botBadgeAuth,
-                        selectedGqlAuth, this->channel_);
+                        this->channel_);
                 }),
             this->output_.end());
     }

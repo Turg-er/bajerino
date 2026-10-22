@@ -6,6 +6,7 @@
 #include <pajlada/signals.hpp>
 #include <QDateTime>
 #include <QHash>
+#include <QMetaObject>
 #include <QQueue>
 #include <QSet>
 #include <QString>
@@ -223,6 +224,7 @@ private:
     std::uint64_t accountGeneration_ = 0;
 
     std::uint64_t actionGeneration_ = 0;
+    QMetaObject::Connection streamerModeChangedConnection_;
     pajlada::Signals::SignalHolder signalHolder_;
 };
 

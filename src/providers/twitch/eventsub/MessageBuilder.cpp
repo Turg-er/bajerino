@@ -1228,18 +1228,20 @@ MessagePtr makeAutoModReviewMessage(TwitchChannel *channel,
         presentation == AutoModReviewPresentation::ReviewQueue;
 
     const auto reviewReason = [&item] {
-        if (!item.reasonCategory.isEmpty())
+        auto reason = item.reasonCategory.isEmpty() ? item.reasonSummary
+                                                    : item.reasonCategory;
+        if (item.reasonLevel > 0)
         {
-            auto reason = item.reasonCategory;
-            if (item.reasonLevel > 0)
-            {
-                reason +=
-                    u" \u00b7 Level "_s % QString::number(item.reasonLevel);
-            }
-            return reason;
+            reason +=
+                u" \u00b7 Level "_s % QString::number(item.reasonLevel);
         }
-
-        return QString{};
+        if (item.blockedTerm && !item.matchedFragments.isEmpty() &&
+            !(getSettings()->streamerModeHideBlockedTermText &&
+              getApp()->getStreamerMode()->isEnabled()))
+        {
+            reason += u" \u00b7 "_s % item.matchedFragments.join(u", "_s);
+        }
+        return reason;
     }();
     if (isReviewQueue)
     {

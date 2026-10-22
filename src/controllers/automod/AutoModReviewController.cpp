@@ -15,6 +15,7 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
+#include "singletons/StreamerMode.hpp"
 #include "util/FormatTime.hpp"
 #include "util/QStringHash.hpp"
 
@@ -176,7 +177,10 @@ QString reviewActionLabel(ReviewAction action)
 }
 
 AutoModReviewController::AutoModReviewController() = default;
-AutoModReviewController::~AutoModReviewController() = default;
+AutoModReviewController::~AutoModReviewController()
+{
+    QObject::disconnect(this->streamerModeChangedConnection_);
+}
 
 void AutoModReviewController::initialize()
 {
@@ -194,6 +198,11 @@ void AutoModReviewController::initialize()
     };
     getSettings()->advancedAutoModInChat.connect(republish,
                                                  this->signalHolder_);
+    this->streamerModeChangedConnection_ =
+        QObject::connect(getApp()->getStreamerMode(), &IStreamerMode::changed,
+                         getApp()->getStreamerMode(), republish);
+    getSettings()->streamerModeHideBlockedTermText.connect(republish,
+                                                           this->signalHolder_);
     getSettings()->autoModReviewShowReason.connect(republish,
                                                    this->signalHolder_);
     getSettings()->autoModReviewShowContext.connect(republish,

@@ -1795,6 +1795,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "Sending messages still uses your logged in account.")
         ->addTo(layout);
 
+    SettingWidget::checkbox("Connect anonymously when banned",
+                            s.connectAnonymouslyWhenBanned)
+        ->setTooltip("Keep reading chat after a ban. Turn this off or use "
+                     "Reconnect to try your account again after an unban.")
+        ->addTo(layout);
+
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)
         ->setTooltip("'Helix' will use Twitch's Helix API to send messages. "
                      "'IRC' will use IRC to send messages.")

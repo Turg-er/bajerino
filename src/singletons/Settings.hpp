@@ -797,7 +797,7 @@ public:
         static_cast<int>(HighlightMatchStyle::Fill),
     };
     BoolSetting advancedAutoModInChat = {
-        "/moltorino/moderation/advancedAutoModInChat", true};
+        "/moltorino/moderation/advancedAutoModInChat", false};
 
     BoolSetting enableThreadHighlight = {
         "/highlighting/thread/nameIsHighlightKeyword", true};
@@ -922,6 +922,8 @@ public:
     BoolSetting displaySevenTVAnimatedProfile = {
         "/misc/displaySevenTVAnimatedProfile", true};
 
+    BoolSetting connectAnonymouslyWhenBanned = {
+        "/misc/connectAnonymouslyWhenBanned", true};
     EnumStringSetting<TwitchReadConnectionMode> twitchReadConnectionMode = {
         "/misc/x-7tv/twitchReadConnectionMode",
         TwitchReadConnectionMode::Authenticated};

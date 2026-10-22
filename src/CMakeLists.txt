@@ -124,8 +124,6 @@ set(SOURCE_FILES
         controllers/commands/builtin/twitch/GetFounders.hpp
         controllers/commands/builtin/twitch/GetVIPs.cpp
         controllers/commands/builtin/twitch/GetVIPs.hpp
-        controllers/commands/builtin/twitch/InvisibleMessage.cpp
-        controllers/commands/builtin/twitch/InvisibleMessage.hpp
         controllers/commands/builtin/twitch/LowTrust.cpp
         controllers/commands/builtin/twitch/LowTrust.hpp
         controllers/commands/builtin/twitch/ModVipActions.cpp

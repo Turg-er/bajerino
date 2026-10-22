@@ -652,7 +652,7 @@ private:
     void releaseTooltip();
 
     void showAutoModTimeoutMenu(const QString &key, const QPoint &globalPos);
-    bool confirmAutoModBan(QString key);
+    bool banAutoModUser(QString key);
     QString autoModReviewDetails(const QString &key) const;
 
     std::function<bool(const MessagePtr &)> messagePredicate_;

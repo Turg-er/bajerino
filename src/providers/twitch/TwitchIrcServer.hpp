@@ -49,17 +49,14 @@ public:
     virtual void sendMessage(const QString &channelName,
                              const QString &message) = 0;
     virtual void sendRawMessage(const QString &rawMessage) = 0;
-    virtual bool sendInvisibleMessage(
-        const std::shared_ptr<TwitchChannel> &channel, const QString &message,
-        const QString &oauthToken) = 0;
-
     virtual ChannelPtr getOrAddChannel(const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getOrAddAnonymousChannel(
         const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) = 0;
     virtual ChannelPtr getAnonymousChannelOrEmpty(
         const QString &dirtyChannelName) = 0;
-    virtual void reconnectChannel(const std::shared_ptr<TwitchChannel> &channel)
+    virtual void reconnectChannel(const std::shared_ptr<TwitchChannel> &channel,
+                                  bool = true)
     {
         (void)channel;
         this->connect();
@@ -148,10 +145,6 @@ public:
     void sendMessage(const QString &channelName,
                      const QString &message) override;
     void sendRawMessage(const QString &rawMessage) override;
-    bool sendInvisibleMessage(const std::shared_ptr<TwitchChannel> &channel,
-                              const QString &message,
-                              const QString &oauthToken) override;
-
     ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override;
     ChannelPtr getOrAddAnonymousChannel(
         const QString &dirtyChannelName) override;
@@ -159,8 +152,8 @@ public:
     ChannelPtr getChannelOrEmpty(const QString &dirtyChannelName) override;
     ChannelPtr getAnonymousChannelOrEmpty(
         const QString &dirtyChannelName) override;
-    void reconnectChannel(
-        const std::shared_ptr<TwitchChannel> &channel) override;
+    void reconnectChannel(const std::shared_ptr<TwitchChannel> &channel,
+                          bool reconnectAnonymous = true) override;
     void reconnectAnonymousChannels() override;
 
     void open(ConnectionType type);
@@ -262,6 +255,7 @@ private:
     QObjectPtr<RatelimitBucket> joinBucket_;
     QHash<QString, PendingJoin> joinAttempts_;
     QHash<QString, PendingJoin> anonymousJoinAttempts_;
+    QSet<QString> accountReconnects_;
     QTimer joinRetryTimer_;
     QTimer anonymousJoinRetryTimer_;
 
