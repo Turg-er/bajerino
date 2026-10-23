@@ -137,6 +137,12 @@ endif()
 if(USE_PRECOMPILED_HEADERS AND NOT APPLE)
     message(STATUS "Reusing precompiled headers for tests from chatterino-lib")
     target_precompile_headers(${PROJECT_NAME} REUSE_FROM chatterino-lib)
+    if (NOT MSVC AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+        # I know I'm missing something, but CMake doesn't want to
+        # propagate the -pthread flag from the dependencies to this target.
+        # Just force it to do so.
+        target_compile_options(${PROJECT_NAME} PRIVATE -pthread)
+    endif()
 endif()
 
 set_target_properties(${PROJECT_NAME}

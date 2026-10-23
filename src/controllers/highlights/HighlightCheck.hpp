@@ -6,6 +6,7 @@
 
 #include "common/FlagsEnum.hpp"
 #include "controllers/filters/lang/expressions/Expression.hpp"
+#include "messages/Message.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -31,6 +32,7 @@ struct HighlightCheckParams {
     const MessageFlags &messageFlags;
     bool self;
     filters::RunContext runContext;
+    MessagePlatform platform = MessagePlatform::AnyOrTwitch;
 };
 
 using HighlightCheck = std::function<std::optional<HighlightResult>(

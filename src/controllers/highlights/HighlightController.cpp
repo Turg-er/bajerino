@@ -71,13 +71,20 @@ HighlightController::HighlightController(Settings &settings,
 
     this->signalHolder_.managedConnect(
         accounts->twitch.currentUserChanged, [this, &settings] {
-            qCDebug(LOG) << "Rebuild checks because user swapped accounts";
+            qCDebug(LOG)
+                << "Rebuild checks because Twitch user swapped accounts";
             this->rebuildChecks(settings);
         });
 
     this->signalHolder_.managedConnect(
         accounts->twitch.currentUserNameChanged, [this, &settings] {
-            qCDebug(LOG) << "Rebuild checks because user name changed";
+            qCDebug(LOG) << "Rebuild checks because Twitch user name changed";
+            this->rebuildChecks(settings);
+        });
+
+    this->signalHolder_.managedConnect(
+        accounts->kick.currentUserChanged, [this, &settings] {
+            qCDebug(LOG) << "Rebuild checks because Kick user swapped accounts";
             this->rebuildChecks(settings);
         });
 

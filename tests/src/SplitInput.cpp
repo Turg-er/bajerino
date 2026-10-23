@@ -19,6 +19,7 @@
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Paths.hpp"
@@ -104,6 +105,11 @@ public:
         return &this->seventv;
     }
 
+    SeventvPersonalEmotes *getSeventvPersonalEmotes() override
+    {
+        return &this->stvPersonal;
+    }
+
     BttvEmotes bttv;
     FfzEmotes ffz;
     SeventvEmotes seventv;
@@ -122,6 +128,7 @@ public:
     AccountController accounts;
     CommandController commands;
     mock::EmoteController emotes;
+    SeventvPersonalEmotes stvPersonal;
 };
 
 class TestSplitInput : public SplitInput

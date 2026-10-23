@@ -8,6 +8,7 @@
 #include "controllers/accounts/AccountController.hpp"
 #include "controllers/highlights/HighlightCheck.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
+#include "providers/kick/KickAccount.hpp"
 #include "providers/twitch/TwitchAccount.hpp"  // IWYU pragma: keep
 
 namespace chatterino::highlights {
@@ -17,37 +18,67 @@ HighlightCheck YourUsernameHighlight::buildCheck() const
     using H = std::remove_pointer_t<decltype(this)>;
     using Params = HighlightCheckParams;
 
-    auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
+    auto twitchRe = [&] -> std::optional<QRegularExpression> {
+        auto user = getApp()->getAccounts()->twitch.getCurrent();
+        auto name = user->getUserName();
+        if (user->isAnon() || name.isEmpty())
+        {
+            return std::nullopt;
+        }
 
-    if (currentUser->isAnon())
+        return QRegularExpression{
+            REGEX_START_BOUNDARY % QRegularExpression::escape(name) %
+                REGEX_END_BOUNDARY,
+            QRegularExpression::UseUnicodePropertiesOption |
+                QRegularExpression::CaseInsensitiveOption,
+        };
+    }();
+    auto kickRe = [&] -> std::optional<QRegularExpression> {
+        auto user = getApp()->getAccounts()->kick.current();
+        auto name = user->username();
+        if (user->isAnonymous() || name.isEmpty())
+        {
+            return std::nullopt;
+        }
+
+        return QRegularExpression{
+            REGEX_START_BOUNDARY % QRegularExpression::escape(name) %
+                REGEX_END_BOUNDARY,
+            QRegularExpression::UseUnicodePropertiesOption |
+                QRegularExpression::CaseInsensitiveOption,
+        };
+    }();
+
+    if (!twitchRe && !kickRe)
     {
         return {};
     }
-
-    auto currentUsername = currentUser->getUserName();
-
-    if (currentUsername.isEmpty())
-    {
-        return {};
-    }
-
-    QRegularExpression regex(REGEX_START_BOUNDARY %
-                                 QRegularExpression::escape(currentUsername) %
-                                 REGEX_END_BOUNDARY,
-                             QRegularExpression::UseUnicodePropertiesOption |
-                                 QRegularExpression::CaseInsensitiveOption);
 
     return {
-        [highlight = *this,
-         regex](const Params &p) -> std::optional<HighlightResult> {
+        [highlight = *this, twitchRe,
+         kickRe](const Params &p) -> std::optional<HighlightResult> {
             if (p.self)
             {
                 return std::nullopt;
             }
 
-            if (!regex.match(p.originalMessage).hasMatch())
+            switch (p.platform)
             {
-                return std::nullopt;
+                case MessagePlatform::AnyOrTwitch: {
+                    if (!twitchRe ||
+                        !twitchRe->match(p.originalMessage).hasMatch())
+                    {
+                        return std::nullopt;
+                    }
+                }
+                break;
+                case MessagePlatform::Kick: {
+                    if (!kickRe || !kickRe->match(p.originalMessage).hasMatch())
+                    {
+                        return std::nullopt;
+                    }
+                }
+                break;
             }
 
             return highlight.outcome.makeSimpleResult<H>();

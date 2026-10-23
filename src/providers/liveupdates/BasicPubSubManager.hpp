@@ -290,7 +290,7 @@ private:
     {
         for (const auto &client : this->clients_)
         {
-            if (client.second->subscriptions_.contains(subscription))
+            if (client.second->isSubscribed(subscription))
             {
                 return true;
             }
@@ -309,13 +309,6 @@ private:
             }
         }
         return false;
-    }
-
-    bool isSubscribed(const Subscription &subscription) const
-    {
-        return std::ranges::any_of(this->clients_, [&](const auto &c) {
-            return c.second->isSubscribed(subscription);
-        });
     }
 
     Client *resolve(size_t id)
