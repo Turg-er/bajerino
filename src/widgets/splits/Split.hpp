@@ -163,7 +163,7 @@ private:
     /**
      * @brief Opens a Twitch channel's stream in your default browser's player (opens a formatted link)
      */
-    void openChannelInBrowserPlayer(ChannelPtr channel);
+    static void openChannelInBrowserPlayer(const ChannelPtr &channel);
     /**
      * @brief Opens a Twitch channel's stream in streamlink (if the stream's live, and streamlink's installed)
      */

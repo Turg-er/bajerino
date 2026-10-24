@@ -5,6 +5,7 @@
 #include "messages/Message.hpp"
 
 #include "common/Literals.hpp"
+#include "messages/MessageElement.hpp"
 #include "messages/MessageThread.hpp"
 #include "providers/colors/ColorProvider.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
@@ -84,95 +85,35 @@ ScrollbarHighlight Message::getScrollBarHighlight() const
     {
         return {};
     }
-    if (this->flags.has(MessageFlag::Highlighted) ||
-        this->flags.has(MessageFlag::HighlightedWhisper))
+    if (this->flags.has(MessageFlag::Highlighted))
     {
         return {
             this->highlightColor,
         };
     }
 
-    if (this->flags.has(MessageFlag::WatchStreak) &&
-        getSettings()->enableWatchStreakHighlight)
-    {
-        return {
-            ColorProvider::instance().color(ColorType::WatchStreak),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::Subscription) &&
-        getSettings()->enableSubHighlight)
-    {
-        return {
-            ColorProvider::instance().color(ColorType::Subscription),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::RedeemedHighlight) ||
-        (this->flags.has(MessageFlag::RedeemedChannelPointReward) &&
-         !this->usesTwitchGigantifyPresentation()))
-    {
-        return {
-            ColorProvider::instance().color(ColorType::RedeemedHighlight),
-            ScrollbarHighlight::Default,
-            true,
-        };
-    }
-
-    if (this->flags.has(MessageFlag::FirstMessage))
-    {
-        return {
-            ColorProvider::instance().color(ColorType::FirstMessageHighlight),
-            ScrollbarHighlight::Default,
-            false,
-            true,
-        };
-    }
-
-    if (this->flags.has(MessageFlag::AutoModOffendingMessage) ||
-        this->flags.has(MessageFlag::AutoModOffendingMessageHeader))
-    {
-        return {
-            ColorProvider::instance().color(ColorType::AutomodHighlight),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::Announcement) &&
-        getSettings()->enableAnnouncementHighlight)
-    {
-        return {
-            ColorProvider::instance().color(colorTypeFromHelixAnnouncementColor(
-                this->announcementColor,
-                getSettings()->enableColoredAnnouncementHighlight)),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::UncategorizedNotification))
-    {
-        // TODO: Give this a better/its own color :-)
-        return {
-            ColorProvider::instance().color(ColorType::Subscription),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::Announcement) &&
-        getSettings()->enableAnnouncementHighlight)
-    {
-        return {
-            ColorProvider::instance().color(colorTypeFromHelixAnnouncementColor(
-                this->announcementColor,
-                getSettings()->enableColoredAnnouncementHighlight)),
-        };
-    }
-
-    if (this->flags.has(MessageFlag::UncategorizedNotification))
-    {
-        return {
-            ColorProvider::instance().color(ColorType::Subscription),
-        };
-    }
-
     return {};
+}
+
+QString Message::getHeaderText() const
+{
+    QStringList headerWords;
+    for (const auto &element : this->elements)
+    {
+        const auto flags = element->getFlags();
+        if (flags.has(MessageElementFlag::Text) &&
+            flags.hasAny(MessageElementFlag::AnnouncementHeader,
+                         MessageElementFlag::SubscriptionHeader,
+                         MessageElementFlag::WatchStreakHeader))
+        {
+            if (const auto *text =
+                    dynamic_cast<const TextElement *>(element.get()))
+            {
+                headerWords.append(text->words());
+            }
+        }
+    }
+    return headerWords.join(' ');
 }
 
 std::shared_ptr<Message> Message::clone() const

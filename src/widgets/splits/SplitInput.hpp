@@ -33,6 +33,7 @@
 class QMimeData;
 
 class QMenu;
+class QMimeData;
 
 namespace chatterino {
 
@@ -427,13 +428,13 @@ private:
     /// the user updates the query.
     int prevIndexBeforeSearch = 0;
 
-private Q_SLOTS:
-    void editTextChanged();
+    Q_SLOT void editTextChanged();
 
-    void updateChannel();
+    Q_SLOT void updateChannel();
 
     friend class Split;
     friend class ReplyThreadPopup;
+    friend class PopupCycleFixture;
 };
 
 }  // namespace chatterino

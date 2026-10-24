@@ -12,7 +12,7 @@ namespace boost {
 
 template <>
 struct hash<QString> {
-    std::size_t operator()(QString const &s) const
+    size_t operator()(QString const &s) const
     {
         return qHash(s);
     }

@@ -13,7 +13,11 @@ namespace chatterino::mock {
 class EmptyApplication : public IApplication
 {
 public:
-    EmptyApplication() = default;
+    EmptyApplication()
+    {
+        this->paths_.settingsDirectory = this->settingsDir.path();
+        this->paths_.bluzyrinoDataDirectories.clear();
+    }
 
     explicit EmptyApplication(const QString &settingsData)
     {
@@ -25,6 +29,7 @@ public:
             settingsFile.close();
         }
         this->paths_.settingsDirectory = this->settingsDir.path();
+        this->paths_.bluzyrinoDataDirectories.clear();
     }
 
     ~EmptyApplication() override = default;
@@ -70,6 +75,16 @@ public:
     }
 
     BluzyrinoBadges *getBluzyrinoBadges() override
+    {
+        return nullptr;
+    }
+
+    JilChatBadges *getJilChatBadges() override
+    {
+        return nullptr;
+    }
+
+    BadgeHQBadges *getBadgeHQBadges() override
     {
         return nullptr;
     }

@@ -80,11 +80,10 @@ const ImageUploaderResultTag imageUploaderResultMessage{};
 // NOLINTEND(readability-identifier-naming)
 
 MessagePtr makeSystemMessage(const QString &text);
-MessagePtr makeSystemMessage(const QString &text, const QTime &time);
+MessagePtr makeSystemMessage(const QString &text, QTime time);
 
 struct HighlightAlert {
-    QUrl customSound;
-    bool playSound = false;
+    QUrl sound;
     bool windowAlert = false;
 };
 class MessageBuilder
@@ -94,7 +93,7 @@ public:
     MessageBuilder();
 
     MessageBuilder(SystemMessageTag, const QString &text,
-                   const QTime &time = QTime::currentTime());
+                   QTime time = QTime::currentTime());
     MessageBuilder(TimeoutMessageTag, const QString &timeoutUser,
                    const QString &sourceUser, const QString &channel,
                    const QString &systemMessageText, uint32_t times,
@@ -181,8 +180,9 @@ public:
     void appendChannelPointRewardMessage(const ChannelPointReward &reward,
                                          bool isMod, bool isBroadcaster);
 
-    static MessagePtr makeChannelPointRewardMessage(
-        const ChannelPointReward &reward, bool isMod, bool isBroadcaster);
+    static std::pair<MessagePtr, HighlightAlert> makeChannelPointRewardMessage(
+        const ChannelPointReward &reward, bool isMod, bool isBroadcaster,
+        Channel *channel);
 
     /// Make a "CHANNEL_NAME has gone live!" message
     static MessagePtr makeLiveMessage(const HelixMinimalUser &channel,
@@ -250,15 +250,13 @@ public:
         const MessagePtr &message, const MessagePtr &previousParent,
         const MessagePtr &replacementParent);
 
-    static MessagePtrMut makeSystemMessageWithUser(
+    static std::pair<MessagePtrMut, HighlightAlert> makeSystemMessageWithUser(
         const QString &text, const QString &loginName,
-        const QString &displayName, const MessageColor &userColor,
-        const QTime &time, const Communi::IrcMessage &ircMessage,
-        TwitchChannel *channel);
+        const QString &displayName, const MessageColor &userColor, QTime time,
+        const Communi::IrcMessage &ircMessage, TwitchChannel *channel);
 
-    static MessagePtrMut makeSubgiftMessage(Communi::TagsRef tags,
-                                            const QTime &time,
-                                            TwitchChannel *channel);
+    static std::pair<MessagePtrMut, HighlightAlert> makeSubgiftMessage(
+        Communi::TagsRef tags, QTime time, TwitchChannel *channel);
 
     static MessagePtrMut makeMissingScopesMessage(const QString &missingScopes);
 
@@ -342,7 +340,8 @@ public:
     // parseHighlights only updates the visual state of the message, but leaves the playing of alerts and sounds to the triggerHighlights function
     [[nodiscard]] HighlightAlert parseHighlights(Communi::TagsRef tags,
                                                  const QString &originalMessage,
-                                                 const MessageParseArgs &args);
+                                                 const MessageParseArgs &args,
+                                                 Channel *channel);
 
 private:
     void appendChannelName(const Channel *channel);
@@ -360,6 +359,8 @@ private:
     void appendFfzBadges(TwitchChannel *twitchChannel, const QString &userID);
     void appendFfzApBadge(const QString &userID);
     void appendBluzyrinoBadges(const QString &userID);
+    void appendJilChatBadges(const QString &userID);
+    void appendBadgeHQBadges(const QString &userID);
     void appendBttvBadges(const QString &userID);
     void appendSeventvBadges(const QString &userID);
     void appendHomiesBadges(const QString &userID, bool senderIsCurrentUser);

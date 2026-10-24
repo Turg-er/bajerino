@@ -18,6 +18,8 @@
 #include "providers/bttv/liveupdates/BttvLiveUpdateMessages.hpp"  // IWYU pragma: keep
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/irc/IrcConnection2.hpp"
+#include "providers/kick/KickChannel.hpp"
+#include "providers/kick/KickChatServer.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 #include "providers/NetworkConfigurationProvider.hpp"
@@ -738,7 +740,7 @@ bool TwitchIrcServer::clearAnonymousReadFallbacks()
 void TwitchIrcServer::handleReadBlock(Communi::IrcMessage *message)
 {
     const auto tags = message->tags();
-    if (tags.has("historical"))
+    if (!getSettings()->connectAnonymouslyWhenBanned || tags.has("historical"))
     {
         return;
     }
@@ -1337,43 +1339,52 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
     {
         this->signalHolder.managedConnect(
             bttvLiveUpdates->signals_.emoteAdded, [&](const auto &data) {
-                auto chan = this->getChannelOrEmptyByID(data.channelID);
-
                 postToThread(
-                    [chan, data] {
-                        if (auto *channel =
-                                dynamic_cast<TwitchChannel *>(chan.get()))
-                        {
-                            channel->addBttvEmote(data);
-                        }
+                    [this, data] {
+                        this->forEachChannel([&data](const auto &chan) {
+                            if (auto *channel =
+                                    dynamic_cast<TwitchChannel *>(chan.get());
+                                channel && channel->emoteSourceID(
+                                               ChannelEmoteProvider::Bttv) ==
+                                               data.channelID)
+                            {
+                                channel->addBttvEmote(data);
+                            }
+                        });
                     },
                     this);
             });
         this->signalHolder.managedConnect(
             bttvLiveUpdates->signals_.emoteUpdated, [&](const auto &data) {
-                auto chan = this->getChannelOrEmptyByID(data.channelID);
-
                 postToThread(
-                    [chan, data] {
-                        if (auto *channel =
-                                dynamic_cast<TwitchChannel *>(chan.get()))
-                        {
-                            channel->updateBttvEmote(data);
-                        }
+                    [this, data] {
+                        this->forEachChannel([&data](const auto &chan) {
+                            if (auto *channel =
+                                    dynamic_cast<TwitchChannel *>(chan.get());
+                                channel && channel->emoteSourceID(
+                                               ChannelEmoteProvider::Bttv) ==
+                                               data.channelID)
+                            {
+                                channel->updateBttvEmote(data);
+                            }
+                        });
                     },
                     this);
             });
         this->signalHolder.managedConnect(
             bttvLiveUpdates->signals_.emoteRemoved, [&](const auto &data) {
-                auto chan = this->getChannelOrEmptyByID(data.channelID);
-
                 postToThread(
-                    [chan, data] {
-                        if (auto *channel =
-                                dynamic_cast<TwitchChannel *>(chan.get()))
-                        {
-                            channel->removeBttvEmote(data);
-                        }
+                    [this, data] {
+                        this->forEachChannel([&data](const auto &chan) {
+                            if (auto *channel =
+                                    dynamic_cast<TwitchChannel *>(chan.get());
+                                channel && channel->emoteSourceID(
+                                               ChannelEmoteProvider::Bttv) ==
+                                               data.channelID)
+                            {
+                                channel->removeBttvEmote(data);
+                            }
+                        });
                     },
                     this);
             });
@@ -1394,17 +1405,14 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                     getApp()->getSeventvPersonalEmotes()->updateEmoteSet(
                         data.emoteSetID, data);
                 }
-                else
-                {
-                    postToThread(
-                        [this, data] {
-                            this->forEachSeventvEmoteSet(
-                                data.emoteSetID, [data](TwitchChannel &chan) {
-                                    chan.addSeventvEmote(data);
-                                });
-                        },
-                        this);
-                }
+                postToThread(
+                    [this, data] {
+                        this->forEachSeventvEmoteSet(
+                            data.emoteSetID, [data](TwitchChannel &chan) {
+                                chan.addSeventvEmote(data);
+                            });
+                    },
+                    this);
             });
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.emoteUpdated, [&](const auto &data) {
@@ -1414,17 +1422,14 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                     getApp()->getSeventvPersonalEmotes()->updateEmoteSet(
                         data.emoteSetID, data);
                 }
-                else
-                {
-                    postToThread(
-                        [this, data] {
-                            this->forEachSeventvEmoteSet(
-                                data.emoteSetID, [data](TwitchChannel &chan) {
-                                    chan.updateSeventvEmote(data);
-                                });
-                        },
-                        this);
-                }
+                postToThread(
+                    [this, data] {
+                        this->forEachSeventvEmoteSet(
+                            data.emoteSetID, [data](TwitchChannel &chan) {
+                                chan.updateSeventvEmote(data);
+                            });
+                    },
+                    this);
             });
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.emoteRemoved, [&](const auto &data) {
@@ -1434,24 +1439,25 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
                     getApp()->getSeventvPersonalEmotes()->updateEmoteSet(
                         data.emoteSetID, data);
                 }
-                else
-                {
-                    postToThread(
-                        [this, data] {
-                            this->forEachSeventvEmoteSet(
-                                data.emoteSetID, [data](TwitchChannel &chan) {
-                                    chan.removeSeventvEmote(data);
-                                });
-                        },
-                        this);
-                }
+                postToThread(
+                    [this, data] {
+                        this->forEachSeventvEmoteSet(
+                            data.emoteSetID, [data](TwitchChannel &chan) {
+                                chan.removeSeventvEmote(data);
+                            });
+                    },
+                    this);
             });
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.userUpdated, [&](const auto &data) {
-                this->forEachSeventvUser(data.userID,
-                                         [data](TwitchChannel &chan) {
-                                             chan.updateSeventvUser(data);
-                                         });
+                postToThread(
+                    [this, data] {
+                        this->forEachSeventvUser(
+                            data.userID, [data](TwitchChannel &chan) {
+                                chan.updateSeventvUser(data);
+                            });
+                    },
+                    this);
             });
         this->signalHolder.managedConnect(
             seventvEventAPI->signals_.personalEmoteSetAdded,
@@ -1496,6 +1502,29 @@ void TwitchIrcServer::initEventAPIs(BttvLiveUpdates *bttvLiveUpdates,
     }
 }
 
+void TwitchIrcServer::dropBttvChannel(const QString &channelID)
+{
+    auto *updates = getApp()->getBttvLiveUpdates();
+    if (updates == nullptr || channelID.isEmpty())
+    {
+        return;
+    }
+    bool inUse = false;
+    this->forEachChannel([&](const auto &chan) {
+        if (const auto *channel = dynamic_cast<TwitchChannel *>(chan.get()))
+        {
+            inUse |= channel->roomId() == channelID ||
+                     (getSettings()->enableBTTVChannelEmotes &&
+                      channel->emoteSourceID(ChannelEmoteProvider::Bttv) ==
+                          channelID);
+        }
+    });
+    if (!inUse)
+    {
+        updates->partChannel(channelID);
+    }
+}
+
 void TwitchIrcServer::reloadAllBTTVChannelEmotes()
 {
     this->forEachChannel([](const auto &chan) {
@@ -1531,7 +1560,7 @@ void TwitchIrcServer::forEachSeventvEmoteSet(
 {
     this->forEachChannel([emoteSetId, func](const auto &chan) {
         if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get());
-            channel->seventvEmoteSetID() == emoteSetId)
+            channel != nullptr && channel->seventvEmoteSetID() == emoteSetId)
         {
             func(*channel);
         }
@@ -1542,7 +1571,7 @@ void TwitchIrcServer::forEachSeventvUser(
 {
     this->forEachChannel([userId, func](const auto &chan) {
         if (auto *channel = dynamic_cast<TwitchChannel *>(chan.get());
-            channel->seventvUserID() == userId)
+            channel != nullptr && channel->seventvUserID() == userId)
         {
             func(*channel);
         }
@@ -1575,6 +1604,10 @@ void TwitchIrcServer::dropSeventvChannel(const QString &userID,
             }
 
             auto *channel = dynamic_cast<TwitchChannel *>(chan.get());
+            if (channel == nullptr)
+            {
+                continue;
+            }
             if (!foundSet && channel->seventvEmoteSetID() == emoteSetID)
             {
                 foundSet = true;
@@ -1594,6 +1627,28 @@ void TwitchIrcServer::dropSeventvChannel(const QString &userID,
     if (!(foundSet && foundUser))
     {
         scan(this->anonymousChannels);
+    }
+
+    if (auto *kick = getApp()->getKickChatServer())
+    {
+        if (!foundUser)
+        {
+            kick->forEachSeventvUser(userID, [&foundUser](KickChannel &) {
+                foundUser = true;
+            });
+        }
+        if (!foundSet)
+        {
+            kick->forEachSeventvEmoteSet(emoteSetID,
+                                         [&foundSet](KickChannel &) {
+                                             foundSet = true;
+                                         });
+        }
+    }
+    if (!foundSet)
+    {
+        foundSet =
+            getApp()->getSeventvPersonalEmotes()->hasEmoteSet(emoteSetID);
     }
 
     if (!foundUser)
@@ -1904,73 +1959,6 @@ void TwitchIrcServer::sendMessage(const QString &channelName,
                                   const QString &message)
 {
     this->sendRawMessage(makePrivmsg(channelName, message, makeIrcTags()));
-}
-
-bool TwitchIrcServer::sendInvisibleMessage(
-    const std::shared_ptr<TwitchChannel> &channel, const QString &message,
-    const QString &oauthToken)
-{
-    if (!channel)
-    {
-        return false;
-    }
-    if (oauthToken.trimmed().isEmpty())
-    {
-        channel->addSystemMessage(
-            MoltorinoAuth::authRequiredMessage("sending invisible messages"));
-        return false;
-    }
-
-    const auto channelId = channel->roomId();
-    if (channelId.isEmpty())
-    {
-        channel->addSystemMessage(
-            "Sending messages in this channel isn't possible yet.");
-        return false;
-    }
-
-    const auto parsedMessage = channel->prepareMessage(message);
-    if (parsedMessage.isEmpty())
-    {
-        return false;
-    }
-    if (parsedMessage.size() > TWITCH_MESSAGE_LIMIT)
-    {
-        channel->addSystemMessage("Your message was too long.");
-        return false;
-    }
-    if (!this->prepareToSend(channel))
-    {
-        return false;
-    }
-
-    const auto nonce = makeInvisibleTwitchClientNonce(parsedMessage);
-    const auto weak = std::weak_ptr<TwitchChannel>(channel);
-    TwitchGql::sendChatMessageWithNonce(
-        channelId, parsedMessage, nonce, oauthToken,
-        [weak, parsedMessage] {
-            auto shared = weak.lock();
-            if (!shared)
-            {
-                return;
-            }
-
-            shared->updateBttvActivity();
-            shared->updateSevenTVActivity();
-            shared->lastSentMessage_ = parsedMessage;
-        },
-        [weak](const QString &error) {
-            auto shared = weak.lock();
-            if (!shared)
-            {
-                return;
-            }
-
-            shared->addSystemMessage("Failed to send invisible message: " +
-                                     MoltorinoAuth::normalizeAuthError(
-                                         "sending invisible messages", error));
-        });
-    return true;
 }
 
 void TwitchIrcServer::sendRawMessage(const QString &rawMessage)

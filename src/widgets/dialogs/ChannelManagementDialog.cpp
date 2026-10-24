@@ -823,14 +823,16 @@ void ChannelManagementDialog::saveMetadata()
     this->setStatus("Saving stream info");
     this->updateControls();
 
+    const auto successfulUpdate = update;
     QPointer<ChannelManagementDialog> self(this);
     ChannelManagement::updateMetadata(
         this->channel_, std::move(update),
-        [self] {
+        [self, successfulUpdate] {
             if (!self)
             {
                 return;
             }
+            self->applySuccessfulUpdate(successfulUpdate);
             self->saveInFlight_ = false;
             self->setStatus("Stream information updated");
             self->close();
@@ -845,6 +847,35 @@ void ChannelManagementDialog::saveMetadata()
             self->setStatus(error, true);
             self->updateControls();
         });
+}
+
+void ChannelManagementDialog::applySuccessfulUpdate(
+    const ChannelManagementUpdate &update)
+{
+    if (update.title)
+    {
+        this->originalMetadata_.title = *update.title;
+    }
+    if (update.language)
+    {
+        this->originalMetadata_.language = *update.language;
+    }
+    if (update.category)
+    {
+        this->originalMetadata_.category = *update.category;
+    }
+    if (update.tags)
+    {
+        this->originalMetadata_.tags = *update.tags;
+    }
+    if (update.contentLabels)
+    {
+        this->originalMetadata_.contentLabels = *update.contentLabels;
+    }
+    if (update.isRerun)
+    {
+        this->originalMetadata_.isRerun = *update.isRerun;
+    }
 }
 
 void ChannelManagementDialog::addTagFromInput()
@@ -1168,6 +1199,11 @@ void ChannelManagementDialog::setCommercialMessage(const QString &text,
 
 void ChannelManagementDialog::updateCommercialAvailability()
 {
+    if (!this->commercialAvailabilityLabel_)
+    {
+        return;
+    }
+
     const auto cooldownSeconds =
         ChannelManagement::commercialCooldownRemainingSeconds(
             this->channel_->roomId());
@@ -1363,6 +1399,10 @@ void ChannelManagementDialog::setStatus(const QString &text, bool error)
 {
     this->statusText_ = text;
     this->statusIsError_ = error;
+    if (!this->statusLabel_)
+    {
+        return;
+    }
     this->statusLabel_->setText(text);
     this->statusLabel_->setVisible(!text.isEmpty());
     setStateProperty(this->statusLabel_, "error", error);
@@ -1372,6 +1412,10 @@ void ChannelManagementDialog::setCategoryHint(const QString &text, bool error)
 {
     this->categoryHintText_ = text;
     this->categoryHintIsError_ = error;
+    if (!this->categoryHintLabel_)
+    {
+        return;
+    }
     this->categoryStatusLabel_->setText(error ? QString() : text);
     this->categoryHintLabel_->setText(text);
     this->categoryHintLabel_->setVisible(error && !text.isEmpty());

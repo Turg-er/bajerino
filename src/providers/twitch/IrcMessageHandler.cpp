@@ -578,10 +578,9 @@ void IrcMessageHandler::parsePrivMessageInto(
 
     if (shouldUpdateChannelFromMessage)
     {
-        auto badgesTag = message->tag("badges");
-        if (badgesTag.isValid())
+        if (auto badgesTag = message->tags().get("badges"))
         {
-            auto parsedBadges = parseBadges(badgesTag.toString());
+            auto parsedBadges = parseBadges(*badgesTag);
             channel->setCurrentUserBadges(currentUser->getUserId(),
                                           parseBadgeTag(message->tags()));
             channel->setMod(parsedBadges.contains("moderator") ||
@@ -614,7 +613,7 @@ void IrcMessageHandler::parsePrivMessageInto(
 
 void IrcMessageHandler::handleRoomStateMessage(Communi::IrcMessage *message)
 {
-    const auto &tags = message->tags();
+    auto tags = message->tags();
 
     // get Twitch channel
     QString chanName;
@@ -823,10 +822,9 @@ void IrcMessageHandler::handleUserStateMessage(Communi::IrcMessage *message)
         bool hasModBadge = false;
 
         // Checking if currentUser is a VIP, staff member or has moderator badges
-        QVariant badgesTag = message->tag("badges");
-        if (badgesTag.isValid())
+        if (auto badgesTag = message->tags().get("badges"))
         {
-            auto parsedBadges = parseBadges(badgesTag.toString());
+            auto parsedBadges = parseBadges(*badgesTag);
             const auto currentUser =
                 getApp()->getAccounts()->twitch.getCurrent();
             tc->setCurrentUserBadges(currentUser->getUserId(),
@@ -844,11 +842,10 @@ void IrcMessageHandler::handleUserStateMessage(Communi::IrcMessage *message)
         }
         else
         {
-            QVariant modTag = message->tag("mod");
-            if (modTag.isValid())
+            if (auto modTag = message->tags().get("mod"))
             {
                 // Also checking if the mod tag is present, since badges sometimes disappear in IRC
-                tc->setMod(modTag == "1");
+                tc->setMod(*modTag == "1");
             }
         }
 
@@ -895,6 +892,8 @@ void IrcMessageHandler::handleWhisperMessage(Communi::IrcMessage *ircMessage)
     MessageBuilder::triggerHighlights(c, message, alert);
 
     getApp()->getTwitch()->setLastUserThatWhisperedMe(message->loginName);
+    getApp()->getAccounts()->twitch.getCurrent()->addWhisperUser(
+        message->loginName);
 
     if (message->flags.has(MessageFlag::ShowInMentions))
     {
@@ -986,10 +985,18 @@ void IrcMessageHandler::parseUserNoticeMessageInto(Communi::IrcMessage *message,
     if (msgType == "subgift")
     {
         // subgifts are special because they include two users
-        const auto msg = MessageBuilder::makeSubgiftMessage(
+        const auto [msg, alert] = MessageBuilder::makeSubgiftMessage(
             tags, calculateMessageTime(message).time(), channel);
 
         addRecordedUserNotice(sink, channel, msg, tags);
+        MessageBuilder::triggerHighlights(channel, msg, alert);
+
+        if (msg->flags.has(MessageFlag::ShowInMentions) &&
+            sink.sinkTraits().has(MessageSinkTrait::AddMentionsToGlobalChannel))
+        {
+            getApp()->getTwitch()->getMentionsChannel()->addMessage(
+                msg, MessageContext::Original);
+        }
         return;
     }
 
@@ -1105,11 +1112,12 @@ void IrcMessageHandler::parseUserNoticeMessageInto(Communi::IrcMessage *message,
             return;
         }
 
-        auto msg = MessageBuilder::makeSystemMessageWithUser(
+        auto [msg, alert] = MessageBuilder::makeSystemMessageWithUser(
             parseTagString(messageText), login, displayName, userColor,
             calculateMessageTime(message).time(), *message, channel);
 
         addRecordedUserNotice(sink, channel, msg, tags);
+        MessageBuilder::triggerHighlights(channel, msg, alert);
     }
 }
 
@@ -1509,6 +1517,11 @@ void IrcMessageHandler::addMessage(Communi::IrcMessage *message,
                                                   tags.raw());
             },
             [&] {
+                if (msg->flags.has(MessageFlag::SharedMessage))
+                {
+                    chan->probeSharedChatSession();
+                }
+
                 sink.addMessage(msg, MessageContext::Original);
             });
         chan->addRecentChatter(msg->displayName);

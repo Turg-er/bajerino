@@ -343,11 +343,6 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
             this->update();
         },
         this->managedConnections_);
-    getSettings()->thinTabLines.connect(
-        [this] {
-            this->update();
-        },
-        this->managedConnections_);
     getSettings()->colorTabHighlightsByMessage.connect(
         [this](auto, const auto &) {
             this->update();
@@ -1223,7 +1218,8 @@ void NotebookTab::titleUpdated()
 {
     // Queue up save because: Tab title changed
     getApp()->getWindows()->queueSave();
-    this->refreshSize();
+    this->notebook_->refresh();
+    this->refreshAndCommitSize(true);
     this->update();
     this->notebook_->refresh();
 }
@@ -1579,6 +1575,8 @@ void NotebookTab::tabSizeChanged()
     this->mouseDownX_ = false;
     this->mouseOverX_ = false;
     this->refreshAndCommitSize(true);
+
+    this->notebook_->refresh();
     this->update();
 }
 
@@ -1644,8 +1642,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
         (windowFocused ? colors.backgrounds.regular
                        : colors.backgrounds.unfocused);
 
-    const auto tabLineWidth = getSettings()->thinTabLines ? 1 : 2;
-    auto selectionOffset = ceil((this->selected_ ? 0 : tabLineWidth) * scale);
+    auto selectionOffset = std::ceil((this->selected_ ? 0.F : 1.F) * scale);
 
     // fill the tab background
     auto bgRect = this->rect();
@@ -1720,8 +1717,7 @@ void NotebookTab::paintEvent(QPaintEvent *)
     }
 
     // draw color indicator line
-    auto lineThickness =
-        ceil((tabLineWidth + (this->selected_ ? 1 : 0)) * scale);
+    auto lineThickness = std::ceil((this->selected_ ? 2.F : 1.F) * scale);
     const auto &lineColors =
         this->role_ == Role::GroupHeader && this->selected_ &&
                 this->highlightState_ != HighlightState::None

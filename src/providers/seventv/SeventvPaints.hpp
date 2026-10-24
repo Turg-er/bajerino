@@ -4,6 +4,7 @@
 
 #include <pajlada/signals/signal.hpp>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -50,7 +51,7 @@ public:
     pajlada::Signals::Signal<const QString &, SeventvPaintLoadStatus>
         paintLoadStatusChanged;
 
-    void addPaint(const QJsonObject &paintJson);
+    void addPaint(const QJsonObject &paintJson, bool updateExisting = true);
     void assignPaintToUsers(const QString &paintID,
                             std::span<const seventv::eventapi::User> users);
     void clearPaintFromUsers(const QString &paintID,
@@ -85,6 +86,7 @@ private:
         std::uint64_t requestID = 0;
         std::chrono::steady_clock::time_point startedAt{};
         bool retry = false;
+        QJsonObject definition;
     };
 
     void loadPaintsByIDInternal(const QStringList &paintIDs, bool retry,
@@ -99,14 +101,15 @@ private:
     void schedulePaintRetry(const QStringList &paintIDs);
     bool finishPaintLoad(const PaintBatchItem &paint, std::uint64_t requestID,
                          SeventvPaintLoadStatus status);
+    void notifyPaintChanged(std::vector<std::pair<QString, bool>> users,
+                            bool repaint = false);
 
     mutable std::shared_mutex mutex_;
 
-    // user-name => paint
-    std::unordered_map<QString, std::shared_ptr<Paint>> kickPaintMap_;
-    // user-name => paint
-    std::unordered_map<QString, std::shared_ptr<Paint>> twitchPaintMap_;
-    // paint-id => paint
+    std::unordered_map<QString, QString> kickPaintMap_;
+
+    std::unordered_map<QString, QString> twitchPaintMap_;
+
     std::unordered_map<QString, std::shared_ptr<Paint>> knownPaints_;
 
     std::unordered_map<QString, PaintLoadState> paintLoadStates_;

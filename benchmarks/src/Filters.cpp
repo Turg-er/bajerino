@@ -29,10 +29,8 @@ public:
 
     void run(benchmark::State &state) override
     {
-        auto parsed = recentmessages::detail::parseRecentMessages(
-            this->messages.object());
-        auto built = recentmessages::detail::buildRecentMessages(
-            parsed, this->chan.get());
+        const auto built = bench::buildRecentMessages(
+            this->messages.object().value("messages").toArray(), this->chan);
 
         QList<QUuid> filters;
         for (qsizetype i = 0; i < this->filterTexts.size(); i++)

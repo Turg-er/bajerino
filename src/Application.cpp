@@ -21,11 +21,14 @@
 #include "controllers/recording/ChatRecordingController.hpp"
 #include "controllers/sound/ISoundController.hpp"
 #include "controllers/spellcheck/SpellChecker.hpp"
+#include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
+#include "providers/IvrApi.hpp"
+#include "providers/jilchat/JilChatBadges.hpp"
 #include "providers/kick/KickChatServer.hpp"
 #include "providers/links/LinkResolver.hpp"
 #include "providers/potat/PotatCommands.hpp"
@@ -212,6 +215,8 @@ Application::Application(Settings &_settings, const Paths &paths,
     , ffzBadges(new FfzBadges)
     , ffzApBadges(new FfzApBadges)
     , bluzyrinoBadges(new BluzyrinoBadges)
+    , jilChatBadges(new JilChatBadges)
+    , badgeHQBadges(new BadgeHQBadges)
     , potatCommands(new PotatCommands)
     , bttvBadges(new BttvBadges)
     , seventvBadges(new SeventvBadges)
@@ -288,6 +293,8 @@ void Application::initialize(Settings &settings, const Paths &paths)
     this->ffzBadges->load();
     this->ffzApBadges->initialize();
     this->bluzyrinoBadges->initialize();
+    this->jilChatBadges->initialize();
+    this->badgeHQBadges->initialize();
     this->moltorinoSupporterBadges->initialize();
 
     // Load global emotes
@@ -838,6 +845,18 @@ BluzyrinoBadges *Application::getBluzyrinoBadges()
     return this->bluzyrinoBadges.get();
 }
 
+JilChatBadges *Application::getJilChatBadges()
+{
+    assert(this->jilChatBadges);
+    return this->jilChatBadges.get();
+}
+
+BadgeHQBadges *Application::getBadgeHQBadges()
+{
+    assert(this->badgeHQBadges);
+    return this->badgeHQBadges.get();
+}
+
 PotatCommands *Application::getPotatCommands()
 {
     assertInGuiThread();
@@ -918,6 +937,8 @@ void Application::stop()
     this->repeatedMessageDetector.reset();
     this->ffzApBadges.reset();
     this->bluzyrinoBadges.reset();
+    this->jilChatBadges.reset();
+    this->badgeHQBadges.reset();
     this->potatCommands.reset();
     this->homiesBadges.reset();
     this->twitch.reset();

@@ -91,7 +91,6 @@ public:
      **/
     virtual void select(QWidget *page, bool focusPage = true,
                         bool recordInHistory = true);
-
     void selectHistoryBack(bool focusPage);
     void selectHistoryForward(bool focusPage);
     QWidget *getPreviousVisitedPage() const;

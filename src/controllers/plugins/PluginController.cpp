@@ -71,6 +71,7 @@ void PluginController::initialize(Settings &settings)
         {
             // uninitialize plugins
             this->plugins_.clear();
+            this->queueChangeNotification();
         }
     });
 }
@@ -86,6 +87,7 @@ void PluginController::loadPlugins()
         auto pluginDir = QDir(info.absoluteFilePath());
         this->tryLoadFromDir(pluginDir);
     }
+    this->queueChangeNotification();
 }
 
 bool PluginController::tryLoadFromDir(const QDir &pluginDir)
@@ -137,6 +139,7 @@ bool PluginController::tryLoadFromDir(const QDir &pluginDir)
         this->plugins_.insert(
             {pluginDir.dirName(),
              UnloadedPlugin{pluginDir.dirName(), meta, pluginDir}});
+        this->queueChangeNotification();
         return false;
     }
     this->load(index, pluginDir, meta);
@@ -552,13 +555,12 @@ void PluginController::queueChangeNotification()
     }
     this->changeNotificationQueued = true;
     QMetaObject::invokeMethod(
-        qApp,
+        this,
         [this] {
             this->changeNotificationQueued = false;
             this->onPluginsUpdated.invoke();
         },
         Qt::QueuedConnection);
 }
-
 }  // namespace chatterino
 #endif

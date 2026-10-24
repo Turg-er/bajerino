@@ -9,6 +9,7 @@
 #include <QCompleter>
 #include <QKeyEvent>
 #include <QPointer>
+#include <QStringList>
 #include <QTextEdit>
 
 namespace chatterino {
@@ -46,6 +47,8 @@ public:
     bool selectCompletionRow(int row);
     void setGhostText(QString text);
     const QString &ghostText() const;
+    bool isCompletionInProgress() const;
+    void continueCompletion(const QStringList &completions, int currentRow);
 
 protected:
     int heightForWidth(int /*unused*/) const override;
@@ -71,8 +74,8 @@ private:
     QString textUnderCursor(bool *hadSpace = nullptr) const;
 
     QPointer<QCompleter> completer_;
-    pajlada::Signals::SignalHolder connections_;
     QString ignoredCompletionPrefix_;
+    pajlada::Signals::SignalHolder connections_;
     /**
      * This is true if a completion was done but the user didn't type yet,
      * and might want to press `Tab` again to get the next completion

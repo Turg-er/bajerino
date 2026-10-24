@@ -82,12 +82,12 @@ QString getPrivateSwitch(const QString &browserExecutable)
         {"google chrome beta", "-incognito"},
         {"google chrome canary", "-incognito"},
         {"google-chrome-stable", "-incognito"},
-        {"chromium", "-incognito"},
         {"vivaldi", "-incognito"},
         {"opera", "-incognito"},
+        {"msedge", "-inprivate"},
+        {"chromium", "-incognito"},
         {"brave", "-incognito"},
         {"brave browser", "-incognito"},
-        {"msedge", "-inprivate"},
         {"microsoft edge", "-inprivate"},
     };
 

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "util/QStringHash.hpp"
+
 #include <boost/functional/hash.hpp>
 #include <QHash>
 #include <QString>
@@ -46,13 +48,13 @@ struct hash<chatterino::eventsub::SubscriptionRequest> {
     {
         size_t seed = 0;
 
-        boost::hash_combine(seed, qHash(v.subscriptionType));
-        boost::hash_combine(seed, qHash(v.subscriptionVersion));
+        boost::hash_combine(seed, v.subscriptionType);
+        boost::hash_combine(seed, v.subscriptionVersion);
 
         for (const auto &[conditionKey, conditionValue] : v.conditions)
         {
-            boost::hash_combine(seed, qHash(conditionKey));
-            boost::hash_combine(seed, qHash(conditionValue));
+            boost::hash_combine(seed, conditionKey);
+            boost::hash_combine(seed, conditionValue);
         }
 
         return seed;

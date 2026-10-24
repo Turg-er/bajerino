@@ -23,6 +23,7 @@
 #include "messages/MessageColor.hpp"
 #include "messages/MessageElement.hpp"
 #include "messages/MessageThread.hpp"
+#include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/bttv/BttvEmotes.hpp"
@@ -33,6 +34,7 @@
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
+#include "providers/jilchat/JilChatBadges.hpp"
 #include "providers/links/LinkResolver.hpp"
 #include "providers/moltorino/MoltorinoSupporterBadges.hpp"
 #include "providers/pronouns/Pronouns.hpp"
@@ -363,39 +365,15 @@ QString formatUpdatedEmoteList(const QString &platform,
     return text;
 }
 
-/**
- * Gets the default sound url if the user set one,
- * or the chatterino default ping sound if no url is set.
- */
-QUrl getFallbackHighlightSound()
-{
-    QString path = getSettings()->pathHighlightSound;
-    bool fileExists =
-        !path.isEmpty() && QFileInfo::exists(path) && QFileInfo(path).isFile();
-
-    if (fileExists)
-    {
-        return QUrl::fromLocalFile(path);
-    }
-
-    return QUrl("qrc:/sounds/ping2.wav");
-}
-
-void actuallyTriggerHighlights(const QString & /*channelName*/, bool playSound,
-                               const QUrl &customSoundUrl, bool windowAlert)
+void actuallyTriggerHighlights(const QUrl &sound, bool windowAlert)
 {
     const bool hasFocus = (QApplication::focusWidget() != nullptr);
     const bool resolveFocus =
         !hasFocus || getSettings()->highlightAlwaysPlaySound;
 
-    if (playSound && resolveFocus)
+    if (!sound.isEmpty() && resolveFocus)
     {
-        QUrl soundUrl = customSoundUrl;
-        if (soundUrl.isEmpty())
-        {
-            soundUrl = getFallbackHighlightSound();
-        }
-        getApp()->getSound()->play(soundUrl);
+        getApp()->getSound()->play(sound);
     }
 
     if (windowAlert)
@@ -936,7 +914,7 @@ MessagePtr makeSystemMessage(const QString &text)
     return MessageBuilder(systemMessage, text).release();
 }
 
-MessagePtr makeSystemMessage(const QString &text, const QTime &time)
+MessagePtr makeSystemMessage(const QString &text, QTime time)
 {
     return MessageBuilder(systemMessage, text, time).release();
 }
@@ -947,7 +925,7 @@ MessageBuilder::MessageBuilder()
 }
 
 MessageBuilder::MessageBuilder(SystemMessageTag, const QString &text,
-                               const QTime &time)
+                               QTime time)
     : MessageBuilder()
 {
     this->emplace<TimestampElement>(time);
@@ -973,10 +951,11 @@ MessageBuilder::MessageBuilder(SystemMessageTag, const QString &text,
     this->message().searchText = text;
 }
 
-MessagePtrMut MessageBuilder::makeSystemMessageWithUser(
-    const QString &text, const QString &loginName, const QString &displayName,
-    const MessageColor &userColor, const QTime &time,
-    const Communi::IrcMessage &ircMessage, TwitchChannel *channel)
+std::pair<MessagePtrMut, HighlightAlert>
+    MessageBuilder::makeSystemMessageWithUser(
+        const QString &text, const QString &loginName,
+        const QString &displayName, const MessageColor &userColor, QTime time,
+        const Communi::IrcMessage &ircMessage, TwitchChannel *channel)
 {
     MessageBuilder builder;
     builder.emplace<TimestampElement>(time);
@@ -1003,12 +982,19 @@ MessagePtrMut MessageBuilder::makeSystemMessageWithUser(
 
     builder.parseMessageTags(tags, channel, true);
 
-    return builder.release();
+    HighlightAlert highlight = builder.parseHighlights(tags, text, {}, channel);
+    if (tags.has("historical"))
+    {
+        // TODO: This logic should probably move into builder.parseHighlights
+        highlight.sound.clear();
+        highlight.windowAlert = false;
+    }
+
+    return {builder.release(), highlight};
 }
 
-MessagePtrMut MessageBuilder::makeSubgiftMessage(Communi::TagsRef tags,
-                                                 const QTime &time,
-                                                 TwitchChannel *channel)
+std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeSubgiftMessage(
+    Communi::TagsRef tags, QTime time, TwitchChannel *channel)
 {
     auto text = parseTagString(tags.getOrEmpty("system-msg"));
 
@@ -1112,13 +1098,20 @@ MessagePtrMut MessageBuilder::makeSubgiftMessage(Communi::TagsRef tags,
     }
 
     builder->flags.set(MessageFlag::System);
-    builder->flags.set(MessageFlag::DoNotTriggerNotification);
     builder->messageText = text;
     builder->searchText = text;
 
     builder.parseMessageTags(tags, channel, true);
 
-    return builder.release();
+    HighlightAlert highlight = builder.parseHighlights(tags, "", {}, channel);
+    if (tags.has("historical"))
+    {
+        // TODO: This logic should probably move into builder.parseHighlights
+        highlight.sound.clear();
+        highlight.windowAlert = false;
+    }
+
+    return {builder.release(), highlight};
 }
 
 MessageBuilder::MessageBuilder(TimeoutMessageTag, const QString &timeoutUser,
@@ -1564,7 +1557,7 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
                                        const MessagePtr &message,
                                        const HighlightAlert &alert)
 {
-    if (!alert.windowAlert && !alert.playSound)
+    if (!alert.windowAlert && alert.sound.isEmpty())
     {
         return;
     }
@@ -1593,10 +1586,9 @@ void MessageBuilder::triggerHighlights(const Channel *channel,
         return;
     }
 
-    actuallyTriggerHighlights(channelName, alert.playSound, alert.customSound,
-                              alert.windowAlert);
+    actuallyTriggerHighlights(alert.sound, alert.windowAlert);
 
-    if (alert.playSound)
+    if (!alert.sound.isEmpty())
     {
         if (auto *windows = getApp()->getWindows())
         {
@@ -1674,14 +1666,20 @@ void MessageBuilder::appendChannelPointRewardMessage(
     this->message().reward = std::make_shared<ChannelPointReward>(reward);
 }
 
-MessagePtr MessageBuilder::makeChannelPointRewardMessage(
-    const ChannelPointReward &reward, bool isMod, bool isBroadcaster)
+std::pair<MessagePtr, HighlightAlert>
+    MessageBuilder::makeChannelPointRewardMessage(
+        const ChannelPointReward &reward, bool isMod, bool isBroadcaster,
+        Channel *channel)
 {
     MessageBuilder builder;
 
     builder.appendChannelPointRewardMessage(reward, isMod, isBroadcaster);
 
-    return builder.release();
+    QVariantMap tagsMap;
+    Communi::TagsRef tags(tagsMap);
+    auto highlights = builder.parseHighlights(tags, "", {}, channel);
+
+    return {builder.release(), HighlightAlert{}};
 }
 
 MessagePtr MessageBuilder::makeLiveMessage(const HelixMinimalUser &channel,
@@ -2267,6 +2265,8 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
         builder.appendFfzBadges(twitchChannel, userID);
         builder.appendFfzApBadge(userID);
         builder.appendBluzyrinoBadges(userID);
+        builder.appendJilChatBadges(userID);
+        builder.appendBadgeHQBadges(userID);
         builder.appendBttvBadges(userID);
         builder.appendMoltorinoBadges(userID);
         builder.appendSeventvBadges(userID);
@@ -2369,19 +2369,12 @@ std::pair<MessagePtrMut, HighlightAlert> MessageBuilder::makeIrcMessage(
         }
     }
 
-    // highlighting incoming whispers if requested per setting
-    if (args.isReceivedWhisper && getSettings()->highlightInlineWhispers)
-    {
-        builder->flags.set(MessageFlag::HighlightedWhisper);
-        builder->highlightColor =
-            ColorProvider::instance().color(ColorType::Whisper);
-    }
-
     // highlights
-    HighlightAlert highlight = builder.parseHighlights(tags, content, args);
+    HighlightAlert highlight =
+        builder.parseHighlights(tags, content, args, channel);
     if (tags.has("historical"))
     {
-        highlight.playSound = false;
+        highlight.sound.clear();
         highlight.windowAlert = false;
     }
 
@@ -3317,7 +3310,8 @@ void MessageBuilder::parseThread(const QString & /*messageContent*/,
 
 HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
                                                const QString &originalMessage,
-                                               const MessageParseArgs &args)
+                                               const MessageParseArgs &args,
+                                               Channel *channel)
 {
     if (getSettings()->isBlacklistedUser(this->message().loginName))
     {
@@ -3325,11 +3319,22 @@ HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
         return {};
     }
 
+    auto currentUser = getApp()->getAccounts()->twitch.getCurrent();
     auto badges = parseBadgeTag(tags);
-    auto [highlighted, highlightResult] = getApp()->getHighlights()->check(
-        args, badges, this->message().loginName, originalMessage,
-        this->message().flags, this->message().platform, this->message().userID,
-        this->message().channelName);
+    auto [highlighted, highlightResult] = getApp()->getHighlights()->check({
+        .args = args,
+        .twitchBadges = badges,
+        .senderName = this->message().loginName,
+        .originalMessage = originalMessage,
+        .messageFlags = this->message().flags,
+        .self = this->message().loginName == currentUser->getUserName(),
+        .runContext =
+            filters::RunContext{
+                .message = this->message(),
+                .channel = channel,
+            },
+        .platform = this->message().platform,
+    });
 
     if (!highlighted)
     {
@@ -3341,28 +3346,14 @@ HighlightAlert MessageBuilder::parseHighlights(Communi::TagsRef tags,
     this->message().flags.set(MessageFlag::Highlighted);
 
     this->message().highlightColor = highlightResult.color;
-    if (!highlightResult.matches.empty())
-    {
-        this->message().highlightMatches =
-            std::make_shared<const std::vector<HighlightMatch>>(
-                std::move(highlightResult.matches));
-    }
 
     if (highlightResult.showInMentions)
     {
         this->message().flags.set(MessageFlag::ShowInMentions);
     }
 
-    auto customSound = [&] {
-        if (highlightResult.customSoundUrl)
-        {
-            return *highlightResult.customSoundUrl;
-        }
-        return QUrl{};
-    }();
     return {
-        .customSound = customSound,
-        .playSound = highlightResult.playSound,
+        .sound = highlightResult.sound,
         .windowAlert = highlightResult.alert,
     };
 }
@@ -3858,6 +3849,14 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
         {
             return QStringLiteral("bl");
         }
+        if (flags.has(MessageElementFlag::BadgeJilChat))
+        {
+            return QStringLiteral("jc");
+        }
+        if (flags.has(MessageElementFlag::BadgeBadgeHQ))
+        {
+            return QStringLiteral("bh");
+        }
         if (flags.has(MessageElementFlag::BadgeSevenTV))
         {
             return QStringLiteral("7");
@@ -3907,9 +3906,9 @@ void MessageBuilder::applyVanityBadgeLayout(const QString &userID,
     }
     const auto customRankCount = requestedRanks.size();
     const auto defaultRank = [](const QString &slot) {
-        static constexpr std::array<QStringView, 13> order{
-            u"ta", u"ts", u"tv", u"tp", u"c",  u"ff", u"fa",
-            u"bt", u"bl", u"m",  u"7",  u"hc", u"hs",
+        static constexpr std::array<QStringView, 15> order{
+            u"ta", u"ts", u"tv", u"tp", u"c", u"ff", u"fa", u"bt",
+            u"bl", u"jc", u"bh", u"m",  u"7", u"hc", u"hs",
         };
         return static_cast<int>(std::ranges::find(order, slot) - order.begin());
     };
@@ -3994,6 +3993,44 @@ void MessageBuilder::appendBluzyrinoBadges(const QString &userID)
     for (const auto &badge : provider->getBadges({userID}))
     {
         this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeBluzyrino);
+        this->message().externalBadges.emplace_back(badge->name.string);
+    }
+}
+
+void MessageBuilder::appendJilChatBadges(const QString &userID)
+{
+    if (!getSettings()->showBadgesJilChat)
+    {
+        return;
+    }
+
+    auto *provider = getApp()->getJilChatBadges();
+    if (provider == nullptr)
+    {
+        return;
+    }
+    for (const auto &badge : provider->getBadges({userID}))
+    {
+        this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeJilChat);
+        this->message().externalBadges.emplace_back(badge->name.string);
+    }
+}
+
+void MessageBuilder::appendBadgeHQBadges(const QString &userID)
+{
+    if (!getSettings()->showBadgesBadgeHQ)
+    {
+        return;
+    }
+
+    auto *provider = getApp()->getBadgeHQBadges();
+    if (provider == nullptr)
+    {
+        return;
+    }
+    for (const auto &badge : provider->getBadges({userID}))
+    {
+        this->emplace<BadgeElement>(badge, MessageElementFlag::BadgeBadgeHQ);
         this->message().externalBadges.emplace_back(badge->name.string);
     }
 }

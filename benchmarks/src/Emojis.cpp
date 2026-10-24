@@ -82,7 +82,7 @@ static void BM_EmojiParsing(benchmark::State &state)
                 break;
             }
         }
-        return emoji->emote;
+        return emojis.getEmote(emoji);
     };
     auto penguinEmoji = getEmoji("1F427");
     assert(penguinEmoji.get() != nullptr);

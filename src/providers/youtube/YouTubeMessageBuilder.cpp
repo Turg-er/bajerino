@@ -1,6 +1,7 @@
 #include "providers/youtube/YouTubeMessageBuilder.hpp"
 
 #include "Application.hpp"
+#include "controllers/accounts/AccountController.hpp"
 #include "controllers/emotes/EmoteController.hpp"
 #include "controllers/highlights/HighlightController.hpp"
 #include "controllers/highlights/HighlightResult.hpp"
@@ -10,6 +11,7 @@
 #include "messages/MessageElement.hpp"
 #include "providers/emoji/Emojis.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
+#include "providers/youtube/YouTubeAccount.hpp"
 #include "providers/youtube/YouTubeChannel.hpp"
 #include "providers/youtube/YouTubeEmotes.hpp"
 #include "singletons/Resources.hpp"
@@ -236,7 +238,8 @@ void appendRoleBadge(YouTubeMessageBuilder &builder, const EmotePtr &badge,
 }
 
 HighlightAlert processHighlights(YouTubeMessageBuilder &builder,
-                                 const YouTubeMessage &source)
+                                 const YouTubeMessage &source,
+                                 YouTubeChannel *channel)
 {
     if (getSettings()->isBlacklistedUser(builder->loginName))
     {
@@ -247,9 +250,18 @@ HighlightAlert processHighlights(YouTubeMessageBuilder &builder,
 
     args.isSubscriptionMessage =
         source.kind == YouTubeMessageKind::MembershipMilestone;
-    auto [highlighted, result] = getApp()->getHighlights()->check(
-        args, {}, builder->loginName, source.text, builder->flags,
-        MessagePlatform::YouTube, builder->userID, builder->channelName);
+    const auto account = getApp()->getAccounts()->youtube.current();
+    auto [highlighted, result] = getApp()->getHighlights()->check({
+        .args = args,
+        .twitchBadges = {},
+        .senderName = builder->loginName,
+        .originalMessage = source.text,
+        .messageFlags = builder->flags,
+        .self =
+            !account->isAnonymous() && builder->userID == account->channelID(),
+        .runContext = {.message = builder.message(), .channel = channel},
+        .platform = MessagePlatform::YouTube,
+    });
     if (!highlighted)
     {
         return {};
@@ -257,25 +269,19 @@ HighlightAlert processHighlights(YouTubeMessageBuilder &builder,
 
     builder->flags.set(MessageFlag::Highlighted);
     builder->highlightColor = result.color;
-    if (!result.matches.empty())
-    {
-        builder->highlightMatches =
-            std::make_shared<const std::vector<HighlightMatch>>(
-                std::move(result.matches));
-    }
+
     if (result.showInMentions)
     {
         builder->flags.set(MessageFlag::ShowInMentions);
     }
 
     HighlightAlert alert{
-        .customSound = result.customSoundUrl.value_or(QUrl{}),
-        .playSound = result.playSound,
+        .sound = result.sound,
         .windowAlert = result.alert,
     };
     if (source.historical || source.localEcho)
     {
-        alert.playSound = false;
+        alert.sound = QUrl{};
         alert.windowAlert = false;
     }
     return alert;
@@ -541,7 +547,7 @@ std::pair<MessagePtrMut, HighlightAlert> YouTubeMessageBuilder::makeChatMessage(
     }
     builder->searchText += source.text;
 
-    auto alert = processHighlights(builder, source);
+    auto alert = processHighlights(builder, source, channel);
     if (source.kind == YouTubeMessageKind::SuperChat &&
         !builder->flags.has(MessageFlag::Highlighted))
     {

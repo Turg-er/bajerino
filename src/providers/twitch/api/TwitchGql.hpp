@@ -379,10 +379,6 @@ struct GqlChannelPointRedeemResult {
 class TwitchGql
 {
 public:
-    static void sendChatMessageWithNonce(
-        const QString &channelId, const QString &message, const QString &nonce,
-        const QString &oauthToken, std::function<void()> successCallback,
-        std::function<void(const QString &)> failureCallback);
     static void getVanityState(
         const QString &channelLogin, const QString &expectedChannelId,
         const TwitchGqlAuth &auth,

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: MIT
 
+#include "controllers/highlights/types/AnyHighlight.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "providers/twitch/TwitchCommon.hpp"
 #include "Test.hpp"
@@ -71,7 +72,7 @@ TEST_P(TwitchChannelModeMigrationTest, MigratesLegacySettings)
     const auto *version = manager->get("/misc/settingsVersion");
     ASSERT_NE(version, nullptr);
     ASSERT_TRUE(version->IsInt());
-    EXPECT_EQ(version->GetInt(), 1);
+    EXPECT_EQ(version->GetInt(), 2);
     EXPECT_EQ(manager->get("/bajerino/joinIrcAsAnonymous"), nullptr);
     EXPECT_EQ(manager->get("/misc/x-7tv/twitchReadConnectionMode"), nullptr);
 }
@@ -156,6 +157,30 @@ TEST(Settings, TwitchChannelModeMigrationPreservesNewParallelOnly)
     EXPECT_EQ(app.settings.twitchDefaultChannelMode.getEnum(),
               TwitchChannelMode::BajerinoAnonymous);
     EXPECT_FALSE(app.settings.twitchAnonymousReadParallel.getValue());
+}
+
+TEST(Settings, MigratesHighlightsFromExistingBajerinoVersionOne)
+{
+    mock::BaseApplication app(R"({
+        "misc": {"settingsVersion": 1},
+        "bajerino": {"twitchDefaultChannelMode": "anonymousread"},
+        "highlighting": {"highlights": [{
+            "pattern": "saved phrase", "regex": false, "case": false,
+            "alert": true, "sound": false, "showInMentions": true
+        }]}
+    })",
+                              true);
+    EXPECT_EQ(app.settings.twitchDefaultChannelMode.getEnum(),
+              TwitchChannelMode::AnonymousRead);
+    const auto highlights = app.settings.sharedHighlights.readOnly();
+    const auto migrated =
+        std::ranges::find_if(*highlights, [](const auto &highlight) {
+            const auto *message =
+                std::get_if<highlights::MessageHighlight>(&highlight);
+            return message && message->pattern == "saved phrase";
+        });
+    ASSERT_NE(migrated, highlights->end());
+    EXPECT_TRUE(highlights::isEnabled(*migrated));
 }
 
 TEST(Settings, SharedSettingsExcludeBajerinoEncryptionKey)

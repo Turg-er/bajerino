@@ -51,9 +51,6 @@ public:
 
     virtual void sendMessage(const QString &channelName,
                              const QString &message) = 0;
-    virtual bool sendInvisibleMessage(
-        const std::shared_ptr<TwitchChannel> &channel, const QString &message,
-        const QString &oauthToken) = 0;
     virtual void sendRawMessage(const QString &rawMessage) = 0;
 
     virtual ChannelPtr getOrAddChannel(const QString &dirtyChannelName) = 0;
@@ -88,6 +85,8 @@ public:
 
     virtual void dropSeventvChannel(const QString &userID,
                                     const QString &emoteSetID) = 0;
+
+    virtual void dropBttvChannel(const QString &channelID) = 0;
 
     virtual const IndirectChannel &getWatchingChannel() const = 0;
     virtual void setWatchingChannel(ChannelPtr newWatchingChannel) = 0;
@@ -136,6 +135,7 @@ public:
         const QString &channelID) override;
 
     void reloadAllBTTVChannelEmotes();
+    void dropBttvChannel(const QString &channelID) override;
     void reloadAllFFZChannelEmotes();
     void reloadAllSevenTVChannelEmotes();
 
@@ -167,9 +167,6 @@ public:
 
     void sendMessage(const QString &channelName,
                      const QString &message) override;
-    bool sendInvisibleMessage(const std::shared_ptr<TwitchChannel> &channel,
-                              const QString &message,
-                              const QString &oauthToken) override;
     void sendRawMessage(const QString &rawMessage) override;
 
     ChannelPtr getOrAddChannel(const QString &dirtyChannelName) override;

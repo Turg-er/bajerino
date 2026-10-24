@@ -1681,7 +1681,15 @@ void SplitInput::handleImagePaste(const QMimeData *source)
         return;
     }
 
-    auto channel = this->split_->getSelectedChannel();
+    auto channel = this->replyChannel_.lock();
+    if (!channel)
+    {
+        channel = this->split_->getSelectedChannel();
+    }
+    if (!channel)
+    {
+        return;
+    }
     auto *imageUploader = getApp()->getImageUploader();
 
     auto [images, imageProcessError] = imageUploader->getImages(source);
@@ -3033,10 +3041,16 @@ bool SplitInput::maybeSendTranslatedMessage(
                 "providers in Settings."));
             return;
         }
-        const auto translatedLength =
-            channel->isTikTokChannel()
-                ? tiktok::livetext::analyzeEditorText(translatedText).count
-                : translatedText.size();
+        auto translatedLength = translatedText.size();
+        if (channel->isTikTokChannel())
+        {
+            translatedLength =
+                tiktok::livetext::analyzeEditorText(translatedText).count;
+        }
+        else if (channel->isTwitchChannel())
+        {
+            translatedLength = codepointLength(translatedText);
+        }
         if (translatedLength > messageLimit)
         {
             channel->addSystemMessage(translatedMessageLimitError(channel));
@@ -3059,7 +3073,8 @@ bool SplitInput::maybeSendTranslatedMessage(
         {
             messageToSend.prepend(QStringLiteral(". "));
         }
-        if (twitchChannel != nullptr && messageToSend.size() > messageLimit)
+        if (twitchChannel != nullptr &&
+            codepointLength(messageToSend) > messageLimit)
         {
             channel->addSystemMessage(translatedMessageLimitError(channel));
             return;
@@ -3741,16 +3756,26 @@ void SplitInput::installTextEditEvents()
                 cursor.setPosition(static_cast<int>(word.end() - text.begin()),
                                    QTextCursor::KeepAnchor);
 
+                auto *firstAction = menu->actions().value(0);
                 auto suggestions =
                     getApp()->getSpellChecker()->suggestions(word.toString());
                 for (const auto &sugg :
                      suggestions | std::views::take(nSuggestions))
                 {
                     auto qSugg = QString::fromStdString(sugg);
-                    menu->addAction(qSugg, [this, qSugg, cursor]() mutable {
-                        cursor.insertText(qSugg);
-                        this->ui_.textEdit->setTextCursor(cursor);
-                    });
+                    auto *action = new QAction(qSugg, menu);
+                    QObject::connect(
+                        action, &QAction::triggered, this,
+                        [this, qSugg, cursor]() mutable {
+                            cursor.insertText(qSugg);
+                            this->ui_.textEdit->setTextCursor(cursor);
+                        });
+                    menu->insertAction(firstAction, action);
+                }
+
+                if (!suggestions.empty())
+                {
+                    menu->insertSeparator(firstAction);
                 }
             }
 #else
@@ -4341,6 +4366,12 @@ void SplitInput::updateCompletionPopup()
     }
 
     // check if in completion prefix
+    if (edit.isCompletionInProgress())
+    {
+        this->hideCompletionPopup();
+        return;
+    }
+
     auto position = cursorPosition - 1;
 
     if (text.length() == 0 || position == -1)
@@ -4645,9 +4676,17 @@ void SplitInput::showCompletionPopup(const QString &text, CompletionKind kind)
             [that = QPointer(this)](const QString &text) mutable {
                 if (auto *this2 = that.data())
                 {
+                    auto completions =
+                        this2->inputCompletionPopup_->selectedCompletions(
+                            this2->ui_.textEdit->isFirstWord());
                     this2->insertCompletionText(text);
                     this2->hideCompletionPopup();
                     this2->resetCommandCompletionSession();
+                    if (completions)
+                    {
+                        auto [items, index] = *completions;
+                        this2->ui_.textEdit->continueCompletion(items, index);
+                    }
                 }
             });
     }
@@ -5106,40 +5145,41 @@ void SplitInput::paintEvent(QPaintEvent * /*event*/)
 
     const bool polished = this->theme->customization.foundation ==
                           ThemeFoundation::MoltorinoPolished;
+    const auto borderColor =
+        this->theme->isLightTheme() ? QColor(0xcccccc) : QColor(0x333333);
+    const auto drawBorder = [&painter, &borderColor](QRect rect) {
+        if (rect.isEmpty())
+        {
+            return;
+        }
+        painter.fillRect(rect.left(), rect.top(), rect.width(), 1, borderColor);
+        painter.fillRect(rect.left(), rect.bottom(), rect.width(), 1,
+                         borderColor);
+        painter.fillRect(rect.left(), rect.top(), 1, rect.height(),
+                         borderColor);
+        painter.fillRect(rect.right(), rect.top(), 1, rect.height(),
+                         borderColor);
+    };
 
-    QColor borderColor =
-        this->theme->isLightTheme() ? QColor("#ccc") : QColor("#333");
-
-    auto *inputWrap = this->ui_.inputWrapper;
-    auto inputBoxRect = inputWrap->geometry();
-
-    if (polished)
+    const auto inputBoxRect = this->ui_.inputWrapper->geometry();
+    painter.fillRect(inputBoxRect, this->backgroundColor());
+    if (!polished)
     {
-        painter.fillRect(inputBoxRect, this->theme->splits.input.background);
-    }
-    else
-    {
-        inputBoxRect.setSize(inputBoxRect.size() - QSize{1, 1});
-        painter.setBrush({this->theme->splits.input.background});
-        painter.setPen(borderColor);
-        painter.drawRect(inputBoxRect);
+        drawBorder(inputBoxRect);
     }
 
     if (this->enableInlineReplying_ && this->replyTarget_ != nullptr)
     {
-        auto replyRect = this->ui_.replyWrapper->geometry();
-
+        const auto replyRect = this->ui_.replyWrapper->geometry();
+        painter.fillRect(replyRect, this->theme->splits.input.background);
         if (polished)
         {
-            painter.fillRect(replyRect, this->theme->splits.input.background);
             painter.setPen(this->theme->splits.header.border);
         }
         else
         {
-            replyRect.setSize(replyRect.size() - QSize{1, 1});
-            painter.setBrush(this->theme->splits.input.background);
+            drawBorder(replyRect);
             painter.setPen(borderColor);
-            painter.drawRect(replyRect);
         }
 
         QPoint replyLabelBorderStart(

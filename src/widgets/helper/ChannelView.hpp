@@ -394,6 +394,7 @@ private:
 
     void updateScrollbar(const std::vector<MessageLayoutPtr> &messages,
                          bool causedByScrollbar, bool disableAnimation);
+    void measureScrollbarForScrollRestore();
     void updateScrollWidgetGeometries();
 
     void resetMessageState();
@@ -406,7 +407,6 @@ private:
     void releaseHiddenMessageLayouts();
 
     void drawMessages(QPainter &painter, const QRegion &area);
-    void measureScrollbarForScrollRestore();
     void updateMessageCaches(
         const std::vector<MessageLayoutPtr> &messagesSnapshot, size_t start,
         const MessageLayout *end);
@@ -656,7 +656,7 @@ private:
     void releaseTooltip();
 
     void showAutoModTimeoutMenu(const QString &key, const QPoint &globalPos);
-    bool confirmAutoModBan(QString key);
+    static bool banAutoModUser(const QString &key);
     QString autoModReviewDetails(const QString &key) const;
 
     std::function<bool(const MessagePtr &)> messagePredicate_;

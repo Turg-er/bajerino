@@ -19,8 +19,14 @@
 #include "providers/twitch/TwitchBadges.hpp"
 
 #include <benchmark/benchmark.h>
+#include <QJsonArray>
+
+#include <vector>
 
 namespace chatterino::bench {
+
+std::vector<MessagePtr> buildRecentMessages(
+    const QJsonArray &messages, const std::shared_ptr<TwitchChannel> &channel);
 
 class MockMessageApplication : public mock::BaseApplication
 {

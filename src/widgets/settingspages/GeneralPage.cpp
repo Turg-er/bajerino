@@ -1354,6 +1354,10 @@ void GeneralPage::initLayout(GeneralPageView &layout)
         ->setTooltip("e.g. prime, bits, sub gifter")
         ->addTo(layout);
 
+    SettingWidget::checkbox("BadgeHQ", s.showBadgesBadgeHQ)
+        ->addKeywords({"badgehq", "badge hq", "supporter", "founder"})
+        ->addTo(layout);
+
     SettingWidget::checkbox("Bajerino", s.showBadgesChatterino)
         ->setTooltip("e.g. Bajerino Supporter/Contributor/Developer")
         ->addTo(layout);
@@ -1380,6 +1384,11 @@ void GeneralPage::initLayout(GeneralPageView &layout)
     SettingWidget::checkbox("Homies Custom", s.showBadgesHomiesCustom)
         ->addKeywords({"homies", "custom"})
         ->setTooltip("Custom Homies badges")
+        ->addTo(layout);
+    SettingWidget::checkbox("JilChat", s.showBadgesJilChat)
+        ->addKeywords({"jilchat", "jil"})
+        ->setTooltip("Badges from JilChat. Nothing is requested from JilChat "
+                     "while this is off.")
         ->addTo(layout);
     SettingWidget::checkbox("Moltorino", s.showBadgesMoltorino)
         ->addKeywords({"moltorino", "supporter", "top donor", "developer"})
@@ -1804,14 +1813,8 @@ void GeneralPage::initLayout(GeneralPageView &layout)
 
     SettingWidget::checkbox("Show Twitch whispers inline", s.inlineWhispers)
         ->setTooltip("Show whispers as messages in all splits instead of just "
-                     "/whispers.")
-        ->addTo(layout);
-
-    SettingWidget::checkbox("Highlight received inline whispers",
-                            s.highlightInlineWhispers)
-        ->setTooltip(
-            "Highlight the whispers shown in all splits.\nIf \"Show Twitch "
-            "whispers inline\" is disabled, this setting will do nothing.")
+                     "/whispers.\nHighlighting of this is now controlled in "
+                     "the Highlights page.")
         ->addTo(layout);
 
     SettingWidget::checkbox(
@@ -1897,6 +1900,12 @@ void GeneralPage::initLayout(GeneralPageView &layout)
             "When disabled, messages sent in reply threads will include the "
             "@mention for the related thread. If the reply context is hidden, "
             "these mentions will never be stripped.")
+        ->addTo(layout);
+
+    SettingWidget::checkbox("Connect anonymously when banned",
+                            s.connectAnonymouslyWhenBanned)
+        ->setTooltip("Keep reading chat after a ban. Turn this off or use "
+                     "Reconnect to try your account again after an unban.")
         ->addTo(layout);
 
     SettingWidget::dropdown("Chat send protocol", s.chatSendProtocol)

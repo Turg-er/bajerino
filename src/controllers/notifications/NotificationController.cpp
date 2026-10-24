@@ -166,18 +166,20 @@ void NotificationController::notifyTwitchChannelLive(
 void NotificationController::notifyChannelLive(
     const NotificationPayload &payload)
 {
-    assert(!payload.channelId.isEmpty() && !payload.streamId.isEmpty());
-
-    auto [streamIt, inserted] = this->lastNotifiedStreamIds_.try_emplace(
-        payload.channelId, payload.streamId);
-    if (!inserted && streamIt->second == payload.streamId)
+    if (payload.platform == Platform::Twitch && !payload.channelId.isEmpty() &&
+        !payload.streamId.isEmpty())
     {
-        return;
-    }
-    if (!inserted)
-    {
-        this->notifyTwitchChannelOffline(payload.channelId);
-        streamIt->second = payload.streamId;
+        auto [streamIt, inserted] = this->lastNotifiedStreamIds_.try_emplace(
+            payload.channelId, payload.streamId);
+        if (!inserted && streamIt->second == payload.streamId)
+        {
+            return;
+        }
+        if (!inserted)
+        {
+            this->notifyTwitchChannelOffline(payload.channelId);
+            streamIt->second = payload.streamId;
+        }
     }
 
     bool showNotification =
@@ -233,9 +235,11 @@ void NotificationController::notifyChannelLive(
     else
     {
         liveChannel->addMessage(MessageBuilder::makeLiveMessage(
-                                    {.id = payload.channelId,
-                                     .login = payload.channelName,
-                                     .displayName = payload.displayName},
+                                    {
+                                        .id = payload.channelId,
+                                        .login = payload.channelName,
+                                        .displayName = payload.displayName,
+                                    },
                                     payload.title),
                                 MessageContext::Original);
     }

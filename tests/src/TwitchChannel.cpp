@@ -11,6 +11,7 @@
 #include "mocks/Helix.hpp"
 #include "mocks/Logging.hpp"
 #include "mocks/TwitchIrcServer.hpp"
+#include "providers/bttv/liveupdates/BttvLiveUpdateMessages.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/twitch/ChannelPointReward.hpp"
 #include "providers/twitch/PubSubManager.hpp"
@@ -89,6 +90,137 @@ TEST(TwitchChannel, LiveUpdateGrouping)
     // Updates more than five seconds apart start a new group.
     addEmote("FourthEmote", nextDay.addSecs(10));
     EXPECT_EQ(channel->countMessages(), 3);
+}
+
+TEST(TwitchChannel, EmoteSourcesArePerChannelAndPerProvider)
+{
+    LiveUpdateApplication app;
+    app.settings.enableBTTVChannelEmotes = false;
+    app.settings.enableFFZChannelEmotes = false;
+    app.settings.enableSevenTVChannelEmotes = false;
+    auto first = std::make_shared<TwitchChannel>("emote_source_first");
+    auto second = std::make_shared<TwitchChannel>("emote_source_second");
+    TwitchChannelTestAccess::setRoomId(*first, "11");
+    TwitchChannelTestAccess::setRoomId(*second, "22");
+
+    ASSERT_TRUE(first->setEmoteSourceOverride(ChannelEmoteProvider::SevenTV,
+                                              " 00042 "));
+    ASSERT_TRUE(
+        first->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, "43"));
+    ASSERT_TRUE(first->setEmoteSourceOverride(ChannelEmoteProvider::Ffz, "44"));
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::SevenTV), "42");
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::Bttv), "43");
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::Ffz), "44");
+    for (const auto provider :
+         {ChannelEmoteProvider::SevenTV, ChannelEmoteProvider::Bttv,
+          ChannelEmoteProvider::Ffz})
+    {
+        EXPECT_EQ(second->emoteSourceID(provider), "22");
+        EXPECT_TRUE(second->emoteSourceOverride(provider).isEmpty());
+    }
+    EXPECT_EQ(first->roomId(), "11");
+    EXPECT_EQ(first->getName(), "emote_source_first");
+
+    ASSERT_TRUE(first->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, " "));
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::Bttv), "11");
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::SevenTV), "42");
+    EXPECT_EQ(first->emoteSourceID(ChannelEmoteProvider::Ffz), "44");
+
+    first.reset();
+    auto reopened = std::make_shared<TwitchChannel>("emote_source_first");
+    TwitchChannelTestAccess::setRoomId(*reopened, "11");
+    EXPECT_EQ(reopened->emoteSourceID(ChannelEmoteProvider::SevenTV), "42");
+    EXPECT_EQ(reopened->emoteSourceID(ChannelEmoteProvider::Bttv), "11");
+    EXPECT_EQ(reopened->emoteSourceID(ChannelEmoteProvider::Ffz), "44");
+}
+
+TEST(TwitchChannel, SharedEmoteSourceAndOptionalIndividualOverrides)
+{
+    LiveUpdateApplication app;
+    app.settings.enableBTTVChannelEmotes = false;
+    app.settings.enableFFZChannelEmotes = false;
+    app.settings.enableSevenTVChannelEmotes = false;
+    auto channel = std::make_shared<TwitchChannel>("emote_source_shared");
+    TwitchChannelTestAccess::setRoomId(*channel, "11");
+    EXPECT_FALSE(channel->emoteSources().individualProviders);
+    ChannelEmoteSources sources{.sharedTwitchID = "42",
+                                .providerTwitchIDs = {"43", "", "44"}};
+    ASSERT_TRUE(channel->setEmoteSources(sources));
+    for (const auto provider :
+         {ChannelEmoteProvider::SevenTV, ChannelEmoteProvider::Bttv,
+          ChannelEmoteProvider::Ffz})
+    {
+        EXPECT_EQ(channel->emoteSourceID(provider), "42");
+    }
+    sources.individualProviders = true;
+    ASSERT_TRUE(channel->setEmoteSources(sources));
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::SevenTV), "43");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Bttv), "11");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Ffz), "44");
+
+    sources.sharedTwitchID = "51";
+    sources.providerTwitchIDs[2] = "invalid";
+    EXPECT_FALSE(channel->setEmoteSources(sources));
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Bttv), "11");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Ffz), "44");
+    EXPECT_TRUE(channel->emoteSources().individualProviders);
+
+    ASSERT_TRUE(channel->setEmoteSources({}));
+    for (const auto provider :
+         {ChannelEmoteProvider::SevenTV, ChannelEmoteProvider::Bttv,
+          ChannelEmoteProvider::Ffz})
+    {
+        EXPECT_EQ(channel->emoteSourceID(provider), "11");
+    }
+    EXPECT_FALSE(channel->emoteSources().individualProviders);
+}
+
+TEST(TwitchChannel, InvalidEmoteSourcesDoNotReplaceSavedSources)
+{
+    LiveUpdateApplication app;
+    auto channel = std::make_shared<TwitchChannel>("emote_source_validation");
+    for (const auto provider :
+         {ChannelEmoteProvider::SevenTV, ChannelEmoteProvider::Bttv,
+          ChannelEmoteProvider::Ffz})
+    {
+        ASSERT_TRUE(channel->setEmoteSourceOverride(provider, "123"));
+        for (const auto &invalid : {"0", "-1", "+1", "1.5", "1e3", "twitchname",
+                                    "https://twitch.tv/test", "12/34", "12 34",
+                                    "18446744073709551616"})
+        {
+            EXPECT_FALSE(channel->setEmoteSourceOverride(provider, invalid))
+                << invalid;
+            EXPECT_EQ(channel->emoteSourceOverride(provider), "123");
+        }
+    }
+}
+
+TEST(TwitchChannel, BttvLiveUpdatesOnlyAffectSelectedSource)
+{
+    LiveUpdateApplication app;
+    app.settings.enableBTTVChannelEmotes = true;
+    auto channel = std::make_shared<TwitchChannel>("emote_source_live");
+    ASSERT_TRUE(
+        channel->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, "22"));
+    TwitchChannelTestAccess::setRoomId(*channel, "11");
+    const auto emote = QJsonObject{
+        {"id", "test-emote"}, {"code", "DonorEmote"}, {"imageType", "png"}};
+    const BttvLiveUpdateEmoteUpdateAddMessage ownRoom(
+        {{"channel", "twitch:11"}, {"emote", emote}});
+    const BttvLiveUpdateEmoteUpdateAddMessage donorRoom(
+        {{"channel", "twitch:22"}, {"emote", emote}});
+    channel->addBttvEmote(ownRoom);
+    EXPECT_TRUE(channel->bttvEmotes()->empty());
+    channel->addBttvEmote(donorRoom);
+    ASSERT_EQ(channel->bttvEmotes()->size(), 1);
+    EXPECT_TRUE(channel->bttvEmote(EmoteName{"DonorEmote"}).has_value());
+
+    channel->removeBttvEmote(BttvLiveUpdateEmoteRemoveMessage(
+        {{"channel", "twitch:11"}, {"emoteId", "test-emote"}}));
+    EXPECT_EQ(channel->bttvEmotes()->size(), 1);
+    channel->removeBttvEmote(BttvLiveUpdateEmoteRemoveMessage(
+        {{"channel", "twitch:22"}, {"emoteId", "test-emote"}}));
+    EXPECT_TRUE(channel->bttvEmotes()->empty());
 }
 
 }  // namespace chatterino

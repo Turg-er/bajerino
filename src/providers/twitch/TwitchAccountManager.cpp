@@ -123,6 +123,7 @@ void TwitchAccountManager::validateCurrentAccount(const QString &eventSubUserID)
                 app->getAccounts()->twitch.currentUserNameChanged.invoke();
             }
 
+            this->loginRestored.invoke();
             auto missing = missingScopes(json["scopes"_L1].toArray());
             if (!missing.isEmpty())
             {
@@ -146,6 +147,7 @@ void TwitchAccountManager::validateCurrentAccount(const QString &eventSubUserID)
             }
             if (res.status() == 401)
             {
+                this->loginExpired.invoke();
                 this->showAccountWarning(
                     u"Your Twitch login for %1 is no longer valid. "
                     "AutoMod and other account features may stop working. "

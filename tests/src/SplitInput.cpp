@@ -11,6 +11,7 @@
 #include "controllers/completion/TabCompletionModel.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "controllers/plugins/PluginController.hpp"
+#include "messages/Emote.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "mocks/Channel.hpp"
 #include "mocks/EmoteController.hpp"
@@ -19,6 +20,7 @@
 #include "providers/bttv/BttvEmotes.hpp"
 #include "providers/ffz/FfzEmotes.hpp"
 #include "providers/seventv/SeventvEmotes.hpp"
+#include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
@@ -33,21 +35,30 @@
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/dialogs/PollDialog.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
+#include "widgets/listview/GenericListView.hpp"
 #include "widgets/Notebook.hpp"
+#include "widgets/splits/InputCompletionItem.hpp"
+#include "widgets/splits/InputCompletionPopup.hpp"
 #include "widgets/splits/PinnedMessageWidget.hpp"
 #include "widgets/splits/Split.hpp"
 #include "widgets/splits/SplitHeader.hpp"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QCompleter>
 #include <QDebug>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QString>
 
 #include <algorithm>
 #include <array>
+#include <initializer_list>
 #include <tuple>
 
 using namespace chatterino;
@@ -130,6 +141,12 @@ public:
         return &this->seventv;
     }
 
+    SeventvPersonalEmotes *getSeventvPersonalEmotes() override
+    {
+        return &this->personalEmotes;
+    }
+
+    SeventvPersonalEmotes personalEmotes;
     BttvEmotes bttv;
     FfzEmotes ffz;
     SeventvEmotes seventv;
@@ -316,6 +333,82 @@ TEST(PollDialog, CreatesPollUsingNativeAccountAndHelix)
         .Times(1);
     start->click();
 }
+namespace chatterino {
+
+class PopupCycleFixture : public ::testing::Test
+{
+public:
+    PopupCycleFixture()
+        : input(this->split.getInput())
+    {
+        this->app.settings.mentionUsersWithComma.setValue(true);
+    }
+
+    void setChannel(ChannelPtr channel)
+    {
+        this->split.setChannel(IndirectChannel(std::move(channel)));
+        this->split.show();
+    }
+
+    void setChatters(std::initializer_list<QString> names)
+    {
+        auto channel = std::make_shared<TwitchChannel>("forsen");
+        for (const auto &name : names)
+        {
+            channel->addRecentChatter(name);
+        }
+        this->setChannel(channel);
+    }
+
+    void setEmotes(std::initializer_list<QString> names, bool zeroWidth = false)
+    {
+        auto emotes = std::make_shared<EmoteMap>();
+        for (const auto &name : names)
+        {
+            auto emote = std::make_shared<Emote>();
+            emote->name = EmoteName{name};
+            emote->zeroWidth = zeroWidth;
+            emotes->emplace(emote->name, std::move(emote));
+        }
+        auto channel = std::make_shared<TwitchChannel>("forsen");
+        channel->setBttvEmotes(std::move(emotes));
+        this->setChannel(channel);
+    }
+
+    ResizingTextEdit *edit() const
+    {
+        return this->input.ui_.textEdit;
+    }
+
+    InputCompletionPopup *popup()
+    {
+        return this->input.inputCompletionPopup_;
+    }
+
+    GenericListView *list()
+    {
+        auto *result = this->popup();
+        return result ? result->ui_.listView : nullptr;
+    }
+
+    void pressTab() const
+    {
+        QKeyEvent tab(QEvent::KeyPress, Qt::Key_Tab, Qt::NoModifier, "\t");
+        QApplication::sendEvent(this->edit(), &tab);
+    }
+
+    void pressBacktab() const
+    {
+        QKeyEvent backtab(QEvent::KeyPress, Qt::Key_Backtab, Qt::ShiftModifier);
+        QApplication::sendEvent(this->edit(), &backtab);
+    }
+
+    MockApplication app;
+    Split split{nullptr};
+    SplitInput &input;
+};
+
+}  // namespace chatterino
 
 TEST_F(SplitInputCompletionTest, EmoteCompletionPreservesUndoHistory)
 {
@@ -343,6 +436,139 @@ TEST_F(SplitInputCompletionTest, UsernameCompletionPreservesUndoHistory)
     EXPECT_EQ("boring game @fors", this->input.getInputText());
     this->input.undoInput();
     EXPECT_TRUE(this->input.getInputText().isEmpty());
+}
+
+TEST_F(PopupCycleFixture, UsernameSelectionCyclesWithTab)
+{
+    this->setChatters({"zzpopupfirst", "zzpopupsecond"});
+    ASSERT_NE(this->edit(), nullptr);
+
+    this->input.insertText("@zzpopup");
+    auto *list = this->list();
+    ASSERT_NE(list, nullptr);
+    ASSERT_TRUE(this->popup()->isVisible());
+    ASSERT_EQ(list->model()->rowCount(), 2);
+    list->setCurrentIndex(list->model()->index(1, 0));
+    const auto *selected = dynamic_cast<const InputCompletionItem *>(
+        GenericListItem::fromVariant(list->currentIndex().data()));
+    ASSERT_NE(selected, nullptr);
+    const auto selectedText = "@" + selected->insertionText() + ", ";
+
+    // The first tab accepts the selected username
+    this->pressTab();
+    const auto first = this->input.getInputText();
+    EXPECT_EQ(first, selectedText);
+
+    // Further tabs cycle through the popup usernames
+    this->pressTab();
+    const auto second = this->input.getInputText();
+    EXPECT_TRUE(second == "@zzpopupfirst, " || second == "@zzpopupsecond, ");
+    EXPECT_NE(second, first);
+    this->pressTab();
+    EXPECT_EQ(this->input.getInputText(), first);
+    this->pressBacktab();
+    EXPECT_EQ(this->input.getInputText(), second);
+}
+
+TEST_F(PopupCycleFixture, EnterAcceptanceCyclesWithTab)
+{
+    this->setChatters({"zzpopupfirst", "zzpopupsecond"});
+    this->input.insertText("@zzpopup");
+    auto *list = this->list();
+    ASSERT_NE(list, nullptr);
+    ASSERT_EQ(list->model()->rowCount(), 2);
+    list->setCurrentIndex(list->model()->index(1, 0));
+
+    // Enter accepts the popup item and tab continues through its list
+    QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier, "\r");
+    QApplication::sendEvent(this->edit(), &enter);
+    const auto first = this->input.getInputText();
+    EXPECT_TRUE(first == "@zzpopupfirst, " || first == "@zzpopupsecond, ");
+    this->pressTab();
+    EXPECT_NE(this->input.getInputText(), first);
+}
+
+TEST_F(PopupCycleFixture, OneCharacterSelectionCyclesAfterClick)
+{
+    this->setEmotes({"⚽", "⚽more"}, true);
+    this->input.insertText(":~⚽");
+    auto *list = this->list();
+    ASSERT_NE(list, nullptr);
+    ASSERT_EQ(list->model()->rowCount(), 2);
+    const auto *first = dynamic_cast<const InputCompletionItem *>(
+        GenericListItem::fromVariant(list->model()->index(0, 0).data()));
+    ASSERT_NE(first, nullptr);
+    const auto selection = list->model()->index(
+        first->insertionText() == QString::fromUtf8("⚽") ? 0 : 1, 0);
+    const auto *selected = dynamic_cast<const InputCompletionItem *>(
+        GenericListItem::fromVariant(selection.data()));
+    ASSERT_NE(selected, nullptr);
+    ASSERT_EQ(selected->insertionText(), QString::fromUtf8("⚽"));
+
+    // Clicking a one-character result still allows tab to choose the next
+    list->setCurrentIndex(selection);
+    Q_EMIT list->clicked(selection);
+    EXPECT_EQ(this->input.getInputText(), QString::fromUtf8("⚽ "));
+    this->pressTab();
+    EXPECT_EQ(this->input.getInputText(), QString::fromUtf8("⚽more "));
+}
+
+TEST_F(PopupCycleFixture, CompletionAfterNewlineKeepsPreviousLine)
+{
+    this->setChatters({"zzpopupfirst", "zzpopupsecond"});
+    this->input.insertText("previous\n@zzpopup");
+    auto *list = this->list();
+    ASSERT_NE(list, nullptr);
+    ASSERT_EQ(list->model()->rowCount(), 2);
+    list->setCurrentIndex(list->model()->index(0, 0));
+
+    // Cycling a completion on a new line keeps the text before the newline
+    this->pressTab();
+    const auto first = this->input.getInputText();
+    ASSERT_TRUE(first.startsWith("previous\n@"));
+    this->pressTab();
+    const auto second = this->input.getInputText();
+    EXPECT_TRUE(second.startsWith("previous\n@"));
+    EXPECT_NE(second, first);
+}
+
+TEST_F(PopupCycleFixture, DuplicateEmoteNamesCycleOnce)
+{
+    this->setEmotes({"zzdupone", "zzduptwo"});
+    auto duplicate = std::make_shared<Emote>();
+    duplicate->name = EmoteName{"zzdupone"};
+    auto globalEmotes = std::make_shared<EmoteMap>();
+    globalEmotes->emplace(duplicate->name, duplicate);
+    this->app.bttv.setEmotes(std::move(globalEmotes));
+
+    this->input.insertText(":zzdup");
+    auto *list = this->list();
+    ASSERT_NE(list, nullptr);
+    // The same emote name appears in both the channel and global results
+    ASSERT_EQ(list->model()->rowCount(), 3);
+
+    int lastDuplicateRow = -1;
+    int duplicateCount = 0;
+    for (int row = 0; row < list->model()->rowCount(); ++row)
+    {
+        const auto *item = dynamic_cast<const InputCompletionItem *>(
+            GenericListItem::fromVariant(list->model()->index(row, 0).data()));
+        ASSERT_NE(item, nullptr);
+        if (item->insertionText() == "zzdupone")
+        {
+            lastDuplicateRow = row;
+            ++duplicateCount;
+        }
+    }
+    ASSERT_EQ(duplicateCount, 2);
+    ASSERT_GE(lastDuplicateRow, 0);
+    list->setCurrentIndex(list->model()->index(lastDuplicateRow, 0));
+
+    // Selecting a duplicate skips the other copy on the next tab
+    this->pressTab();
+    EXPECT_EQ(this->input.getInputText(), "zzdupone ");
+    this->pressTab();
+    EXPECT_EQ(this->input.getInputText(), "zzduptwo ");
 }
 
 TEST_F(SplitInputCompletionTest, TabCompletionPreservesUndoHistory)
@@ -674,4 +900,77 @@ TEST(SplitInputTest, StatusLabelsReserveTextWidth)
 
     EXPECT_EQ(input.ui_.textEditLength->minimumWidth(), 0);
     EXPECT_EQ(input.ui_.sendWaitStatus->minimumWidth(), 0);
+}
+
+TEST(SplitHeader, EmoteSourcesDialogDefaultsAndIndividualOverrides)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    app.settings.enableBTTVChannelEmotes = false;
+    app.settings.enableFFZChannelEmotes = false;
+    app.settings.enableSevenTVChannelEmotes = false;
+    auto channel = std::make_shared<TwitchChannel>("emote_dialog");
+    app.twitch.mockChannels[channel->getName()] = channel;
+    Split split(nullptr);
+    split.setChannel(IndirectChannel{channel});
+    auto *header = new SplitHeader(&split);
+
+    QMouseEvent click(QEvent::MouseButtonPress, QPointF(4, 4), QPointF(4, 4),
+                      Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+    QApplication::sendEvent(header, &click);
+    auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+    ASSERT_NE(menu, nullptr);
+    QAction *editSources = nullptr;
+    const auto actions = menu->actions();
+    for (auto *action : actions)
+    {
+        if (action->text() == "More" && action->menu() != nullptr)
+        {
+            const auto entries = action->menu()->actions();
+            for (auto *entry : entries)
+            {
+                if (entry->text() == "Emote sources...")
+                {
+                    editSources = entry;
+                }
+            }
+        }
+    }
+    ASSERT_NE(editSources, nullptr);
+    editSources->trigger();
+    menu->close();
+    auto *dialog = header->findChild<QDialog *>();
+    ASSERT_NE(dialog, nullptr);
+    auto *shared = dialog->findChild<QLineEdit *>("SharedEmoteSourceID");
+    auto *individual = dialog->findChild<QCheckBox *>("IndividualEmoteSources");
+    auto *ffz = dialog->findChild<QLineEdit *>("EmoteSourceIDFFZ");
+    ASSERT_NE(shared, nullptr);
+    ASSERT_NE(individual, nullptr);
+    ASSERT_NE(ffz, nullptr);
+    EXPECT_TRUE(shared->text().isEmpty());
+    EXPECT_FALSE(individual->isChecked());
+    EXPECT_TRUE(shared->placeholderText().contains("not available"));
+    EXPECT_FALSE(ffz->isVisibleTo(dialog));
+
+    TwitchChannelTestAccess::setRoomId(*channel, "42");
+    EXPECT_EQ(shared->placeholderText(), "Current channel: 42");
+    shared->setText("99");
+    individual->setChecked(true);
+    EXPECT_FALSE(shared->isEnabled());
+    EXPECT_TRUE(ffz->isVisibleTo(dialog));
+    EXPECT_EQ(ffz->text(), "99");
+    ffz->clear();
+    EXPECT_EQ(ffz->placeholderText(), "Current channel: 42");
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    ASSERT_NE(buttons, nullptr);
+    buttons->button(QDialogButtonBox::Save)->click();
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::SevenTV), "99");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Bttv), "99");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Ffz), "42");
+    EXPECT_TRUE(
+        channel->emoteSourceOverride(ChannelEmoteProvider::Ffz).isEmpty());
+    QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    TwitchChannelTestAccess::setRoomId(*channel, "43");
+    EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Ffz), "43");
 }

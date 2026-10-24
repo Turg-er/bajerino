@@ -16,6 +16,7 @@
 #    include <QFileInfo>
 #    include <QJsonArray>
 #    include <QJsonObject>
+#    include <QObject>
 #    include <QString>
 #    include <sol/forward.hpp>
 
@@ -30,7 +31,7 @@ namespace chatterino {
 class Settings;
 class Paths;
 
-class PluginController
+class PluginController : public QObject
 {
     const Paths &paths;
 

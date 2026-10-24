@@ -35,7 +35,7 @@ chatterino--SettingsDialog chatterino--SettingsDialogTab {
 }
 
 chatterino--SettingsPage #generalSettingsScrollContent {
-    background: #222;
+    background: #222222;
 }
 
 #generalSettingsScrollContent > QWidget {
@@ -51,7 +51,7 @@ chatterino--SettingsPage QToolTip {
     padding: 2px;
     background-color: #333333;
     border: 1px solid #545454;
-    color: white;
+    color: #ffffff;
 }
 
 chatterino--PageHeader {
@@ -71,11 +71,11 @@ chatterino--SubtitleLabel {
 }
 
 chatterino--DescriptionLabel {
-    color: #999;
+    color: #999999;
 }
 
 QLabel#description {
-    color: #999;
+    color: #999999;
     padding-left: 10px;
 }
 

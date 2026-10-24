@@ -50,6 +50,7 @@ public:
     bool hasCaller{};
     QPointer<QObject> caller;
     bool cache{};
+    QString cacheFilePath;
     std::function<bool(const QByteArray &)> cacheValidator;
     bool executeConcurrently{};
     bool useProxy{};

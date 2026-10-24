@@ -1193,9 +1193,7 @@ QString user(const CommandContext &ctx)
         return "";
     }
 
-    QDesktopServices::openUrl(
-        QUrl(QString("https://www.twitch.tv/popout/%1/viewercard/%2")
-                 .arg(channelName, userName)));
+    openTwitchUsercard(channelName, userName);
     return "";
 }
 

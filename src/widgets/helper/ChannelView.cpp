@@ -3535,6 +3535,7 @@ void ChannelView::setChannel(const ChannelPtr &underlyingChannel,
 
         this->channelConnections_.managedConnect(
             underlyingChannel->messagesCleared, [this] {
+                this->setAutoModReviewSelectedKey({});
                 this->clearMessages();
             });
     }
@@ -4620,7 +4621,7 @@ bool ChannelView::timeoutSelectedAutoMod()
 
 bool ChannelView::banSelectedAutoMod()
 {
-    return this->confirmAutoModBan(this->autoModReviewSelectedKey_);
+    return ChannelView::banAutoModUser(this->autoModReviewSelectedKey_);
 }
 
 ChannelPtr ChannelView::sourceChannel() const
@@ -4746,9 +4747,7 @@ void ChannelView::messageAppended(MessagePtr &message,
              messageFlags->has(MessageFlag::ShowInMentions) &&
              !messageFlags->has(MessageFlag::Subscription) &&
              (getSettings()->highlightMentions ||
-              this->channel_->getType() != Channel::Type::TwitchMentions)) ||
-            (this->channel_->getType() == Channel::Type::TwitchAutomod &&
-             getSettings()->enableAutomodHighlight))
+              this->channel_->getType() != Channel::Type::TwitchMentions)))
         {
             this->tabHighlightRequested.invoke(
                 {.state = HighlightState::Highlighted,
@@ -4844,7 +4843,7 @@ void ChannelView::messagePrepended(MessagePtr &message,
         if (!message->flags.has(MessageFlag::DoNotTriggerNotification) &&
             !message->isHiddenByClientNonce())
         {
-            if (getSettings()->enableAutomodHighlight)
+            if (message->flags.has(MessageFlag::Highlighted))
             {
                 this->tabHighlightRequested.invoke(
                     {.state = HighlightState::Highlighted,
@@ -4944,7 +4943,7 @@ void ChannelView::messagePrepended(MessagePtr &message,
     if (!message->flags.has(MessageFlag::DoNotTriggerNotification) &&
         !message->isHiddenByClientNonce())
     {
-        if (getSettings()->enableAutomodHighlight)
+        if (message->flags.has(MessageFlag::Highlighted))
         {
             this->tabHighlightRequested.invoke(
                 {.state = HighlightState::Highlighted,
@@ -8514,7 +8513,7 @@ void ChannelView::handleLinkClick(QMouseEvent *event, const Link &link,
 
         case Link::AutoModReviewBan: {
             selectAutoModCard(link.value);
-            this->confirmAutoModBan(link.value);
+            ChannelView::banAutoModUser(link.value);
         }
         break;
 
@@ -8658,7 +8657,19 @@ void ChannelView::handleLinkClick(QMouseEvent *event, const Link &link,
         }
         break;
         case Link::Reconnect: {
-            this->underlyingChannel_.get()->reconnect();
+            if (link.value.startsWith("account:"))
+            {
+                if (auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+                        getApp()->getTwitch()->getChannelOrEmpty(
+                            link.value.section(':', 1))))
+                {
+                    getApp()->getTwitch()->reconnectChannel(channel);
+                }
+            }
+            else
+            {
+                this->underlyingChannel_.get()->reconnect();
+            }
         }
         break;
         case Link::ReplyToMessage: {
@@ -8743,7 +8754,7 @@ void ChannelView::showAutoModTimeoutMenu(const QString &key,
     }
 }
 
-bool ChannelView::confirmAutoModBan(QString key)
+bool ChannelView::banAutoModUser(const QString &key)
 {
     auto *review = getApp()->getAutoModReview();
     const auto *item = review != nullptr ? review->find(key) : nullptr;
@@ -8753,15 +8764,7 @@ bool ChannelView::confirmAutoModBan(QString key)
         return false;
     }
 
-    const auto answer = QMessageBox::question(
-        this, QStringLiteral("Deny and ban"),
-        QStringLiteral("Deny this message and permanently ban %1 from #%2?")
-            .arg(item->userLogin, item->broadcasterLogin),
-        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-    if (answer == QMessageBox::Yes)
-    {
-        review->denyAndBan(key, QStringLiteral("AutoMod review"));
-    }
+    review->denyAndBan(key, u"AutoMod review"_s);
     return true;
 }
 

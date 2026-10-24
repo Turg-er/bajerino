@@ -9,8 +9,6 @@
 
 #include <QRandomGenerator>
 
-#include <algorithm>
-
 namespace chatterino {
 
 namespace {
@@ -53,14 +51,6 @@ QString makeTwitchClientNonce(qsizetype length)
         nonce.resize(length, QLatin1Char('0'));
     }
     return nonce.toLower();
-}
-
-QString makeInvisibleTwitchClientNonce(const QString &message)
-{
-    const auto messageBytes = message.toUtf8().size();
-    const auto nonceLength = std::max<qsizetype>(
-        32, INVISIBLE_NONCE_AND_MESSAGE_BYTES - messageBytes);
-    return makeTwitchClientNonce(nonceLength);
 }
 
 bool isExtendedTwitchClientNonce(QStringView nonce)

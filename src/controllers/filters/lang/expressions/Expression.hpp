@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "controllers/filters/lang/Tokenizer.hpp"
 #include "controllers/filters/lang/Types.hpp"
 
 #include <QString>
@@ -22,7 +21,7 @@ namespace chatterino::filters {
 
 struct RunContext {
     const Message &message;
-    Channel *channel;
+    Channel *channel = nullptr;
 };
 
 class Expression

@@ -574,6 +574,10 @@ void MessageLayoutContainer::addSelectionText(QString &str, uint32_t from,
                     MessageElementFlag::Pronouns,
                     MessageElementFlag::Badges,
                     MessageElementFlag::ChannelName,
+                    MessageElementFlag::HeaderTimestamp,
+                    MessageElementFlag::AnnouncementHeader,
+                    MessageElementFlag::SubscriptionHeader,
+                    MessageElementFlag::WatchStreakHeader,
                 }))
             {
                 continue;
@@ -686,9 +690,17 @@ size_t MessageLayoutContainer::getSelectionIndex(QPointF point) const
 size_t MessageLayoutContainer::getFirstMessageCharacterIndex() const
 {
     static const FlagsEnum<MessageElementFlag> skippedFlags{
-        MessageElementFlag::RepliedMessage, MessageElementFlag::Timestamp,
-        MessageElementFlag::ModeratorTools, MessageElementFlag::Badges,
-        MessageElementFlag::Username,       MessageElementFlag::Pronouns,
+        MessageElementFlag::RepliedMessage,
+        MessageElementFlag::Timestamp,
+        MessageElementFlag::ModeratorTools,
+        MessageElementFlag::Badges,
+        MessageElementFlag::Username,
+        MessageElementFlag::Pronouns,
+        MessageElementFlag::ChannelName,
+        MessageElementFlag::HeaderTimestamp,
+        MessageElementFlag::AnnouncementHeader,
+        MessageElementFlag::SubscriptionHeader,
+        MessageElementFlag::WatchStreakHeader,
     };
 
     // Get the index of the first character of the real message

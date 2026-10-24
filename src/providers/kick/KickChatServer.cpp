@@ -401,6 +401,7 @@ void KickChatServer::onChatroomClear(KickChannel *channel,
     auto now = QDateTime::currentDateTime();
     auto clear =
         KickMessageBuilder::makeClearChatMessage(now, {}, channel->getName());
+    clear->platform = MessagePlatform::Kick;
     channel->disableAllMessages();
     channel->addOrReplaceClearChat(clear, now);
 }

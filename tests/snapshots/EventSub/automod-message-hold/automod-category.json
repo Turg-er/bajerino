@@ -40,31 +40,18 @@
             "elements": [
                 {
                     "color": "System",
-                    "flags": "Text|IgnoreExactMatch",
+                    "flags": "ChannelName",
                     "link": {
-                        "type": "None",
-                        "value": ""
+                        "type": "JumpToChannel",
+                        "value": "pajlada"
                     },
-                    "style": "ChatSmall",
+                    "style": "ChatMedium",
                     "tooltip": "",
                     "trailingSpace": true,
                     "type": "TextElement",
                     "words": [
-                        "Swearing",
-                        "·",
-                        "Level",
-                        "4"
+                        "#pajlada"
                     ]
-                },
-                {
-                    "flags": "Text|IgnoreExactMatch",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "LinebreakElement"
                 },
                 {
                     "element": {
@@ -92,6 +79,97 @@
                     "tooltip": "",
                     "trailingSpace": true,
                     "type": "TimestampElement"
+                },
+                {
+                    "emote": {
+                        "homePage": "https://dashboard.twitch.tv/settings/moderation/automod",
+                        "images": {
+                            "1x": ""
+                        },
+                        "name": "",
+                        "tooltip": "AutoMod"
+                    },
+                    "flags": "BadgeChannelAuthority",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "AutoMod",
+                    "trailingSpace": true,
+                    "type": "BadgeElement"
+                },
+                {
+                    "color": "#ff0000ff",
+                    "flags": "Text|Username|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatMediumBold",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "AutoMod:"
+                    ]
+                },
+                {
+                    "color": "Text",
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatMedium",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "Held",
+                        "a",
+                        "message",
+                        "for",
+                        "Swearing",
+                        "·",
+                        "Level",
+                        "4."
+                    ]
+                },
+                {
+                    "color": "System",
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "style": "ChatMedium",
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TextElement",
+                    "words": [
+                        "Read",
+                        "only"
+                    ]
+                },
+                {
+                    "flags": "Text|IgnoreExactMatch",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "LinebreakElement"
+                },
+                {
+                    "flags": "ModeratorTools",
+                    "link": {
+                        "type": "None",
+                        "value": ""
+                    },
+                    "tooltip": "",
+                    "trailingSpace": true,
+                    "type": "TwitchModerationElement"
                 },
                 {
                     "color": "Text",
@@ -124,32 +202,6 @@
                     "type": "TextElement",
                     "words": [
                         "ass"
-                    ]
-                },
-                {
-                    "flags": "Text|IgnoreExactMatch",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "LinebreakElement"
-                },
-                {
-                    "color": "System",
-                    "flags": "Text|IgnoreExactMatch",
-                    "link": {
-                        "type": "None",
-                        "value": ""
-                    },
-                    "style": "ChatSmall",
-                    "tooltip": "",
-                    "trailingSpace": true,
-                    "type": "TextElement",
-                    "words": [
-                        "Read",
-                        "only"
                     ]
                 }
             ],

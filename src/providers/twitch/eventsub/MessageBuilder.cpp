@@ -911,7 +911,7 @@ std::pair<MessagePtr, HighlightAlert> makeAutomodHoldMessage(
     QVariantMap tagsMap;
     Communi::TagsRef tags(tagsMap);
     auto highlights =
-        builder.parseHighlights(tags, event.message.text.qt(), {});
+        builder.parseHighlights(tags, event.message.text.qt(), {}, channel);
 
     return {builder.release(), highlights};
 }
@@ -1222,7 +1222,9 @@ MessagePtr makeAutoModReviewMessage(TwitchChannel *channel,
         presentation == AutoModReviewPresentation::ReviewQueue;
 
     const auto reviewReason = [&item] {
-        if (!item.reasonCategory.isEmpty())
+        auto reason = item.reasonCategory.isEmpty() ? item.reasonSummary
+                                                    : item.reasonCategory;
+        if (item.reasonLevel > 0)
         {
             auto reason = item.reasonCategory;
             if (item.reasonLevel > 0)
@@ -1232,8 +1234,13 @@ MessagePtr makeAutoModReviewMessage(TwitchChannel *channel,
             }
             return reason;
         }
-
-        return QString{};
+        if (item.blockedTerm && !item.matchedFragments.isEmpty() &&
+            !(getSettings()->streamerModeHideBlockedTermText &&
+              getApp()->getStreamerMode()->isEnabled()))
+        {
+            reason += u" \u00b7 "_s % item.matchedFragments.join(u", "_s);
+        }
+        return reason;
     }();
     if (isReviewQueue)
     {
@@ -1466,7 +1473,7 @@ MessagePtr makeAutoModReviewMessage(TwitchChannel *channel,
     return builder.release();
 }
 
-MessagePtr makeSuspiciousUserMessageHeader(
+std::pair<MessagePtr, HighlightAlert> makeSuspiciousUserMessage(
     TwitchChannel *channel, const QDateTime &time,
     const lib::payload::channel_suspicious_user_message::v1::Event &event)
 {
@@ -1475,7 +1482,8 @@ MessagePtr makeSuspiciousUserMessageHeader(
     // Builder for low trust user message with explanation
     builder->channelName = event.broadcasterUserLogin.qt();
     builder->serverReceivedTime = time;
-    builder->flags.set(MessageFlag::LowTrustUsers);
+    builder->loginName = event.userLogin.qt();
+    builder->flags.set(MessageFlag::PubSub, MessageFlag::LowTrustUsers);
 
     // AutoMod shield badge
     builder.emplace<BadgeElement>(makeAutoModBadge(),
@@ -1529,36 +1537,14 @@ MessagePtr makeSuspiciousUserMessageHeader(
     builder.emplace<TextElement>(headerMessage, MessageElementFlag::Text,
                                  MessageColor::Text);
 
-    builder.setMessageAndSearchText(prefix % u" " % headerMessage);
-
-    return builder.release();
-}
-
-MessagePtr makeSuspiciousUserMessageBody(
-    TwitchChannel *channel, const QDateTime &time,
-    const lib::payload::channel_suspicious_user_message::v1::Event &event)
-{
-    EventSubMessageBuilder builder(channel);
-    builder->channelName = event.broadcasterUserLogin.qt();
-    builder->serverReceivedTime = time;
-    if (event.lowTrustStatus == lib::suspicious_users::Status::Restricted)
-    {
-        builder->flags.set(MessageFlag::RestrictedMessage);
-    }
-    else
-    {
-        builder->flags.set(MessageFlag::MonitoredMessage);
-    }
+    builder.emplace<LinebreakElement>(MessageElementFlag::Text);
 
     builder
         .emplace<ChannelNameElement>(u'#' + event.broadcasterUserLogin.qt(),
                                      channel->channelAvatar())
         ->setLink({Link::JumpToChannel, event.broadcasterUserLogin.qt()});
     builder.emplace<TimestampElement>(time.time());
-    builder.emplace<TwitchModerationElement>(true, false, false,
-                                             channel->weakFromThis());
-    builder->loginName = event.userLogin.qt();
-    builder->flags.set(MessageFlag::PubSub, MessageFlag::LowTrustUsers);
+    builder.emplace<TwitchModerationElement>();
 
     // sender username
     builder
@@ -1572,10 +1558,16 @@ MessagePtr makeSuspiciousUserMessageBody(
     builder.emplace<TextElement>(event.message.text.qt(),
                                  MessageElementFlag::Text, MessageColor::Text);
 
-    builder.setMessageAndSearchText(event.userName.qt() % u": " %
+    builder.setMessageAndSearchText(prefix % u" " % headerMessage % u" " %
+                                    event.userName.qt() % u": " %
                                     event.message.text.qt());
 
-    return builder.release();
+    QVariantMap tagsMap;
+    Communi::TagsRef tags(tagsMap);
+    auto highlights =
+        builder.parseHighlights(tags, event.message.text.qt(), {}, channel);
+
+    return {builder.release(), highlights};
 }
 
 MessagePtr makeSuspiciousUserUpdate(

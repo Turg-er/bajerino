@@ -316,6 +316,13 @@ void LoggingChannel::addMessage(const MessagePtr &message,
             }
         }
     }
+    if (const auto headerText = message->getHeaderText(); !headerText.isEmpty())
+    {
+        const auto prefix = str;
+        str.append(headerText);
+        str.append(ENDLINE);
+        str.append(prefix);
+    }
     str.append(messageText);
     str.append(ENDLINE);
 

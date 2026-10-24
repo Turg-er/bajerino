@@ -7,6 +7,7 @@
 #include "common/Aliases.hpp"
 #include "messages/ImageSet.hpp"
 
+#include <boost/unordered/unordered_flat_map.hpp>
 #include <QStringList>
 
 #include <cstdint>

@@ -1,0 +1,67 @@
+{
+    "input": {
+        "highlighting": {
+            "selfHighlight": {
+                "showSelfHighlightInMentions": true
+            }
+        }
+    },
+    "output": {
+        "bajerino": {
+            "twitchAnonymousReadParallel": false,
+            "twitchDefaultChannelMode": "authenticated"
+        },
+        "highlighting": {
+            "highlights2": [
+                {
+                    "id": "firstmessage"
+                },
+                {
+                    "id": "watchstreak"
+                },
+                {
+                    "id": "subscriptions"
+                },
+                {
+                    "id": "whispers"
+                },
+                {
+                    "id": "yourusername",
+                    "showInMentions": true
+                },
+                {
+                    "id": "yourmessages"
+                },
+                {
+                    "id": "subscribedthread"
+                },
+                {
+                    "id": "announcements"
+                },
+                {
+                    "id": "channelpoints"
+                },
+                {
+                    "id": "automodcaught"
+                },
+                {
+                    "id": "lowtrustuser"
+                },
+                {
+                    "id": "uncategorizednotification"
+                }
+            ],
+            "selfHighlight": {
+                "showSelfHighlightInMentions": true
+            }
+        },
+        "misc": {
+            "settingsVersion": 2
+        },
+        "moltorino": {
+            "appearance": {
+                "popupSizesResetV1": true
+            }
+        }
+    }
+}

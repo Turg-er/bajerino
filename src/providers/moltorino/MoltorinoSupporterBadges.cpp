@@ -72,7 +72,7 @@ bool isValidVanitySlotKey(const QString &value)
         QStringLiteral("tp"), QStringLiteral("c"),  QStringLiteral("ff"),
         QStringLiteral("fa"), QStringLiteral("bt"), QStringLiteral("m"),
         QStringLiteral("7"),  QStringLiteral("hs"), QStringLiteral("hc"),
-        QStringLiteral("bl"),
+        QStringLiteral("bl"), QStringLiteral("jc"), QStringLiteral("bh"),
     };
     return slots.contains(value);
 }
@@ -601,8 +601,27 @@ MoltorinoVanityLayout normalizeLayout(MoltorinoVanityLayout layout)
     }
     if (present.insert(QStringLiteral("bl")).second)
     {
-        order.insert(std::ranges::find(order, QStringLiteral("m")),
-                     QStringLiteral("bl"));
+        auto anchor = std::ranges::find(order, QStringLiteral("m"));
+        for (const auto &key : {QStringLiteral("bh"), QStringLiteral("jc")})
+        {
+            if (anchor != order.begin() && *std::prev(anchor) == key)
+            {
+                --anchor;
+            }
+        }
+        order.insert(anchor, QStringLiteral("bl"));
+    }
+    if (present.insert(QStringLiteral("jc")).second)
+    {
+        const auto anchor = present.contains(QStringLiteral("bh"))
+                                ? QStringLiteral("bh")
+                                : QStringLiteral("m");
+        order.insert(std::ranges::find(order, anchor), QStringLiteral("jc"));
+    }
+    if (present.insert(QStringLiteral("bh")).second)
+    {
+        const auto jilChat = std::ranges::find(order, QStringLiteral("jc"));
+        order.insert(std::next(jilChat), QStringLiteral("bh"));
     }
     layout.order = std::move(order);
 

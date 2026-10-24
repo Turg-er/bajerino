@@ -19,7 +19,9 @@ HighlightBlacklistModel::HighlightBlacklistModel(QObject *parent)
 
 // turn a vector item into a model row
 HighlightBlacklistUser HighlightBlacklistModel::getItemFromRow(
-    std::vector<QStandardItem *> &row, const HighlightBlacklistUser &original)
+    std::vector<QStandardItem *> &row,
+    const HighlightBlacklistUser & /*original*/,
+    const std::optional<QModelIndex> & /*index*/, std::optional<int> /*role*/)
 {
     // key, regex
 

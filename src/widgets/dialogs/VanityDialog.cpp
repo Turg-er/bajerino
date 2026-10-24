@@ -5,12 +5,14 @@
 #include "common/network/NetworkResult.hpp"
 #include "controllers/accounts/AccountController.hpp"
 #include "messages/Image.hpp"
+#include "providers/badgehq/BadgeHQBadges.hpp"
 #include "providers/bluzyrino/BluzyrinoBadges.hpp"
 #include "providers/bttv/BttvBadges.hpp"
 #include "providers/chatterino/ChatterinoBadges.hpp"
 #include "providers/ffz/FfzBadges.hpp"
 #include "providers/ffzap/FfzApBadges.hpp"
 #include "providers/homies/HomiesBadges.hpp"
+#include "providers/jilchat/JilChatBadges.hpp"
 #include "providers/moltorino/MoltorinoAuth.hpp"
 #include "providers/seventv/SeventvBadges.hpp"
 #include "providers/seventv/SeventvPaints.hpp"
@@ -1887,6 +1889,20 @@ VanityDialog::VanityDialog(std::shared_ptr<TwitchChannel> channel,
                                                      this->refreshPreview();
                                                  });
     }
+    if (auto *provider = getApp()->getJilChatBadges())
+    {
+        this->managedConnections_.managedConnect(provider->badgesUpdated,
+                                                 [this] {
+                                                     this->refreshPreview();
+                                                 });
+    }
+    if (auto *provider = getApp()->getBadgeHQBadges())
+    {
+        this->managedConnections_.managedConnect(provider->badgesUpdated,
+                                                 [this] {
+                                                     this->refreshPreview();
+                                                 });
+    }
     this->refreshMoltorinoBadgeAvailability();
 
     this->originalColor_ = account->color();
@@ -2520,6 +2536,7 @@ QWidget *VanityDialog::buildSevenTVConnectionHeader(
 {
     auto *rowWidget = new QWidget(parent);
     rowWidget->setObjectName(QStringLiteral("VanityConnectionRow"));
+    rowWidget->setProperty("disconnectedText", disconnectedText);
     auto *row = new QHBoxLayout(rowWidget);
     row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(6);
@@ -2695,7 +2712,8 @@ void VanityDialog::refreshStyle()
             QFrame#VanityDialogSeparator {
                 background: %4;
             }
-            QWidget#VanityPreviewFrame {
+            QWidget#VanityPreviewFrame,
+            QWidget#VanitySection {
                 background: %5;
                 border: 1px solid %4;
                 border-radius: 2px;
@@ -4852,6 +4870,22 @@ void VanityDialog::refreshPreview()
             addBadge(QStringLiteral("bl"), QStringLiteral("Bluzyrino"), badge);
         }
     }
+    if (auto *provider = getApp()->getJilChatBadges();
+        provider != nullptr && getSettings()->showBadgesJilChat)
+    {
+        for (const auto &badge : provider->getBadges({this->accountUserId_}))
+        {
+            addBadge(QStringLiteral("jc"), QStringLiteral("JilChat"), badge);
+        }
+    }
+    if (auto *provider = getApp()->getBadgeHQBadges();
+        provider != nullptr && getSettings()->showBadgesBadgeHQ)
+    {
+        for (const auto &badge : provider->getBadges({this->accountUserId_}))
+        {
+            addBadge(QStringLiteral("bh"), QStringLiteral("BadgeHQ"), badge);
+        }
+    }
     if (getApp()->getMoltorinoSupporterBadges() != nullptr)
     {
         const bool previewingLockedBadge =
@@ -5817,6 +5851,14 @@ QString VanityDialog::layoutDisplayName(const QString &key) const
     if (key == QStringLiteral("bl"))
     {
         return QStringLiteral("Bluzyrino");
+    }
+    if (key == QStringLiteral("jc"))
+    {
+        return QStringLiteral("JilChat");
+    }
+    if (key == QStringLiteral("bh"))
+    {
+        return QStringLiteral("BadgeHQ");
     }
     if (key == QStringLiteral("7"))
     {

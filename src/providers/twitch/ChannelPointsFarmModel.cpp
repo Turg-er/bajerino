@@ -23,7 +23,8 @@ QVariant ChannelPointsFarmModel::headerData(int section,
 }
 
 QString ChannelPointsFarmModel::getItemFromRow(
-    std::vector<QStandardItem *> &row, const QString & /*original*/)
+    std::vector<QStandardItem *> &row, const QString & /*original*/,
+    const std::optional<QModelIndex> & /*index*/, std::optional<int> /*role*/)
 {
     return row.at(0)->data(Qt::DisplayRole).toString();
 }

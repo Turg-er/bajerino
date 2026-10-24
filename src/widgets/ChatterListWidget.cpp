@@ -1527,6 +1527,10 @@ public:
     {
         for (const auto &localChannel : this->localChannels)
         {
+            if (!localChannel)
+            {
+                continue;
+            }
             const auto platform = localChannel->messagePlatform();
             if (platform != MessagePlatform::YouTube)
             {
@@ -1698,7 +1702,8 @@ public:
 
         const auto eligibleChannels = std::ranges::count_if(
             this->twitchChannels, [](const auto &channel) {
-                return channel->hasModRights() && !channel->roomId().isEmpty();
+                return channel && channel->hasModRights() &&
+                       !channel->roomId().isEmpty();
             });
         const auto available =
             std::max(0, CHATTER_LIMIT - this->model->total());
@@ -1714,7 +1719,8 @@ public:
         const QPointer<ChatterListWidget> guard(this->q);
         for (const auto &channel : this->twitchChannels)
         {
-            if (!channel->hasModRights() || channel->roomId().isEmpty())
+            if (!channel || !channel->hasModRights() ||
+                channel->roomId().isEmpty())
             {
                 continue;
             }
@@ -2179,7 +2185,8 @@ ChatterListWidget::ChatterListWidget(std::shared_ptr<Channel> channel,
 
 ChatterListWidget::~ChatterListWidget()
 {
-    const auto releasedRows = this->d_->model->rowCount();
+    const auto releasedRows =
+        this->d_ && this->d_->model ? this->d_->model->rowCount() : 0;
     this->d_.reset();
     if (releasedRows >= 1000)
     {

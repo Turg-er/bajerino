@@ -10,7 +10,6 @@
 #include "messages/MessageColor.hpp"
 #include "providers/links/LinkInfo.hpp"
 #include "singletons/Fonts.hpp"
-#include "util/DebugCount.hpp"
 
 #include <magic_enum/magic_enum.hpp>
 #include <pajlada/signals/signalholder.hpp>
@@ -160,13 +159,16 @@ enum class MessageElementFlag : int64_t {
     IgnoreExactMatch = (1LL << 44),
     BadgeFfzAp = (1LL << 45),
     BadgeBluzyrino = (1LL << 46),
+    BadgeJilChat = (1LL << 47),
+    BadgeBadgeHQ = (1LL << 48),
     ChannelAvatar = (1LL << 53),
     NoUsernamePaint = (1LL << 54),
 
     Badges = BadgeGlobalAuthority | BadgePredictions | BadgeChannelAuthority |
              BadgeSubscription | BadgeVanity | BadgeChatterino | BadgeSevenTV |
              BadgeFfz | BadgeSharedChannel | BadgeBttv | BadgeHomies |
-             BadgeMoltorino | BadgeDecrypted | BadgeFfzAp | BadgeBluzyrino,
+             BadgeMoltorino | BadgeDecrypted | BadgeFfzAp | BadgeBluzyrino |
+             BadgeJilChat | BadgeBadgeHQ,
 
     ChannelName = (1LL << 20),
 
@@ -257,6 +259,9 @@ public:
 
     virtual std::unique_ptr<MessageElement> clone() const = 0;
 
+    /// When this element is added to a container, this decides whether the flag check
+    /// should require the context flags to contain all flags of this element (true), as opposed
+    /// to the context flag containing at least one of the flags of this element (false).
     bool exhaustiveFlags = false;
 
     /// The type name for this message element. Used for Lua plugins.
@@ -273,6 +278,10 @@ protected:
     void cloneFrom(const MessageElement &source);
     bool matchesFlags(MessageElementFlags contextFlags) const;
     virtual const QString &getDefaultTooltip() const;
+
+    /// Checks if the given flags from the layout context matches the flags of this element.
+    ///
+    /// Takes `exhaustiveFlags` into consideration.
 
 private:
     struct Metadata;
@@ -812,6 +821,12 @@ public:
 
     FfzBadgeElement(const EmotePtr &data, MessageElementFlags flags_,
                     QColor color_);
+
+    /// The colour FFZ draws behind its (transparent) badge glyph.
+    const QColor &getColor() const
+    {
+        return this->color;
+    }
 
     std::unique_ptr<MessageElement> clone() const override;
 

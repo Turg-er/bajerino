@@ -27,12 +27,12 @@
 #include "providers/youtube/YouTubeChatServer.hpp"
 #include "providers/youtube/YouTubeTypes.hpp"
 #include "singletons/Fonts.hpp"
-#include "singletons/ImageUploader.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/ThemeCustomization.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/CustomPlayer.hpp"
+#include "util/IncognitoBrowser.hpp"
 #include "util/MultiChannel.hpp"
 #include "util/StreamLink.hpp"
 #include "widgets/ChatterListWidget.hpp"
@@ -283,7 +283,7 @@ Split::Split(QWidget *parent)
                     this->joinChannelInNewTab(channel);
                     break;
                 case FromTwitchLinkOpenChannelIn::BrowserPlayer:
-                    this->openChannelInBrowserPlayer(channel);
+                    Split::openChannelInBrowserPlayer(channel);
                     break;
                 case FromTwitchLinkOpenChannelIn::Streamlink:
                     this->openChannelInStreamlink(twitchChannel);
@@ -571,6 +571,11 @@ void Split::hideEvent(QHideEvent *event)
 
 void Split::refreshSelectedYouTube()
 {
+    if (getApp()->getYouTubeChatServer() == nullptr)
+    {
+        return;
+    }
+
     auto *container = dynamic_cast<SplitContainer *>(this->parentWidget());
     if (!this->isVisible() ||
         (container != nullptr && container->getSelectedSplit() != nullptr &&
@@ -2534,12 +2539,19 @@ void Split::updateBannerVisibility()
     setVisibility(selectedId == 0, selectedId == 1, selectedId == 2, true);
 }
 
-void Split::openChannelInBrowserPlayer(ChannelPtr channel)
+void Split::openChannelInBrowserPlayer(const ChannelPtr &channel)
 {
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
-        QDesktopServices::openUrl(
-            QUrl(TWITCH_PLAYER_URL.arg(twitchChannel->getName())));
+        const auto playerUrl = TWITCH_PLAYER_URL.arg(twitchChannel->getName());
+        if (getSettings()->openLinksIncognito && supportsIncognitoLinks())
+        {
+            openLinkIncognito(playerUrl);
+        }
+        else
+        {
+            QDesktopServices::openUrl(QUrl(playerUrl));
+        }
     }
 }
 
@@ -3061,7 +3073,7 @@ void Split::openWhispersInBrowser()
 
 void Split::openBrowserPlayer()
 {
-    this->openChannelInBrowserPlayer(this->getSelectedChannel());
+    Split::openChannelInBrowserPlayer(this->getSelectedChannel());
 }
 
 void Split::openModViewInBrowser()

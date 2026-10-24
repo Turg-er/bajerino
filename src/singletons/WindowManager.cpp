@@ -205,6 +205,8 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->updateWordTypeMaskListener.add(settings.showBadgesFfz);
     this->updateWordTypeMaskListener.add(settings.showBadgesFfzAp);
     this->updateWordTypeMaskListener.add(settings.showBadgesBluzyrino);
+    this->updateWordTypeMaskListener.add(settings.showBadgesJilChat);
+    this->updateWordTypeMaskListener.add(settings.showBadgesBadgeHQ);
     this->updateWordTypeMaskListener.add(settings.showBadgesBttv);
     this->updateWordTypeMaskListener.add(settings.showBadgesSevenTV);
     this->updateWordTypeMaskListener.add(settings.showBadgesHomiesSupporter);
@@ -220,14 +222,7 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->forceLayoutChannelViewsListener.add(
         settings.moderationActions.delayedItemsChanged);
     this->forceLayoutChannelViewsListener.add(
-        settings.highlightedMessages.delayedItemsChanged);
-    this->forceLayoutChannelViewsListener.add(
-        settings.highlightedUsers.delayedItemsChanged);
-    this->forceLayoutChannelViewsListener.add(
-        settings.highlightedBadges.delayedItemsChanged);
-
-    this->forceLayoutChannelViewsListener.add(
-        settings.highlightMatchedFragments);
+        settings.sharedHighlights.delayedItemsChanged);
     this->forceLayoutChannelViewsListener.add(
         settings.removeSpacesBetweenEmotes);
     this->forceLayoutChannelViewsListener.add(settings.enableEmoteModifiers);
@@ -255,7 +250,6 @@ WindowManager::WindowManager(const Args &appArgs_, const Paths &paths,
     this->forceLayoutChannelViewsListener.add(
         settings.clientDetectionAbnormalColor);
     this->forceLayoutChannelViewsListener.add(settings.collpseMessagesMinLines);
-    this->forceLayoutChannelViewsListener.add(settings.enableRedeemedHighlight);
     this->forceLayoutChannelViewsListener.add(
         settings.showPinButtonOnModeratorsMode);
     this->forceLayoutChannelViewsListener.add(settings.showSelfDeleteButton);
@@ -384,6 +378,8 @@ void WindowManager::updateWordTypeMask()
     flags.set(settings->showBadgesFfz ? MEF::BadgeFfz : MEF::None);
     flags.set(settings->showBadgesFfzAp ? MEF::BadgeFfzAp : MEF::None);
     flags.set(settings->showBadgesBluzyrino ? MEF::BadgeBluzyrino : MEF::None);
+    flags.set(settings->showBadgesJilChat ? MEF::BadgeJilChat : MEF::None);
+    flags.set(settings->showBadgesBadgeHQ ? MEF::BadgeBadgeHQ : MEF::None);
     flags.set(settings->showBadgesBttv ? MEF::BadgeBttv : MEF::None);
     flags.set(settings->showBadgesSevenTV ? MEF::BadgeSevenTV : MEF::None);
     flags.set(settings->showBadgesHomiesSupporter.getValue()

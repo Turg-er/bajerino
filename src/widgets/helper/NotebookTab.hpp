@@ -217,7 +217,6 @@ private:
     bool isInLastRow_{};
     bool isFirstVisible_{};
     bool isLastVisible_{};
-    int mouseWheelDelta_ = 0;
     NotebookTabLocation tabLocation_ = NotebookTabLocation::Top;
 
     HighlightState highlightState_ = HighlightState::None;

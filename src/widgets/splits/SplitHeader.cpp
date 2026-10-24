@@ -56,19 +56,28 @@
 #include "widgets/TooltipWidget.hpp"
 #include "widgets/Window.hpp"
 
+#include <pajlada/signals/scoped-connection.hpp>
 #include <QActionGroup>
+#include <QCheckBox>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDrag>
 #include <QFontMetrics>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPainter>
 #include <QPointer>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QScopeGuard>
 #include <QUrl>
+#include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
@@ -562,6 +571,12 @@ SplitHeader::SplitHeader(Split *split)
     getSettings()->headerUptime.connect(_, this->managedConnections_);
     getSettings()->showAnonymousChannelIndicator.connect(
         _, this->managedConnections_);
+    getSettings()->usernameDisplayMode.connect(
+        [this] {
+            this->updateChannelText();
+            this->updateSharedChatButton();
+        },
+        this->managedConnections_, false);
     getSettings()->showFollowButtonInSplitHeader.connect(
         [this](bool enabled, const auto &) {
             if (enabled)
@@ -1047,6 +1062,17 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
             "Reconnect",
             h->getDisplaySequence(HotkeyCategory::Split, "reconnect"), this,
             &SplitHeader::reconnect);
+        if (twitchChannel && twitchChannel->usesAnonymousReadConnection() &&
+            twitchChannel->usesAuthenticatedFeatures())
+        {
+            menu->addAction("Reconnect with your account", this, [this] {
+                if (auto channel = std::dynamic_pointer_cast<TwitchChannel>(
+                        this->split_->getSelectedChannel()))
+                {
+                    getApp()->getTwitch()->reconnectChannel(channel);
+                }
+            });
+        }
     }
 
     if (twitchChannel || kickChannel)
@@ -1239,6 +1265,149 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
 
     if (twitchChannel)
     {
+        moreMenu->addAction("Emote sources...", this, [this, selected] {
+            const auto channel =
+                std::dynamic_pointer_cast<TwitchChannel>(selected);
+            if (!channel)
+            {
+                return;
+            }
+            const auto sources = channel->emoteSources();
+            auto *dialog = new QDialog(this);
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->setWindowModality(Qt::WindowModal);
+            dialog->setWindowTitle("Emote sources for #" + channel->getName());
+            auto *layout = new QVBoxLayout(dialog);
+            auto *description = new QLabel(
+                "Use another Twitch channel's emotes in #" +
+                    channel->getName() +
+                    ". These settings only affect this channel. "
+                    "Leave a field blank to use this channel's own emotes.",
+                dialog);
+            description->setWordWrap(true);
+            layout->addWidget(description);
+
+            auto *sharedForm = new QFormLayout;
+            auto *sharedID = new QLineEdit(sources.sharedTwitchID, dialog);
+            sharedID->setObjectName("SharedEmoteSourceID");
+            sharedID->setToolTip(
+                "A numeric Twitch user ID for 7TV, BTTV, and FFZ. Leave blank "
+                "to use this channel's own emotes.");
+            sharedForm->addRow("Twitch user ID for all providers", sharedID);
+            layout->addLayout(sharedForm);
+
+            auto *individual =
+                new QCheckBox("Override providers individually", dialog);
+            individual->setObjectName("IndividualEmoteSources");
+            individual->setChecked(sources.individualProviders);
+            layout->addWidget(individual);
+            auto *providerFields = new QWidget(dialog);
+            auto *providerForm = new QFormLayout(providerFields);
+            providerForm->setContentsMargins(0, 0, 0, 0);
+            const std::array<QString, 3> names{"7TV", "BTTV", "FFZ"};
+            std::array<QLineEdit *, 3> inputs{};
+            for (size_t i = 0; i < inputs.size(); ++i)
+            {
+                inputs.at(i) = new QLineEdit(sources.providerTwitchIDs.at(i),
+                                             providerFields);
+                inputs.at(i)->setObjectName("EmoteSourceID" + names.at(i));
+                providerForm->addRow(names.at(i) + " Twitch user ID",
+                                     inputs.at(i));
+            }
+            layout->addWidget(providerFields);
+            providerFields->setVisible(individual->isChecked());
+            sharedID->setEnabled(!individual->isChecked());
+            const auto updatePlaceholders = [weak = std::weak_ptr(channel),
+                                             sharedID, inputs] {
+                const auto current = weak.lock();
+                const auto id = current ? current->roomId() : QString{};
+                const auto placeholder =
+                    id.isEmpty()
+                        ? QStringLiteral(
+                              "Current channel (ID not available yet)")
+                        : QStringLiteral("Current channel: %1").arg(id);
+                sharedID->setPlaceholderText(placeholder);
+                for (auto *input : inputs)
+                {
+                    input->setPlaceholderText(placeholder);
+                }
+            };
+            updatePlaceholders();
+            // Disconnect even if Qt destroys the callback without invoking it.
+            auto idConnection =
+                std::make_shared<pajlada::Signals::ScopedConnection>(
+                    channel->roomIdChanged.connect(updatePlaceholders));
+            QObject::connect(dialog, &QObject::destroyed, dialog,
+                             [connection = std::move(idConnection)]() mutable {
+                                 connection.reset();
+                             });
+            const bool seedProviders =
+                !sources.individualProviders &&
+                std::ranges::all_of(sources.providerTwitchIDs,
+                                    [](const auto &id) {
+                                        return id.isEmpty();
+                                    });
+            QObject::connect(
+                individual, &QCheckBox::toggled, dialog,
+                [dialog, providerFields, sharedID, inputs,
+                 seedProviders = seedProviders](bool checked) mutable {
+                    if (checked && seedProviders)
+                    {
+                        for (auto *input : inputs)
+                        {
+                            input->setText(sharedID->text());
+                        }
+                        seedProviders = false;
+                    }
+                    sharedID->setEnabled(!checked);
+                    providerFields->setVisible(checked);
+                    dialog->adjustSize();
+                });
+
+            auto *buttons = new QDialogButtonBox(
+                QDialogButtonBox::Save | QDialogButtonBox::Cancel |
+                    QDialogButtonBox::RestoreDefaults,
+                dialog);
+            layout->addWidget(buttons);
+            QObject::connect(buttons, &QDialogButtonBox::rejected, dialog,
+                             &QDialog::reject);
+            QObject::connect(buttons->button(QDialogButtonBox::RestoreDefaults),
+                             &QPushButton::clicked, dialog,
+                             [sharedID, individual, inputs] {
+                                 sharedID->clear();
+                                 individual->setChecked(false);
+                                 for (auto *input : inputs)
+                                 {
+                                     input->clear();
+                                 }
+                             });
+            QObject::connect(
+                buttons, &QDialogButtonBox::accepted, dialog,
+                [dialog, channel, sharedID, individual, inputs] {
+                    ChannelEmoteSources updated{
+                        .sharedTwitchID = sharedID->text(),
+                        .individualProviders = individual->isChecked(),
+                        .providerTwitchIDs = {},
+                    };
+                    for (size_t i = 0; i < inputs.size(); ++i)
+                    {
+                        updated.providerTwitchIDs.at(i) = inputs.at(i)->text();
+                    }
+                    if (!channel->setEmoteSources(std::move(updated)))
+                    {
+                        QMessageBox::warning(
+                            dialog, "Invalid Twitch user ID",
+                            "Use positive numeric Twitch user IDs. "
+                            "Leave a field blank to use its default.");
+                        return;
+                    }
+                    dialog->accept();
+                });
+            dialog->setMinimumWidth(420);
+            dialog->show();
+            sharedID->setFocus();
+        });
+
         {
             auto *action = new QAction(moreMenu);
             action->setText("Mute highlight sounds");
@@ -1539,6 +1708,11 @@ void SplitHeader::handleChannelChanged()
         if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(selected.get()))
         {
             this->channelConnections_.managedConnect(
+                twitchChannel->sharedChatStatusChanged, [this](const auto &) {
+                    this->syncSharedChatParticipants();
+                    this->updateChannelText();
+                });
+            this->channelConnections_.managedConnect(
                 twitchChannel->streamStatusChanged, [this]() {
                     this->updateChannelText();
                 });
@@ -1654,6 +1828,7 @@ void SplitHeader::handleChannelChanged()
     }
     if (auto *twitchChannel = dynamic_cast<TwitchChannel *>(channel.get()))
     {
+        this->syncSharedChatParticipants();
         this->channelConnections_.managedConnect(
             twitchChannel->messageAppended,
             [this](const MessagePtr &message, const auto &) {
@@ -1768,6 +1943,44 @@ void SplitHeader::applySharedChatFilter()
     this->sharedChatFilterActive_ = true;
 }
 
+void SplitHeader::syncSharedChatParticipants()
+{
+    auto *channel =
+        dynamic_cast<TwitchChannel *>(this->split_->getChannel().get());
+    if (!channel)
+    {
+        return;
+    }
+    QSet<QString> ids{channel->roomId()};
+    auto *users = getApp()->getTwitchUsers();
+    for (const auto &participant : channel->getSharedChatSessionParticipants())
+    {
+        ids.insert(participant.id);
+        this->sharedChatSources_.insert(participant.id,
+                                        users->resolveID({participant.id}));
+    }
+    auto &sources = this->sharedChatSources_;
+    for (auto it = sources.begin(); it != sources.end();)
+    {
+        if (!ids.contains(it.key()))
+        {
+            this->hiddenSharedChatSources_.remove(it.key());
+            it = sources.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+    if (this->hiddenSharedChatSources_.size() ==
+        this->sharedChatSources_.size())
+    {
+        this->hiddenSharedChatSources_.clear();
+    }
+    this->applySharedChatFilter();
+    this->updateSharedChatButton();
+}
+
 void SplitHeader::updateSharedChatButton()
 {
     if (!getSettings()->showSharedChatChannelSelector ||
@@ -1797,7 +2010,11 @@ void SplitHeader::updateSharedChatButton()
             text = QStringLiteral("One chat");
             if (user && !user->displayName.trimmed().isEmpty())
             {
-                text = user->displayName.trimmed();
+                text = HelixMinimalUser{.id = it.key(),
+                                        .login = user->name,
+                                        .displayName = user->displayName}
+                           .formatted(
+                               getSettings()->usernameDisplayMode.getEnum());
             }
             else if (user && !user->name.trimmed().isEmpty())
             {
@@ -1862,7 +2079,11 @@ std::unique_ptr<QMenu> SplitHeader::createSharedChatMenu()
         QString label;
         if (user && !user->displayName.trimmed().isEmpty())
         {
-            label = user->displayName.trimmed();
+            label =
+                HelixMinimalUser{.id = it.key(),
+                                 .login = user->name,
+                                 .displayName = user->displayName}
+                    .formatted(getSettings()->usernameDisplayMode.getEnum());
         }
         else if (user && !user->name.trimmed().isEmpty())
         {

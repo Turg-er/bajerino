@@ -327,6 +327,7 @@ void Notebook::removePage(QWidget *page)
     // Remove page and delete resources
     this->items_[removingIndex].page->deleteLater();
     this->items_[removingIndex].tab->deleteLater();
+    this->tabHistory_.removePage(page);
     this->items_.removeAt(removingIndex);
     for (auto &item : this->items_)
     {
@@ -489,6 +490,16 @@ void Notebook::select(QWidget *page, bool focusPage, bool recordInHistory)
             return;
         }
 
+        if (auto *group = this->findTabGroup(item->tab->groupId());
+            group && group->collapsed)
+        {
+            group->collapsed = false;
+        }
+        if (recordInHistory && this->selectedPage_)
+        {
+            this->tabHistory_.recordNavigation(this->selectedPage_, page);
+        }
+
         page->show();
 
         item->tab->setSelected(true);
@@ -548,7 +559,7 @@ void Notebook::selectHistoryBack(bool focusPage)
             return;
         }
 
-        if (!this->containsPage(*target))
+        if (!this->containsPage(*target) || *target == this->selectedPage_)
         {
             continue;
         }
@@ -571,7 +582,7 @@ void Notebook::selectHistoryForward(bool focusPage)
             return;
         }
 
-        if (!this->containsPage(*target))
+        if (!this->containsPage(*target) || *target == this->selectedPage_)
         {
             continue;
         }
@@ -2158,6 +2169,10 @@ void Notebook::updateUngroupedOrderAfterMove(QWidget *page, QWidget *targetPage,
     auto *moved = *pageIt;
     homeOrder.erase(pageIt);
     auto newTarget = std::ranges::find(homeOrder, targetPage, &Item::page);
+    if (newTarget == homeOrder.end())
+    {
+        return;
+    }
     if (afterTarget)
     {
         ++newTarget;
@@ -2533,6 +2548,11 @@ void Notebook::performLayout(bool animated)
                 }
             }
         }
+    }
+
+    for (auto &item : filteredItems)
+    {
+        item.tab->refreshSize();
     }
 
     QSet<NotebookTab *> displayedTabs;
@@ -3542,18 +3562,20 @@ void SplitNotebook::addCustomButtons()
             }
         });
 
+    const auto resetAccountButton = [this, userBtn, normalAccountSrc] {
+        userBtn->setSource(normalAccountSrc);
+        auto oldVisibility = userBtn->isVisible();
+        auto newVisibility = !getSettings()->hideUserButton.getValue();
+        userBtn->setVisible(newVisibility);
+        if (oldVisibility != newVisibility)
+        {
+            this->performLayout();
+        }
+    };
     this->signalHolder_.managedConnect(
-        getApp()->getAccounts()->twitch.currentUserChanged,
-        [this, userBtn, normalAccountSrc] {
-            userBtn->setSource(normalAccountSrc);
-            auto oldVisibility = userBtn->isVisible();
-            auto newVisibility = !getSettings()->hideUserButton.getValue();
-            userBtn->setVisible(newVisibility);
-            if (oldVisibility != newVisibility)
-            {
-                this->performLayout();
-            }
-        });
+        getApp()->getAccounts()->twitch.currentUserChanged, resetAccountButton);
+    this->signalHolder_.managedConnect(
+        getApp()->getAccounts()->twitch.loginRestored, resetAccountButton);
 
     QObject::connect(userBtn, &Button::leftClicked, [this, userBtn] {
         getApp()->getWindows()->showAccountSelectPopup(

@@ -203,7 +203,7 @@
     ],
     "params": {
         "helixExpectations": {
-            "getSharedChatSession": 1
+            "getSharedChatSession": 0
         }
     }
 }

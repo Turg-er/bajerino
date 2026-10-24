@@ -19,8 +19,9 @@ NotificationModel::NotificationModel(QObject *parent, Platform platform)
 }
 
 // turn a vector item into a model row
-QString NotificationModel::getItemFromRow(std::vector<QStandardItem *> &row,
-                                          const QString &original)
+QString NotificationModel::getItemFromRow(
+    std::vector<QStandardItem *> &row, const QString & /*original*/,
+    const std::optional<QModelIndex> & /*index*/, std::optional<int> /*role*/)
 {
     const auto name = row[0]->data(Qt::DisplayRole).toString();
     return this->platform_ == Platform::YouTube

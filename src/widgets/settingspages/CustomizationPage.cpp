@@ -4,9 +4,9 @@
 #include "common/network/NetworkRequest.hpp"
 #include "common/network/NetworkResult.hpp"
 #include "common/Version.hpp"
+#include "controllers/highlights/types/YourUsernameHighlight.hpp"
 #include "messages/Emote.hpp"
 #include "messages/Image.hpp"
-#include "providers/colors/ColorProvider.hpp"
 #include "providers/twitch/TwitchBadges.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Settings.hpp"
@@ -1045,7 +1045,6 @@ protected:
         constexpr qreal TAB_HEIGHT = 28;
         constexpr qreal TAB_SPACER = 1;
         const TabStyle tabStyle = getSettings()->tabStyle;
-        const int tabLineWidth = getSettings()->thinTabLines ? 1 : 2;
         const bool compactTabs = tabStyle == TabStyle::Compact;
         const bool showTabCloseButton =
             getSettings()->showTabCloseButton.getValue();
@@ -1056,8 +1055,7 @@ protected:
                                  bool selected, bool roundStart,
                                  bool roundEnd) {
             auto backgroundRect = rect;
-            backgroundRect.setTop(backgroundRect.top() +
-                                  (selected ? 0 : tabLineWidth));
+            backgroundRect.setTop(backgroundRect.top() + (selected ? 0 : 1));
             auto shapedRect = backgroundRect;
             if (this->profile_.tabShape == ThemeTabShape::Individual)
             {
@@ -1101,7 +1099,7 @@ protected:
                 painter.setClipPath(path);
                 painter.fillRect(
                     QRectF(backgroundRect.left(), backgroundRect.top(),
-                           backgroundRect.width(), tabLineWidth + 1),
+                           backgroundRect.width(), 2),
                     selectedTabLine);
                 painter.restore();
             }
@@ -1111,7 +1109,7 @@ protected:
                 painter.setClipPath(path);
                 painter.fillRect(
                     QRectF(backgroundRect.left(), backgroundRect.top(),
-                           backgroundRect.width(), tabLineWidth),
+                           backgroundRect.width(), 1),
                     regularTabLine);
                 painter.restore();
             }
@@ -1562,8 +1560,8 @@ protected:
                     {
                         rowBackground = blendThemeHighlight(
                             rowBackground,
-                            *ColorProvider::instance().color(
-                                ColorType::SelfHighlight),
+                            highlights::YourUsernameHighlight::
+                                BACKGROUND_COLOR_DEFAULT,
                             this->profile_.highlightOpacityAdjustment);
                     }
                     target.fillRect(row.rect, rowBackground);
@@ -2038,11 +2036,6 @@ void CustomizationPage::buildUi()
     this->preview_ = new ThemePreviewWidget;
     this->preview_->setMinimumWidth(290);
     workspace->addWidget(this->preview_);
-    getSettings()->thinTabLines.connect(
-        [this] {
-            this->preview_->update();
-        },
-        this->managedConnections_, false);
 
     auto *tabs = new QTabWidget;
     tabs->setMinimumWidth(470);

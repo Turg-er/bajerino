@@ -8,6 +8,7 @@
 #include "messages/Message.hpp"
 #include "messages/MessageElement.hpp"
 #include "providers/emoji/Emojis.hpp"
+#include "providers/tiktok/TikTokAccount.hpp"
 #include "providers/tiktok/TikTokBadge.hpp"
 #include "providers/tiktok/TikTokChannel.hpp"
 #include "providers/tiktok/TikTokEmotes.hpp"
@@ -345,26 +346,29 @@ std::pair<MessagePtrMut, HighlightAlert> makeTikTokMessage(
     if (!getSettings()->isBlacklistedUser(builder->loginName))
     {
         MessageParseArgs args;
-        auto [highlighted, result] = getApp()->getHighlights()->check(
-            args, {}, builder->loginName, builder->messageText, builder->flags,
-            MessagePlatform::TikTok, builder->userID, builder->channelName);
+        const auto account = getApp()->getAccounts()->tiktok.current();
+        auto [highlighted, result] = getApp()->getHighlights()->check({
+            .args = args,
+            .twitchBadges = {},
+            .senderName = builder->loginName,
+            .originalMessage = builder->messageText,
+            .messageFlags = builder->flags,
+            .self =
+                !account->isAnonymous() && builder->userID == account->userID(),
+            .runContext = {.message = builder.message(), .channel = channel},
+            .platform = MessagePlatform::TikTok,
+        });
         if (highlighted)
         {
             builder->flags.set(MessageFlag::Highlighted);
             builder->highlightColor = result.color;
-            if (!result.matches.empty())
-            {
-                builder->highlightMatches =
-                    std::make_shared<const std::vector<HighlightMatch>>(
-                        std::move(result.matches));
-            }
+
             if (result.showInMentions)
             {
                 builder->flags.set(MessageFlag::ShowInMentions);
             }
-            alert = {result.customSoundUrl.value_or(QUrl{}),
-                     result.playSound && !event.historical,
-                     result.alert && !event.historical};
+            alert = {.sound = event.historical ? QUrl{} : result.sound,
+                     .windowAlert = result.alert && !event.historical};
         }
     }
 

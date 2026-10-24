@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QPixmap>
 #include <QPointer>
+#include <QSize>
 #include <QString>
 #include <QStringList>
 
@@ -57,6 +58,7 @@ class PixmapButton;
 class DrawnButton;
 class LiveIndicator;
 class ModeratorCommentsView;
+class UserBadgesView;
 class UserLogsView;
 class UserRolesView;
 
@@ -82,6 +84,7 @@ public:
                        const ChannelPtr &openingChannel);
 
 protected:
+    bool event(QEvent *event) override;
     void themeChangedEvent() override;
     void scaleChangedEvent(float scale) override;
     void windowDeactivationEvent() override;
@@ -97,6 +100,7 @@ private:
     void resetTargetState();
     void updateIdentityLayout();
     void clearSevenTVAvatar();
+    void updateSevenTVAvatarSize();
     void refreshAvatarVisibility();
     void refreshCustomActions();
     void runCustomAction(const Command &command);
@@ -107,14 +111,26 @@ private:
     void updateModeratorCommentsAvailability();
     void updateUserLogsContext();
     void updateUserRolesContext();
+    void updateUserBadgesContext();
+    void updateBadgeCountRow(qsizetype globalBadges);
+    // While the Badges page is open the card grows downwards so a big
+    // collection isn't squeezed into a few rows; it shrinks back afterwards.
+    int heightBeforeBadges_ = 0;
+    int heightWithBadges_ = 0;
+    void refreshBadgeCountStyle();
+    void refitToContent();
+    bool refitPending_ = false;
+    QSize lastRefitMinimum_;
     bool usercardActionAvailable() const;
     void openPlatformUsercard();
     bool moderatorCommentsActionAvailable() const;
     bool userLogsActionAvailable() const;
     bool userRolesActionAvailable() const;
+    bool userBadgesActionAvailable() const;
     void toggleModeratorComments();
     void toggleUserLogs();
     void toggleUserRoles();
+    void toggleUserBadges();
     void openSevenTVUser();
     void refreshUsercardActionPlacements();
     bool crossActionAvailable() const;
@@ -125,6 +141,7 @@ private:
         Comments,
         Logs,
         Roles,
+        Badges,
     };
     void showActivityPage(ActivityPage page);
     void updateUsercardMessagesVisibility();
@@ -324,6 +341,10 @@ private:
         QLabel *subageIcon = nullptr;
         Label *subageLabel = nullptr;
         Label *chatterCountLabel = nullptr;
+        // "N global badges" under the chatter count, from BadgeHQ.
+        QWidget *badgeCountRow = nullptr;
+        QLabel *badgeCountLabel = nullptr;
+        QPushButton *badgeProfileButton = nullptr;
         Label *lastLiveLabel = nullptr;
         QWidget *userColorRow = nullptr;
         QWidget *userColorSwatch = nullptr;
@@ -348,12 +369,14 @@ private:
         ModeratorCommentsView *commentsView = nullptr;
         UserLogsView *logsView = nullptr;
         UserRolesView *rolesView = nullptr;
+        UserBadgesView *badgesView = nullptr;
 
         LabelButton *usercardLabel = nullptr;
         LabelButton *commentsLabel = nullptr;
         LabelButton *userlogsLabel = nullptr;
         LabelButton *sevenTVUserLabel = nullptr;
         LabelButton *rolesLabel = nullptr;
+        LabelButton *badgesLabel = nullptr;
         LabelButton *notesActionLabel = nullptr;
         LabelButton *blockActionLabel = nullptr;
         LabelButton *hideActionLabel = nullptr;
@@ -367,6 +390,7 @@ private:
     } ui_;
 
     QMovie *seventvAvatar_ = nullptr;
+    QSize seventvAvatarSourceSize_;
     bool isTwitchAvatarShown_ = true;
     QPixmap avatarPixmap_;
     QPointer<EditUserNotesDialog> editUserNotesDialog_;

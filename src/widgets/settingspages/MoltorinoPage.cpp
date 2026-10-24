@@ -890,8 +890,7 @@ private:
 
         if (error == "slow_down" || message == "slow_down")
         {
-            this->devicePollIntervalMs_ =
-                std::min(this->devicePollIntervalMs_ + 5000, 60000);
+            this->devicePollIntervalMs_ += 5000;
             setLabelStatus(this->deviceStatusLabel_,
                            "Twitch asked Moltorino to poll more slowly. "
                            "Still waiting for approval...");
@@ -2230,10 +2229,6 @@ MoltorinoPage::MoltorinoPage()
         ->setToolTip("Choose when the inline Delete action appears beside "
                      "messages sent by the selected account.");
 
-    SettingWidget::checkbox("Thin tab lines", s.thinTabLines)
-        ->setTooltip("Thinner lines with less space above tabs.")
-        ->addTo(*view);
-
     SettingWidget::checkbox("Continuous background across splits",
                             s.continuousSplitBackground)
         ->addKeywords({"wallpaper", "image", "video"})
@@ -2459,6 +2454,11 @@ MoltorinoPage::MoltorinoPage()
         ->addTo(*view);
     SettingWidget::dropdown("Roles", s.usercardRolesActionPlacement,
                             actionPlacements)
+        ->addTo(*view);
+    SettingWidget::dropdown("Badges", s.usercardBadgesActionPlacement,
+                            actionPlacements)
+        ->setTooltip("Show every badge a user owns, loaded from their "
+                     "BadgeHQ profile when you open it.")
         ->addTo(*view);
     SettingWidget::dropdown("7TV profile", s.usercardSevenTVActionPlacement,
                             actionPlacements)

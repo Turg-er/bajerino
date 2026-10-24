@@ -364,6 +364,7 @@ ImageElement::ImageElement(ImagePtr image, MessageElementFlags flags)
     : MessageElement(flags)
     , image_(std::move(image))
 {
+    assert(image_ != nullptr);
 }
 
 void ImageElement::addToContainer(MessageLayoutContainer &container,
@@ -518,7 +519,7 @@ void EmoteElement::setStaticPreview(bool enabled)
 void EmoteElement::addToContainer(MessageLayoutContainer &container,
                                   const MessageLayoutContext &ctx)
 {
-    if (ctx.flags.hasNone(this->getFlags()))
+    if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -1293,7 +1294,7 @@ void BadgeElement::addToContainer(MessageLayoutContainer &container,
     {
         const auto *settings = getSettings();
         const auto enabled =
-            ctx.flags.hasAny(elementFlags) &&
+            this->matchesFlags(ctx.flags) &&
             ((isHomiesSupporter &&
               settings->showBadgesHomiesSupporter.getValue()) ||
              (isHomiesCustom && settings->showBadgesHomiesCustom.getValue()));
@@ -1303,7 +1304,7 @@ void BadgeElement::addToContainer(MessageLayoutContainer &container,
             return;
         }
     }
-    else if (!ctx.flags.hasAny(elementFlags))
+    else if (!this->matchesFlags(ctx.flags))
     {
         return;
     }
@@ -1587,6 +1588,10 @@ ChannelNameElement::ChannelNameElement(
 void ChannelNameElement::addToContainer(MessageLayoutContainer &container,
                                         const MessageLayoutContext &ctx)
 {
+    if (this->exhaustiveFlags && !this->matchesFlags(ctx.flags))
+    {
+        return;
+    }
     if (!ctx.flags.has(MessageElementFlag::ChannelAvatar))
     {
         TextElement::addToContainer(container, ctx);
@@ -1856,8 +1861,14 @@ void TextElement::addWordsToContainer(const QStringList &words,
             ctx.message.highlightMatches &&
             (this->getFlags().has(MessageElementFlag::Text) ||
              ctx.trackMessageText) &&
-            !this->getFlags().has(MessageElementFlag::IgnoreExactMatch) &&
-            !this->getFlags().has(MessageElementFlag::RepliedMessage);
+            !this->getFlags().hasAny({
+                MessageElementFlag::IgnoreExactMatch,
+                MessageElementFlag::RepliedMessage,
+                MessageElementFlag::HeaderTimestamp,
+                MessageElementFlag::AnnouncementHeader,
+                MessageElementFlag::SubscriptionHeader,
+                MessageElementFlag::WatchStreakHeader,
+            });
 
         for (qsizetype wordIndex = 0; wordIndex < words.size(); ++wordIndex)
         {
@@ -2911,6 +2922,10 @@ TwitchModerationElement::~TwitchModerationElement() = default;
 void TwitchModerationElement::addToContainer(MessageLayoutContainer &container,
                                              const MessageLayoutContext &ctx)
 {
+    if (this->exhaustiveFlags && !this->matchesFlags(ctx.flags))
+    {
+        return;
+    }
     const bool inModerationMode =
         ctx.flags.has(MessageElementFlag::ModeratorTools);
     auto *settings = getSettings();

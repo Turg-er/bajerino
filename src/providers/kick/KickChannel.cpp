@@ -397,7 +397,7 @@ bool KickChannel::updateLiveStatus(bool live, const QString &title)
             this->addMessage(MessageBuilder::makeLiveMessage(
                                  HelixMinimalUser{
                                      .id = QString::number(this->userID()),
-                                     .login = this->getDisplayName(),
+                                     .login = this->getName(),
                                      .displayName = this->getDisplayName(),
                                  },
                                  title,
@@ -410,7 +410,7 @@ bool KickChannel::updateLiveStatus(bool live, const QString &title)
             this->addMessage(
                 MessageBuilder::makeOfflineSystemMessage(HelixMinimalUser{
                     .id = QString::number(this->userID()),
-                    .login = this->getDisplayName(),
+                    .login = this->getName(),
                     .displayName = this->getDisplayName(),
                 }),
                 MessageContext::Original);
@@ -888,21 +888,15 @@ bool KickChannel::tryReplaceLastSeventvAddOrRemove(MessageFlag op,
         if (op == MessageFlag::LiveUpdatesAdd)
         {
             return {
-                liveUpdatesAddEmoteMessage,
-                "7TV",
-                last->loginName,
-                this->lastSeventvEmoteNames_,
-                QDateTime::currentDateTime(),
+                liveUpdatesAddEmoteMessage,   "7TV", last->loginName,
+                this->lastSeventvEmoteNames_, now,
             };
         }
 
         // op == RemoveEmoteMessage
         return {
-            liveUpdatesRemoveEmoteMessage,
-            "7TV",
-            last->loginName,
-            this->lastSeventvEmoteNames_,
-            QDateTime::currentDateTime(),
+            liveUpdatesRemoveEmoteMessage, "7TV", last->loginName,
+            this->lastSeventvEmoteNames_,  now,
         };
     };
 

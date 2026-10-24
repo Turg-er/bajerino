@@ -100,52 +100,53 @@ void QuickSwitcherPopup::updateSuggestions(const QString &text)
 {
     this->switcherModel_.clear();
 
-    if (text.isEmpty())
+    const auto pages = text.isEmpty()
+                           ? this->window->getNotebook().getVisitHistoryPages()
+                           : std::vector<QWidget *>{};
+    const auto open = openPages(this->window);
+    QList<SplitContainer *> ordered;
+    ordered.reserve(open.size());
+    for (auto *page : pages)
     {
-        for (auto *page : this->window->getNotebook().getVisitHistoryPages())
+        auto *container = dynamic_cast<SplitContainer *>(page);
+        if (open.contains(container) && !ordered.contains(container))
         {
-            auto *sc = dynamic_cast<SplitContainer *>(page);
-            if (sc != nullptr)
-            {
-                auto item = std::make_unique<SwitchSplitItem>(sc);
-                this->switcherModel_.addItem(std::move(item));
-            }
+            ordered.append(container);
         }
     }
-    else
+    for (auto *page : open)
     {
-        // Add items for navigating to different splits
-        for (auto *sc : openPages(this->window))
+        if (!ordered.contains(page))
         {
-            const QString &tabTitle = sc->getTab()->getTitle();
-            const auto splits = sc->getSplits();
-
-            // First, check for splits on this page
-            for (auto *split : splits)
+            ordered.append(page);
+        }
+    }
+    for (auto *sc : std::as_const(ordered))
+    {
+        bool matched = false;
+        if (!text.isEmpty())
+        {
+            for (auto *split : sc->getSplits())
             {
                 if (split->getChannel()->getName().contains(
                         text, Qt::CaseInsensitive))
                 {
-                    auto item = std::make_unique<SwitchSplitItem>(sc, split);
-                    this->switcherModel_.addItem(std::move(item));
-
-                    // We want to continue the outer loop so we need a goto
-                    goto nextPage;
+                    this->switcherModel_.addItem(
+                        std::make_unique<SwitchSplitItem>(sc, split));
+                    matched = true;
+                    break;
                 }
             }
-
-            // Then check if tab title matches
-            if (tabTitle.contains(text, Qt::CaseInsensitive))
-            {
-                auto item = std::make_unique<SwitchSplitItem>(sc);
-                this->switcherModel_.addItem(std::move(item));
-                continue;
-            }
-
-        nextPage:;
         }
+        if (!matched &&
+            sc->getTab()->getTitle().contains(text, Qt::CaseInsensitive))
+        {
+            this->switcherModel_.addItem(std::make_unique<SwitchSplitItem>(sc));
+        }
+    }
 
-        // Add item for opening a channel in a new tab or new popup
+    if (!text.isEmpty())
+    {
         auto newTabItem = std::make_unique<NewTabItem>(this->window, text);
         this->switcherModel_.addItem(std::move(newTabItem));
 

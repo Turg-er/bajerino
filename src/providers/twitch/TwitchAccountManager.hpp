@@ -77,6 +77,7 @@ public:
     /// Fired when the IRC server sends a "Login authentication failed" notice,
     /// indicating the current OAuth token has expired.
     pajlada::Signals::NoArgSignal loginExpired;
+    pajlada::Signals::NoArgSignal loginRestored;
 
     SignalVector<std::shared_ptr<TwitchAccount>> accounts;
 

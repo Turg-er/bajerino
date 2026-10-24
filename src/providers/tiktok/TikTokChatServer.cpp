@@ -106,10 +106,10 @@ TikTokChatServer::TikTokChatServer()
     });
     this->cleanup_.setInterval(60000);
     QObject::connect(&this->cleanup_, &QTimer::timeout, this, [this] {
-        for (auto it = this->channels_.begin(); it != this->channels_.end();)
+        auto &channels = this->channels_;
+        for (auto it = channels.begin(); it != channels.end();)
         {
-            it = it.value().expired() ? this->channels_.erase(it)
-                                      : std::next(it);
+            it = it.value().expired() ? channels.erase(it) : std::next(it);
         }
     });
 }
@@ -523,7 +523,7 @@ WebSocketHandle TikTokChatServer::connectRoom(
     const auto cookie = this->guestCookie();
     if (cookie.isEmpty())
     {
-        if (this->guestRetryAt_ <= now)
+        if (!this->bootstrapping_ && this->guestRetryAt_ <= now)
         {
             this->bootstrap();
         }

@@ -63,21 +63,22 @@ QStringList getXDGUserDirectories(XDGDirectoryType directory)
                 XDGDirectoryType::Config,
                 {
                     "XDG_CONFIG_HOME",
-                    combinePath(QDir::homePath(), ".config/"),
+                    ".config/",
                 },
             },
             {
                 XDGDirectoryType::Data,
                 {
                     "XDG_DATA_HOME",
-                    combinePath(QDir::homePath(), ".local/share/"),
+                    ".local/share/",
                 },
             },
         };
 
     const auto &[userEnvVar, userDefaultValue] = userDirectories.at(directory);
     return {
-        qEnvironmentVariable(userEnvVar, userDefaultValue),
+        qEnvironmentVariable(userEnvVar,
+                             combinePath(QDir::homePath(), userDefaultValue)),
     };
 }
 

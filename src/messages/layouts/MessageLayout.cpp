@@ -5,7 +5,7 @@
 #include "messages/layouts/MessageLayout.hpp"
 
 #include "Application.hpp"
-#include "controllers/highlights/HighlightPhrase.hpp"
+#include "controllers/highlights/types/AutomodCaughtHighlight.hpp"
 #include "messages/layouts/MessageLayoutContainer.hpp"
 #include "messages/layouts/MessageLayoutContext.hpp"
 #include "messages/layouts/MessageLayoutElement.hpp"
@@ -459,22 +459,6 @@ MessagePaintResult MessageLayout::paint(const MessagePaintContext &ctx)
             ctx.messageColors.disabled);
     }
 
-    if (ctx.preferences.showHighlights && !ctx.isMentions &&
-        ((this->message_->flags.has(MessageFlag::RedeemedChannelPointReward) &&
-          !this->message_->usesTwitchGigantifyPresentation()) ||
-         this->message_->flags.has(MessageFlag::RedeemedHighlight)) &&
-        ctx.preferences.enableRedeemedHighlight)
-    {
-        ctx.painter.fillRect(
-            QRect{
-                0,
-                ctx.y,
-                static_cast<int>(this->scale_ * 4),
-                pixmap->height(),
-            },
-            *ColorProvider::instance().color(ColorType::RedeemedHighlight));
-    }
-
     // draw selection
     if (!ctx.selection.isEmpty())
     {
@@ -573,169 +557,24 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
     }();
 
     if (ctx.preferences.showHighlights &&
-        this->flags.has(MessageLayoutFlag::AutoModReviewSelected))
+        this->message_->flags.has(MessageFlag::Highlighted) &&
+        !this->flags.has(MessageLayoutFlag::IgnoreHighlights))
     {
-        auto selection = ctx.messageColors.selection;
-        selection.setAlpha(26);
-        backgroundColor = blendThemeHighlight(backgroundColor, selection, 0);
+        // NOTE: As we move more things into Highlighted, and less things to use custom flags for their color,
+        // they will start respecting the IgnoreHighlights flag. Keep this in mind.
+        // assert(this->message_->highlightColor);
+        if (this->message_->highlightColor &&
+            this->message_->highlightColor->isValid())
+        {
+            // Blend highlight color with usual background color
+            backgroundColor = blendThemeHighlight(
+                backgroundColor, *this->message_->highlightColor,
+                ctx.highlightOpacityAdjustment);
+        }
     }
-
-    if (ctx.preferences.showHighlights)
+    else if (this->message_->flags.has(MessageFlag::Debug))
     {
-        if (this->message_->flags.has(MessageFlag::FirstMessage) &&
-            ctx.preferences.enableFirstMessageHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::FirstMessageHighlight),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if (this->message_->flags.has(MessageFlag::WatchStreak) &&
-                 ctx.preferences.enableWatchStreakHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::WatchStreak),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if ((this->message_->flags.has(MessageFlag::Highlighted) ||
-                  this->message_->flags.has(MessageFlag::HighlightedWhisper)) &&
-                 !this->flags.has(MessageLayoutFlag::IgnoreHighlights))
-        {
-            assert(this->message_->highlightColor);
-            if (this->message_->highlightColor)
-            {
-                backgroundColor = blendThemeHighlight(
-                    backgroundColor, *this->message_->highlightColor,
-                    ctx.highlightOpacityAdjustment);
-            }
-        }
-        else if (this->message_->flags.has(MessageFlag::Announcement) &&
-                 ctx.preferences.enableAnnouncementHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(colorTypeFromHelixAnnouncementColor(
-                    this->message_->announcementColor,
-                    ctx.preferences.enableColoredAnnouncementHighlight)),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if (this->message_->flags.has(MessageFlag::Subscription) &&
-                 ctx.preferences.enableSubHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::Subscription),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if ((this->message_->flags.has(MessageFlag::RedeemedHighlight) ||
-                  (this->message_->flags.has(
-                       MessageFlag::RedeemedChannelPointReward) &&
-                   !this->message_->usesTwitchGigantifyPresentation())) &&
-                 ctx.preferences.enableRedeemedHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::RedeemedHighlight),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if (this->message_->flags.has(MessageFlag::ChatWarning) &&
-                 ctx.preferences.enableAutomodHighlight)
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::AutomodHighlight),
-                ctx.highlightOpacityAdjustment);
-        }
-        else if (this->message_->flags.has(MessageFlag::AutoMod) ||
-                 this->message_->flags.has(MessageFlag::LowTrustUsers))
-        {
-            if (this->message_->autoModReview)
-            {
-                if (ctx.preferences.enableAutomodHighlight)
-                {
-                    auto accent =
-                        *ctx.colorProvider.color(ColorType::AutomodHighlight);
-                    if (this->flags.has(
-                            MessageLayoutFlag::AutoModReviewChannel))
-                    {
-                        accent.setAlpha(18);
-                    }
-                    backgroundColor =
-                        blendThemeHighlight(backgroundColor, accent,
-                                            ctx.highlightOpacityAdjustment);
-                }
-            }
-            else if (ctx.preferences.enableAutomodHighlight &&
-                     (this->message_->flags.has(
-                          MessageFlag::AutoModOffendingMessage) ||
-                      this->message_->flags.has(
-                          MessageFlag::AutoModOffendingMessageHeader)))
-            {
-                backgroundColor = blendThemeHighlight(
-                    backgroundColor,
-                    *ctx.colorProvider.color(ColorType::AutomodHighlight),
-                    ctx.highlightOpacityAdjustment);
-            }
-            else if (ctx.preferences.enableAutomodHighlight)
-            {
-                backgroundColor = blendThemeHighlight(
-                    backgroundColor,
-                    HighlightPhrase::FALLBACK_AUTOMOD_HIGHLIGHT_COLOR,
-                    ctx.highlightOpacityAdjustment);
-            }
-        }
-        else if (this->message_->flags.has(MessageFlag::Debug))
-        {
-            backgroundColor = QColor("#4A273D");
-        }
-        else if ((ctx.preferences.enableClientDetectionHighlight &&
-                  this->message_->clientDetection !=
-                      Message::ClientDetectionStatus::Unknown &&
-                  this->message_->clientDetection !=
-                      Message::ClientDetectionStatus::Abnormal) ||
-                 (ctx.preferences.enableAbnormalClientDetectionHighlight &&
-                  this->message_->clientDetection ==
-                      Message::ClientDetectionStatus::Abnormal))
-        {
-            switch (this->message_->clientDetection)
-            {
-                case Message::ClientDetectionStatus::Web:
-                    backgroundColor = blendThemeHighlight(
-                        backgroundColor,
-                        ctx.preferences.clientDetectionWebColor,
-                        ctx.highlightOpacityAdjustment);
-                    break;
-                case Message::ClientDetectionStatus::Android:
-                    backgroundColor = blendThemeHighlight(
-                        backgroundColor,
-                        ctx.preferences.clientDetectionAndroidColor,
-                        ctx.highlightOpacityAdjustment);
-                    break;
-                case Message::ClientDetectionStatus::IOS:
-                    backgroundColor = blendThemeHighlight(
-                        backgroundColor,
-                        ctx.preferences.clientDetectionIosColor,
-                        ctx.highlightOpacityAdjustment);
-                    break;
-                case Message::ClientDetectionStatus::Abnormal:
-                    backgroundColor = blendThemeHighlight(
-                        backgroundColor,
-                        ctx.preferences.clientDetectionAbnormalColor,
-                        ctx.highlightOpacityAdjustment);
-                    break;
-                case Message::ClientDetectionStatus::Unknown:
-                    break;
-            }
-        }
-        else if (this->message_->flags.has(
-                     MessageFlag::UncategorizedNotification))
-        {
-            backgroundColor = blendThemeHighlight(
-                backgroundColor,
-                *ctx.colorProvider.color(ColorType::Subscription),
-                ctx.highlightOpacityAdjustment);
-        }
+        backgroundColor = QColor(0x4A273D);
     }
 
     painter.fillRect(buffer->rect(), backgroundColor);
@@ -744,8 +583,9 @@ void MessageLayout::updateBuffer(QPixmap *buffer,
         const bool selected =
             this->flags.has(MessageLayoutFlag::AutoModReviewSelected);
         auto accent =
-            selected ? ctx.messageColors.linkText
-                     : *ctx.colorProvider.color(ColorType::AutomodHighlight);
+            selected
+                ? ctx.messageColors.linkText
+                : highlights::AutomodCaughtHighlight::BACKGROUND_COLOR_DEFAULT;
         accent.setAlpha(selected ? 205 : 110);
         painter.fillRect(
             QRectF(0, 0, std::max(1.0, (selected ? 2.0 : 1.0) * this->scale_),

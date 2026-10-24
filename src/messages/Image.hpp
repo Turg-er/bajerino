@@ -73,7 +73,8 @@ private:
 
 QList<Frame> readFrames(QImageReader &reader, const Url &url,
                         bool firstFrameOnly = false, int maxFrameDimension = 0,
-                        int minimumFrameDuration = 0);
+                        int minimumFrameDuration = 0,
+                        std::optional<QSize> rescale = std::nullopt);
 void assignFrames(std::weak_ptr<Image> weak, QList<Frame> parsed,
                   std::uint64_t loadGeneration,
                   std::shared_ptr<PickerImageReservation> reservation = {});
@@ -169,7 +170,8 @@ private:
     void actuallyLoad(bool gifFallback = false);
     void expireFrames();
     void initializeStreamingGif(QByteArray data, std::uint64_t loadGeneration,
-                                bool gifFallback = false);
+                                bool gifFallback = false,
+                                int frameDimension = 0);
     QString streamingGifFallbackUrl() const;
     void clearStreamingGif();
     void updateStreamingGifAccounting();

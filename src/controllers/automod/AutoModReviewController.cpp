@@ -15,6 +15,7 @@
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
 #include "singletons/Settings.hpp"
+#include "singletons/StreamerMode.hpp"
 #include "util/FormatTime.hpp"
 #include "util/QStringHash.hpp"
 
@@ -176,7 +177,10 @@ QString reviewActionLabel(ReviewAction action)
 }
 
 AutoModReviewController::AutoModReviewController() = default;
-AutoModReviewController::~AutoModReviewController() = default;
+AutoModReviewController::~AutoModReviewController()
+{
+    QObject::disconnect(this->streamerModeChangedConnection_);
+}
 
 void AutoModReviewController::initialize()
 {
@@ -193,6 +197,11 @@ void AutoModReviewController::initialize()
     };
     getSettings()->advancedAutoModInChat.connect(republish,
                                                  this->signalHolder_);
+    this->streamerModeChangedConnection_ =
+        QObject::connect(getApp()->getStreamerMode(), &IStreamerMode::changed,
+                         getApp()->getStreamerMode(), republish);
+    getSettings()->streamerModeHideBlockedTermText.connect(republish,
+                                                           this->signalHolder_);
     getSettings()->autoModReviewShowReason.connect(republish,
                                                    this->signalHolder_);
     getSettings()->autoModReviewShowContext.connect(republish,
@@ -277,7 +286,7 @@ void AutoModReviewController::ingestHold(
     item.reasonLevel = data.reasonLevel;
     item.matchedFragments = std::move(data.matchedFragments);
     item.termOwnerLogin = std::move(data.termOwnerLogin);
-    item.shownInMentions = getSettings()->showAutomodInMentions;
+    item.shownInMentions = false;
     if (!data.twitchMatches.empty())
     {
         item.highlightMatches = std::make_shared<std::vector<HighlightMatch>>(
@@ -290,27 +299,23 @@ void AutoModReviewController::ingestHold(
                            MessageFlag::ModerationAction, MessageFlag::AutoMod,
                            MessageFlag::AutoModOffendingMessage};
     holdFlags.set(MessageFlag::AutoModBlockedTerm, item.blockedTerm);
-    auto [highlighted, highlightResult] = getApp()->getHighlights()->check(
-        {}, {}, item.userLogin, item.messageText, holdFlags,
-        MessagePlatform::AnyOrTwitch, item.userID, item.broadcasterLogin);
-    if (!highlightResult.matches.empty())
-    {
-        std::vector<HighlightMatch> combined;
-        if (item.highlightMatches)
-        {
-            combined = *item.highlightMatches;
-        }
-        constexpr qsizetype MAX_CARD_MATCHES = 256;
-        const auto available = std::max<qsizetype>(
-            0, MAX_CARD_MATCHES - static_cast<qsizetype>(combined.size()));
-        const auto take = std::min<qsizetype>(
-            available, static_cast<qsizetype>(highlightResult.matches.size()));
-        combined.insert(combined.end(), highlightResult.matches.begin(),
-                        highlightResult.matches.begin() + take);
-        item.highlightMatches =
-            std::make_shared<const std::vector<HighlightMatch>>(
-                std::move(combined));
-    }
+    Message message;
+    message.flags = holdFlags;
+    message.loginName = item.userLogin;
+    message.userID = item.userID;
+    message.channelName = item.broadcasterLogin;
+    message.messageText = item.messageText;
+    auto [highlighted, highlightResult] = getApp()->getHighlights()->check({
+        .args = {},
+        .twitchBadges = {},
+        .senderName = message.loginName,
+        .originalMessage = message.messageText,
+        .messageFlags = message.flags,
+        .self = item.userID ==
+                getApp()->getAccounts()->twitch.getCurrent()->getUserId(),
+        .runContext = {.message = message, .channel = sourceChannel.get()},
+    });
+    item.shownInMentions = highlightResult.showInMentions;
 
     this->order_.push_back(key);
     auto inserted = this->entries_.insert(key, std::move(entry));
@@ -325,9 +330,7 @@ void AutoModReviewController::ingestHold(
                 MessageBuilder::triggerHighlights(
                     source.get(), message,
                     {
-                        .customSound =
-                            highlightResult.customSoundUrl.value_or<QUrl>({}),
-                        .playSound = highlightResult.playSound,
+                        .sound = highlightResult.sound,
                         .windowAlert = highlightResult.alert,
                     });
             }
@@ -362,7 +365,7 @@ void AutoModReviewController::ingestUpdate(
         entry.item.broadcasterID = data.broadcasterID;
         entry.item.messageID = data.messageID;
         entry.item.receivedAt = data.receivedAt;
-        entry.item.shownInMentions = getSettings()->showAutomodInMentions;
+        entry.item.shownInMentions = false;
         entry.sourceChannel = sourceChannel;
         this->order_.push_back(key);
         it = this->entries_.insert(key, std::move(entry));

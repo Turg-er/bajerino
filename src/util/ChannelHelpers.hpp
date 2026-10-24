@@ -21,14 +21,18 @@ namespace chatterino {
 inline void deduplicateMessages(std::vector<MessagePtr> &messages)
 {
     std::ranges::sort(messages, [](const MessagePtr &a, const MessagePtr &b) {
-        const bool aHasId = a->id != nullptr;
-        const bool bHasId = b->id != nullptr;
+        const bool aHasId = !a->id.isEmpty();
+        const bool bHasId = !b->id.isEmpty();
         if (aHasId != bHasId)
         {
             return aHasId > bHasId;
         }
         if (aHasId)
         {
+            if (a->platform != b->platform)
+            {
+                return a->platform > b->platform;
+            }
             return a->id > b->id;
         }
         return std::less<const Message *>{}(a.get(), b.get());
@@ -43,7 +47,8 @@ inline void deduplicateMessages(std::vector<MessagePtr> &messages)
                 return true;
             }
 
-            return (a->id != nullptr) && (b->id != nullptr) && a->id == b->id;
+            return !a->id.isEmpty() && !b->id.isEmpty() &&
+                   a->platform == b->platform && a->id == b->id;
         });
 
     messages.erase(duplicates.begin(), duplicates.end());
@@ -242,6 +247,7 @@ void addOrReplaceChannelClear(const Buffer &buffer, MessagePtr message,
             message->serverReceivedTime, message->timeoutUser,
             message->channelName, count);
         replacement->flags = message->flags;
+        replacement->platform = message->platform;
 
         replaceMessage(i, s, replacement);
 

@@ -54,20 +54,12 @@ struct MessageColors {
 
 // TODO: Explore if we can let settings own this
 struct MessagePreferences {
-    bool showHighlights = true;
-    QColor lastMessageColor;
-    Qt::BrushStyle lastMessagePattern{};
-
-    bool enableRedeemedHighlight{};
-    bool enableFirstMessageHighlight{};
-    bool enableSubHighlight{};
-    bool enableWatchStreakHighlight{};
-    bool enableAutomodHighlight{};
-    bool enableAnnouncementHighlight{};
-    bool enableColoredAnnouncementHighlight{};
     bool enableClientDetectionHighlight{};
     bool enableClientDetectionIcon{};
     bool enableAbnormalClientDetectionHighlight{};
+    bool showHighlights = true;
+    QColor lastMessageColor;
+    Qt::BrushStyle lastMessagePattern{};
 
     bool alternateMessages{};
     bool separateMessages{};

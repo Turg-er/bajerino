@@ -1953,6 +1953,13 @@ std::optional<ThemeCustomizationProfile> builtInCustomizationProfile(
         profile.alternateMessageRows = true;
         profile.alternateMessageOpacity = 14;
         profile.alternateMessageContrast = 28;
+        profile.messageShadow = true;
+        profile.messageShadowEmotes = true;
+        profile.messageShadowColor = QColor(Qt::black);
+        profile.messageShadowOpacity = 46;
+        profile.messageShadowOffsetX = 0;
+        profile.messageShadowOffsetY = 0;
+        profile.messageShadowBlur = 2;
         profile.chatFontFamily = QStringLiteral(DEFAULT_FONT_FAMILY);
         profile.chatFontSize = 14;
         profile.chatFontWeight = QFont::Normal;

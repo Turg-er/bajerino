@@ -78,12 +78,20 @@ BttvLiveUpdates::~BttvLiveUpdates() = default;
 void BttvLiveUpdates::joinChannel(const QString &channelID,
                                   const QString &userID)
 {
+    this->subscribeChannel(channelID);
+    if (!userID.isEmpty())
+    {
+        this->private_->subscribe({BttvLiveUpdateBroadcastMe{
+            .twitchID = channelID, .userID = userID}});
+    }
+}
+
+void BttvLiveUpdates::subscribeChannel(const QString &channelID)
+{
     if (this->private_->joinedChannels.insert(channelID).second)
     {
         this->private_->subscribe(
             {BttvLiveUpdateSubscriptionChannel{channelID}});
-        this->private_->subscribe({BttvLiveUpdateBroadcastMe{
-            .twitchID = channelID, .userID = userID}});
     }
 }
 

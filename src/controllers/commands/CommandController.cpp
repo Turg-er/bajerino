@@ -23,7 +23,6 @@
 #include "controllers/commands/builtin/twitch/GetFounders.hpp"
 #include "controllers/commands/builtin/twitch/GetModerators.hpp"
 #include "controllers/commands/builtin/twitch/GetVIPs.hpp"
-#include "controllers/commands/builtin/twitch/InvisibleMessage.hpp"
 #include "controllers/commands/builtin/twitch/LowTrust.hpp"
 #include "controllers/commands/builtin/twitch/ModVipActions.hpp"
 #include "controllers/commands/builtin/twitch/Nuke.hpp"
@@ -701,7 +700,6 @@ CommandController::CommandController(const Paths &paths)
 
     this->registerCommand("/shoutout", &commands::sendShoutout);
 
-    this->registerCommand("/invis", &commands::sendInvisibleMessage);
     this->registerCommand("/spam", &commands::sendSpam);
     this->registerCommand("/pyramid", &commands::sendPyramid);
     this->registerCommand("/nuke", &commands::sendNuke);

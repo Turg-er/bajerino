@@ -13,10 +13,9 @@
 #include "common/ThumbnailPreviewMode.hpp"
 #include "common/TimeoutStackStyle.hpp"
 #include "controllers/filters/FilterRecord.hpp"
-#include "controllers/highlights/HighlightBadge.hpp"
 #include "controllers/highlights/HighlightBlacklistUser.hpp"
-#include "controllers/highlights/HighlightPhrase.hpp"
-#include "controllers/highlights/HighlightWordList.hpp"
+#include "controllers/highlights/HighlightResult.hpp"
+#include "controllers/highlights/types/AnyHighlightForward.hpp"
 #include "controllers/ignores/HiddenUser.hpp"
 #include "controllers/ignores/IgnorePhrase.hpp"
 #include "controllers/logging/ChannelLog.hpp"
@@ -45,6 +44,14 @@
 #include <unordered_set>
 
 class QJsonObject;
+#include <QStringView>
+
+#include <memory>
+#include <vector>
+
+#if __has_include(<gtest/gtest_prod.h>)
+#    include <gtest/gtest_prod.h>
+#endif
 
 using TimeoutButton = std::pair<QString, int>;
 
@@ -166,7 +173,10 @@ constexpr std::optional<std::string_view> qmagicenumDisplayName(
 struct SettingsArgs {
     bool isTest = false;
     bool runMigrations = true;
+    bool runCleanup = true;
 };
+
+class SettingsPrivate;
 
 /// Settings which are available for reading and writing on the gui thread.
 // These settings are still accessed concurrently in the code but it is bad practice.
@@ -182,6 +192,8 @@ public:
              const QString &settingsDirectory,
              const SettingsArgs &settingsArgs = {});
     ~Settings();
+
+    Q_DISABLE_COPY_MOVE(Settings)
 
     static Settings &instance();
 
@@ -339,7 +351,6 @@ public:
         "/appearance/tabStyle",
         TabStyle::Normal,
     };
-    BoolSetting thinTabLines = {"/appearance/tabs/thinLines", false};
     BoolSetting hidePreferencesButton = {"/appearance/hidePreferencesButton",
                                          false};
     BoolSetting hideUserButton = {"/appearance/hideUserButton", false};
@@ -404,6 +415,8 @@ public:
     BoolSetting showBadgesFfz = {"/appearance/badges/ffz", true};
     BoolSetting showBadgesFfzAp = {"/appearance/badges/ffzap", true};
     BoolSetting showBadgesBluzyrino = {"/appearance/badges/bluzyrino", true};
+    BoolSetting showBadgesJilChat = {"/appearance/badges/jilchat", true};
+    BoolSetting showBadgesBadgeHQ = {"/appearance/badges/badgehq", true};
     BoolSetting useCustomFfzModeratorBadges = {
         "/appearance/badges/useCustomFfzModeratorBadges", true};
     BoolSetting useCustomFfzVipBadges = {
@@ -707,130 +720,8 @@ public:
     };
 
     /// Highlighting
-    //    BoolSetting enableHighlights = {"/highlighting/enabled", true};
-
     BoolSetting highlightMatchedFragments = {
         "/highlighting/matchedFragments/enabled", false};
-
-    BoolSetting enableSelfHighlight = {
-        "/highlighting/selfHighlight/nameIsHighlightKeyword", true};
-    BoolSetting showSelfHighlightInMentions = {
-        "/highlighting/selfHighlight/showSelfHighlightInMentions", true};
-    BoolSetting enableSelfHighlightSound = {
-        "/highlighting/selfHighlight/enableSound", true};
-    BoolSetting enableSelfHighlightTaskbar = {
-        "/highlighting/selfHighlight/enableTaskbarFlashing", true};
-    QStringSetting selfHighlightSoundUrl = {
-        "/highlighting/selfHighlightSoundUrl", ""};
-    QStringSetting selfHighlightColor = {"/highlighting/selfHighlightColor",
-                                         ""};
-    QStringSetting selfHighlightMatchColor{
-        "/highlighting/selfHighlight/matchColor", "#ebffffff"};
-    QStringSetting selfHighlightMatchStyle{
-        "/highlighting/selfHighlight/matchStyle", "Outline"};
-    QStringSetting selfHighlightMatchPaintID{
-        "/highlighting/selfHighlight/matchPaintID", ""};
-
-    BoolSetting enableSelfMessageHighlight = {
-        "/highlighting/selfMessageHighlight/enabled", false};
-    BoolSetting showSelfMessageHighlightInMentions = {
-        "/highlighting/selfMessageHighlight/showInMentions", false};
-    QStringSetting selfMessageHighlightColor = {
-        "/highlighting/selfMessageHighlight/color", ""};
-
-    BoolSetting enableWhisperHighlight = {
-        "/highlighting/whisperHighlight/whispersHighlighted", true};
-    BoolSetting enableWhisperHighlightSound = {
-        "/highlighting/whisperHighlight/enableSound", false};
-    BoolSetting enableWhisperHighlightTaskbar = {
-        "/highlighting/whisperHighlight/enableTaskbarFlashing", false};
-    QStringSetting whisperHighlightSoundUrl = {
-        "/highlighting/whisperHighlightSoundUrl", ""};
-    QStringSetting whisperHighlightColor = {
-        "/highlighting/whisperHighlightColor", ""};
-
-    BoolSetting enableRedeemedHighlight = {
-        "/highlighting/redeemedHighlight/highlighted", true};
-    //    BoolSetting enableRedeemedHighlightSound = {
-    //        "/highlighting/redeemedHighlight/enableSound", false};
-    //    BoolSetting enableRedeemedHighlightTaskbar = {
-    //        "/highlighting/redeemedHighlight/enableTaskbarFlashing", false};
-    //    QStringSetting redeemedHighlightSoundUrl = {
-    //        "/highlighting/redeemedHighlightSoundUrl", ""};
-    QStringSetting redeemedHighlightColor = {
-        "/highlighting/redeemedHighlightColor", ""};
-
-    BoolSetting enableFirstMessageHighlight = {
-        "/highlighting/firstMessageHighlight/highlighted", true};
-    //    BoolSetting enableFirstMessageHighlightSound = {
-    //        "/highlighting/firstMessageHighlight/enableSound", false};
-    //    BoolSetting enableFirstMessageHighlightTaskbar = {
-    //        "/highlighting/firstMessageHighlight/enableTaskbarFlashing", false};
-    //    QStringSetting firstMessageHighlightSoundUrl = {
-    //        "/highlighting/firstMessageHighlightSoundUrl", ""};
-    QStringSetting firstMessageHighlightColor = {
-        "/highlighting/firstMessageHighlightColor", ""};
-
-    BoolSetting enableElevatedMessageHighlight = {
-        "/highlighting/elevatedMessageHighlight/highlighted", true};
-    //    BoolSetting enableElevatedMessageHighlightSound = {
-    //        "/highlighting/elevatedMessageHighlight/enableSound", false};
-    //    BoolSetting enableElevatedMessageHighlightTaskbar = {
-    //        "/highlighting/elevatedMessageHighlight/enableTaskbarFlashing", false};
-    //    QStringSetting elevatedMessageHighlightSoundUrl = {
-    //        "/highlighting/elevatedMessageHighlight/soundUrl", ""};
-    QStringSetting elevatedMessageHighlightColor = {
-        "/highlighting/elevatedMessageHighlight/color", ""};
-
-    BoolSetting enableSubHighlight = {
-        "/highlighting/subHighlight/subsHighlighted", true};
-    BoolSetting enableSubHighlightSound = {
-        "/highlighting/subHighlight/enableSound", false};
-    BoolSetting enableSubHighlightTaskbar = {
-        "/highlighting/subHighlight/enableTaskbarFlashing", false};
-    QStringSetting subHighlightSoundUrl = {"/highlighting/subHighlightSoundUrl",
-                                           ""};
-    QStringSetting subHighlightColor = {"/highlighting/subHighlightColor", ""};
-
-    BoolSetting enableWatchStreakHighlight = {
-        "/highlighting/watchStreak/enabled", true};
-    QStringSetting watchStreakHighlightColor = {
-        "/highlighting/watchStreak/color", ""};
-
-    BoolSetting enableAnnouncementHighlight = {
-        "/highlighting/announcement/enabled",
-        true,
-    };
-    QStringSetting announcementHighlightColor = {
-        "/highlighting/announcement/color",
-        "",
-    };
-    BoolSetting enableColoredAnnouncementHighlight = {
-        "/highlighting/announcement/coloredAnnouncement/enabled",
-        true,
-    };
-
-    BoolSetting enableAutomodHighlight = {
-        "/highlighting/automod/enabled",
-        true,
-    };
-    BoolSetting showAutomodInMentions = {
-        "/highlighting/automod/showInMentions",
-        false,
-    };
-    BoolSetting enableAutomodHighlightSound = {
-        "/highlighting/automod/enableSound",
-        false,
-    };
-    BoolSetting enableAutomodHighlightTaskbar = {
-        "/highlighting/automod/enableTaskbarFlashing",
-        false,
-    };
-    QStringSetting automodHighlightSoundUrl = {
-        "/highlighting/automod/soundUrl",
-        "",
-    };
-    QStringSetting automodHighlightColor = {"/highlighting/automod/color", ""};
     QStringSetting automodMatchHighlightColor = {
         "/highlighting/automod/matchedFragment/color",
         defaultAutoModMatchColor().name(QColor::HexArgb),
@@ -840,22 +731,7 @@ public:
         static_cast<int>(HighlightMatchStyle::Fill),
     };
     BoolSetting advancedAutoModInChat = {
-        "/moltorino/moderation/advancedAutoModInChat", true};
-
-    BoolSetting enableThreadHighlight = {
-        "/highlighting/thread/nameIsHighlightKeyword", true};
-    BoolSetting showThreadHighlightInMentions = {
-        "/highlighting/thread/showSelfHighlightInMentions", true};
-    BoolSetting enableThreadHighlightSound = {
-        "/highlighting/thread/enableSound", true};
-    BoolSetting enableThreadHighlightTaskbar = {
-        "/highlighting/thread/enableTaskbarFlashing", true};
-    QStringSetting threadHighlightSoundUrl = {
-        "/highlighting/threadHighlightSoundUrl", ""};
-    QStringSetting threadHighlightColor = {"/highlighting/threadHighlightColor",
-                                           ""};
-
-    QStringSetting highlightColor = {"/highlighting/color", ""};
+        "/moltorino/moderation/advancedAutoModInChat", false};
 
     BoolSetting longAlerts = {"/highlighting/alerts", false};
 
@@ -883,15 +759,10 @@ public:
     };
     QStringSetting logPath = {"/logging/path", ""};
 
-    QStringSetting pathHighlightSound = {"/highlighting/highlightSoundPath",
-                                         ""};
-
     BoolSetting highlightAlwaysPlaySound = {"/highlighting/alwaysPlaySound",
                                             false};
 
     BoolSetting inlineWhispers = {"/whispers/enableInlineWhispers", true};
-    BoolSetting highlightInlineWhispers = {"/whispers/highlightInlineWhispers",
-                                           false};
 
     /// Notifications
     BoolSetting notificationFlashTaskbar = {"/notifications/enableFlashTaskbar",
@@ -968,6 +839,9 @@ public:
         KickConnectionPreference::Default,
     };
 
+    BoolSetting connectAnonymouslyWhenBanned = {
+        "/misc/connectAnonymouslyWhenBanned", true};
+
     EnumStringSetting<ChatSendProtocol> chatSendProtocol = {
         "/misc/chatSendProtocol", ChatSendProtocol::Default};
 
@@ -1019,6 +893,8 @@ public:
                                                   "bar"};
     QStringSetting usercardRolesActionPlacement = {"/usercard/actions/roles",
                                                    "bar"};
+    QStringSetting usercardBadgesActionPlacement = {"/usercard/actions/badges",
+                                                    "bar"};
     QStringSetting usercardSevenTVActionPlacement = {
         "/usercard/actions/seventv", "bar"};
     QStringSetting usercardNotesActionPlacement = {"/usercard/actions/notes",
@@ -1401,14 +1277,6 @@ public:
     };
 
 private:
-    ChatterinoSetting<std::vector<HighlightPhrase>> highlightedMessagesSetting =
-        {"/highlighting/highlights"};
-    ChatterinoSetting<std::vector<HighlightPhrase>> highlightedUsersSetting = {
-        "/highlighting/users"};
-    ChatterinoSetting<std::vector<HighlightWordList>>
-        highlightWordListsSetting = {"/highlighting/wordLists"};
-    ChatterinoSetting<std::vector<HighlightBadge>> highlightedBadgesSetting = {
-        "/highlighting/badges"};
     ChatterinoSetting<std::vector<HighlightBlacklistUser>>
         blacklistedUsersSetting = {"/highlighting/blacklist"};
     ChatterinoSetting<std::vector<IgnorePhrase>> ignoredMessagesSetting = {
@@ -1437,13 +1305,35 @@ private:
         0,
     };
 
+    /// Migrate settings between versions
     void migrate(bool isTest);
+    void migrateChannelModes(bool isTest);
+
+    /// Migration 0 -> 1
+    ///
+    /// This migration takes all of our custom highlight values & turns them into real highlight rows
+    /// It also merges messages, user, and badge highlights into a single vector.
+    void migrateHighlights(bool isTest);
+
+    /// Run cleanup on existing settings. This could mean removing duplicate values that are not valid.
+    void cleanup();
+
+    /// Delete any duplicate or invalid highlights.
+    ///
+    /// Returns true if any changes were made.
+    bool cleanupHighlights();
+
+    /// Return a set of built-in highlight IDs (e.g. {"whispers", "yourusername"}) that are missing from the user's list of highlights.
+    /// This can happen if a user does some manual cursed surgery on their settings.json file.
+    std::unordered_set<QStringView> missingBillTinHighlights();
+
+    /// Recreates any missing built-in highlights.
+    ///
+    /// Returns true if any changes were made.
+    bool recreateMissingHighlights();
 
 public:
-    SignalVector<HighlightPhrase> highlightedMessages;
-    SignalVector<HighlightPhrase> highlightedUsers;
-    SignalVector<HighlightWordList> highlightWordLists;
-    SignalVector<HighlightBadge> highlightedBadges;
+    SignalVector<highlights::AnyHighlight> sharedHighlights;
     SignalVector<HighlightBlacklistUser> blacklistedUsers;
     SignalVector<IgnorePhrase> ignoredMessages;
     SignalVector<HiddenUser> hiddenUsers;
@@ -1452,7 +1342,6 @@ public:
     SignalVector<ModerationAction> moderationActions;
     SignalVector<ChannelLog> loggedChannels;
 
-    bool isHighlightedUser(const QString &username);
     bool isBlacklistedUser(const QString &username);
     bool isMutedChannel(const QString &channelName);
     bool toggleMutedChannel(const QString &channelName);
@@ -1487,6 +1376,14 @@ private:
     std::unordered_set<std::string> snapshotUnsetPaths_;
 
     pajlada::Signals::SignalHolder signalHolder;
+
+    std::unique_ptr<SettingsPrivate> p;
+
+#ifdef FRIEND_TEST
+    friend class HighlightControllerTest;
+
+    FRIEND_TEST(HighlightControllerTest, BillTinHighlights);
+#endif
 };
 
 Settings *getSettings();

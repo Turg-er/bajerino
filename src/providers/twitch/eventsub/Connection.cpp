@@ -18,6 +18,7 @@
 #include "providers/twitch/eventsub/MessageBuilder.hpp"
 #include "providers/twitch/eventsub/MessageHandlers.hpp"
 #include "providers/twitch/PubSubManager.hpp"
+#include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchBadge.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "providers/twitch/TwitchIrcServer.hpp"
@@ -507,29 +508,18 @@ void Connection::onChannelSuspiciousUserMessage(
     }
 
     auto time = chronoToQDateTime(metadata.messageTimestamp);
-    const auto &event = payload.event;
-    const auto status = event.lowTrustStatus;
-    const auto messageID =
-        event.message.messageID ? event.message.messageID->qt() : QString{};
-    auto header = makeSuspiciousUserMessageHeader(channel.get(), time, event);
-    auto body = status == lib::suspicious_users::Status::Restricted
-                    ? makeSuspiciousUserMessageBody(channel.get(), time, event)
-                    : MessagePtr{};
-    runInGuiThread([channel = std::move(channel), status, messageID, header,
-                    body] {
-        if (!acceptsAuthenticatedEvents(channel.get()))
-            return;
-        if (status == lib::suspicious_users::Status::ActiveMonitoring)
+    auto [message, messageAlert] =
+        makeSuspiciousUserMessage(channel.get(), time, payload.event);
+
+    runInGuiThread([channel, message, messageAlert] {
+        MessageBuilder::triggerHighlights(channel.get(), message, messageAlert);
+
+        channel->addMessage(message, MessageContext::Original);
+
+        if (message->flags.has(MessageFlag::ShowInMentions))
         {
-            if (!messageID.isEmpty())
-            {
-                channel->markMonitoredMessage(messageID, header->messageText);
-            }
-        }
-        else if (body)
-        {
-            channel->addMessage(header, MessageContext::Original);
-            channel->addMessage(body, MessageContext::Original);
+            getApp()->getTwitch()->getMentionsChannel()->addMessage(
+                message, MessageContext::Original);
         }
     });
 }

@@ -34,7 +34,6 @@
 #include "util/MemoryReclaimer.hpp"
 #include "util/QStringHash.hpp"
 #include "widgets/helper/ChannelView.hpp"
-#include "widgets/helper/TrimRegExpValidator.hpp"
 #include "widgets/Notebook.hpp"
 #include "widgets/Scrollbar.hpp"
 
@@ -426,9 +425,6 @@ EmotePopup::EmotePopup(QWidget *parent)
     auto *layout = new QVBoxLayout();
     this->getLayoutContainer()->setLayout(layout);
 
-    QRegularExpression searchRegex("\\S*");
-    searchRegex.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
-
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
@@ -437,8 +433,6 @@ EmotePopup::EmotePopup(QWidget *parent)
     layout2->setSpacing(8);
 
     this->search_->setPlaceholderText("Search all emotes...");
-    this->search_->setValidator(
-        new TrimRegExpValidator(searchRegex, this->search_));
     this->search_->setClearButtonEnabled(true);
     if (auto *clearButton = this->search_->findChild<QAbstractButton *>())
     {
@@ -1345,6 +1339,7 @@ void EmotePopup::filterTwitchEmotes(const ChannelPtr &searchChannel,
     auto seventvGlobalEmotes = filterEmoteMap(
         searchWord, tags, *getApp()->getSeventvEmotes()->globalEmotes());
 
+    // global
     if (!bttvGlobalEmotes.empty())
     {
         addEmotes(*searchChannel, bttvGlobalEmotes, "BetterTTV (Global)");
@@ -1394,6 +1389,7 @@ void EmotePopup::filterTwitchEmotes(const ChannelPtr &searchChannel,
     auto seventvChannelEmotes = filterEmoteMap(
         searchWord, tags, *this->twitchChannel_->seventvEmotes());
 
+    // channel
     if (!bttvChannelEmotes.empty())
     {
         addEmotes(*searchChannel, bttvChannelEmotes, "BetterTTV (Channel)");
@@ -1459,14 +1455,16 @@ void EmotePopup::filterEmotes(const QString &searchText)
         this->filterTwitchEmotes(searchChannel, searchWord, tags);
     }
 
-    std::vector<EmojiPtr> filteredEmojis{};
-    const auto &emojis = getApp()->getEmotes()->getEmojis()->getEmojis();
-    for (const auto &emoji : emojis)
+    std::vector<EmojiPtr> filteredEmojis;
+    if (tags.empty())
     {
-        if (tags.empty() &&
-            emoji->shortCodes[0].contains(searchWord, Qt::CaseInsensitive))
+        for (const auto &emoji :
+             getApp()->getEmotes()->getEmojis()->getEmojis())
         {
-            filteredEmojis.push_back(emoji);
+            if (emoji->shortCodes[0].contains(searchWord, Qt::CaseInsensitive))
+            {
+                filteredEmojis.push_back(emoji);
+            }
         }
     }
     if (!filteredEmojis.empty())

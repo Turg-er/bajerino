@@ -905,6 +905,10 @@ void BackupSharingPage::refreshRecoveryFiles()
 
 void BackupSharingPage::updateRecoveryRow(int rowIndex)
 {
+    if (rowIndex < 0 || rowIndex >= this->recoveryRows_.size())
+    {
+        return;
+    }
     auto &row = this->recoveryRows_[rowIndex];
     const auto selectedFileIndex = row.backup->currentData().toInt();
     if (row.backup->count() == 0 || selectedFileIndex < 0 ||

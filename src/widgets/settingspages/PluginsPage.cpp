@@ -275,7 +275,8 @@ void PluginsPage::rebuildContent()
             reloadButton->setEnabled(false);
         }
 
-        if (getSettings()->pluginRepl.enabled)
+        if (getSettings()->pluginRepl.enabled &&
+            std::holds_alternative<PluginPtr>(plugin))
         {
             auto *replButton = new QPushButton("Open REPL", this->dataFrame_);
             QObject::connect(replButton, &QPushButton::clicked, [id]() {

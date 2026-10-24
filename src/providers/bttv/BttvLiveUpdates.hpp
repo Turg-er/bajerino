@@ -43,6 +43,9 @@ public:
      */
     void joinChannel(const QString &channelID, const QString &userID);
 
+    /// Subscribe to an emote source without broadcasting viewer activity there.
+    void subscribeChannel(const QString &channelID);
+
     void broadcastMe(const QString &channelID, const QString &userID);
 
     /**

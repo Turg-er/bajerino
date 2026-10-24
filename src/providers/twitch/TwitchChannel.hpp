@@ -8,6 +8,7 @@
 #include "common/Atomic.hpp"
 #include "common/Channel.hpp"
 #include "common/ChannelChatters.hpp"
+#include "common/ChatterinoSetting.hpp"
 #include "common/Common.hpp"
 #include "common/UniqueAccess.hpp"
 #include "providers/ffz/FfzBadges.hpp"
@@ -29,6 +30,7 @@
 #include <QElapsedTimer>
 #include <QRegularExpression>
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -43,6 +45,19 @@ class TestEventSubMessagesP;
 namespace chatterino {
 
 class TwitchChannelTestAccess;
+
+enum class ChannelEmoteProvider : std::uint8_t {
+    SevenTV,
+    Bttv,
+    Ffz,
+};
+
+struct ChannelEmoteSources {
+    QString sharedTwitchID;
+    bool individualProviders = false;
+    /// In individual mode, empty provider IDs use this channel's own ID.
+    std::array<QString, 3> providerTwitchIDs;
+};
 
 enum class HighlightState;
 
@@ -456,6 +471,16 @@ public:
     void refreshFFZChannelEmotes(bool manualRefresh);
     void refreshSevenTVChannelEmotes(bool manualRefresh);
 
+    /// An empty override uses this channel's Twitch ID. Each provider is independent.
+    QString emoteSourceOverride(ChannelEmoteProvider provider) const;
+    QString emoteSourceID(ChannelEmoteProvider provider) const;
+    ChannelEmoteSources emoteSources() const;
+    /// Validates and applies all sources together, refreshing only changed providers.
+    bool setEmoteSources(ChannelEmoteSources sources);
+    /// Returns false for a nonempty value that isn't a positive numeric Twitch ID.
+    bool setEmoteSourceOverride(ChannelEmoteProvider provider,
+                                QString twitchID);
+
     void setBttvEmotes(std::shared_ptr<const EmoteMap> &&map);
     void setFfzEmotes(std::shared_ptr<const EmoteMap> &&map);
     void setSeventvEmotes(std::shared_ptr<const EmoteMap> &&map);
@@ -636,7 +661,6 @@ public:
     void setSendWait(int seconds);
 
     bool isLoadingRecentMessages() const;
-
     const std::vector<HelixMinimalUser> &getSharedChatSessionParticipants()
         const;
 
@@ -718,7 +742,10 @@ private:
     void refreshSharedChatSessionState();
 
     /** Joins (subscribes to) a Twitch channel for updates on BTTV. */
-    void joinBttvChannel() const;
+    void joinBttvChannel();
+    void emoteSourceChanged(ChannelEmoteProvider provider);
+    bool isCurrentEmoteRequest(ChannelEmoteProvider provider,
+                               std::uint64_t generation) const;
 
     void updateBttvActivity();
 
@@ -876,6 +903,13 @@ protected:
     ThreadGuard tgFfzChannelBadges_;
 
 private:
+    QStringSetting sharedEmoteSource_;
+    BoolSetting individualEmoteSources_;
+    std::array<QStringSetting, 3> emoteSourceOverrides_;
+    std::array<std::uint64_t, 3> emoteRequestGenerations_{};
+    QString bttvLiveSourceID_;
+    bool applyingEmoteSources_ = false;
+
     // Badges
     struct CurrentUserBadgeState {
         QString userId;
@@ -976,6 +1010,7 @@ private:
      * Timer scheduling the next check of the shared chat session state.
      */
     QTimer nextSharedChatSessionUpdateTimer_;
+    bool sharedChatSessionRequestPending_ = false;
 
     /**
      * Time when the next probe of shared chat session state triggered

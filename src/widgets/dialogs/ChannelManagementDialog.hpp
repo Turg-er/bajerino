@@ -54,6 +54,8 @@ private:
     void refreshParentHeaderIcons() const;
     void saveMetadata();
 
+    void applySuccessfulUpdate(const ChannelManagementUpdate &update);
+
     void addTagFromInput();
     void removeTag(const QString &tag);
     void rebuildTagChips();

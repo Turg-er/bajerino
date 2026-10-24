@@ -5,12 +5,11 @@
 #pragma once
 
 #include <QColor>
-#include <QString>
+#include <QStringList>
 #include <QUrl>
 
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <ostream>
 #include <vector>
 
@@ -54,10 +53,6 @@ struct HighlightMatch {
 };
 
 struct HighlightResult {
-    HighlightResult(bool _alert, bool _playSound,
-                    std::optional<QUrl> _customSoundUrl,
-                    std::shared_ptr<QColor> _color, bool _showInMentions);
-
     /**
      * @brief Construct an empty HighlightResult with all side-effects disabled
      **/
@@ -68,29 +63,19 @@ struct HighlightResult {
      **/
     bool alert{false};
 
-    /**
-     * @brief true if highlight should play a notification sound
-     **/
-    bool playSound{false};
-
-    /**
-     * @brief Can be set to a different sound that should play when this highlight is activated
-     *
-     * May only be set if playSound is true
-     **/
-    std::optional<QUrl> customSoundUrl{};
+    /// Sound to play
+    /// Empty or invalid = no sound should play
+    QUrl sound;
 
     /**
      * @brief set if highlight should set a background color
      **/
-    std::shared_ptr<QColor> color{};
+    std::shared_ptr<QColor> color;
 
     /**
      * @brief true if highlight should show message in the /mentions split
      **/
     bool showInMentions{false};
-
-    std::vector<HighlightMatch> matches;
 
     bool operator==(const HighlightResult &other) const;
     bool operator!=(const HighlightResult &other) const;

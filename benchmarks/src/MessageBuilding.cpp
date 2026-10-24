@@ -5,9 +5,24 @@
 #include "MessageBuilding.hpp"
 
 #include "messages/Emote.hpp"
+#include "providers/recentmessages/Impl.hpp"
 
+#include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
+
+namespace chatterino {
+
+class TwitchChannelTestAccess
+{
+public:
+    static void finishBadgeLoading(TwitchChannel &channel)
+    {
+        channel.badgesLoaded();
+    }
+};
+
+}  // namespace chatterino
 
 namespace {
 
@@ -45,6 +60,26 @@ QJsonDocument readJsonFile(const QString &path)
 
 namespace chatterino::bench {
 
+std::vector<MessagePtr> buildRecentMessages(
+    const QJsonArray &messages, const std::shared_ptr<TwitchChannel> &channel)
+{
+    QEventLoop loop;
+    std::vector<MessagePtr> built;
+    bool completed = false;
+    recentmessages::detail::buildRecentMessagesBatched(
+        messages, channel,
+        [&built, &completed, &loop](std::vector<MessagePtr> result) {
+            built = std::move(result);
+            completed = true;
+            loop.quit();
+        });
+    if (!completed)
+    {
+        loop.exec();
+    }
+    return built;
+}
+
 MockMessageApplication::MockMessageApplication()
     : highlights(this->settings, &this->accounts)
 {
@@ -55,6 +90,10 @@ MessageBenchmark::MessageBenchmark(QString name)
     : name(std::move(name))
     , chan(std::make_shared<TwitchChannel>(this->name))
 {
+    // Use local badges and an empty channel catalog without network requests.
+    this->app.twitchBadges.loadLocalBadges();
+    TwitchChannelTestAccess::finishBadgeLoading(*this->chan);
+
     const auto seventvEmotes =
         tryReadJsonFile(u":/bench/seventvemotes-%1.json"_s.arg(this->name));
     const auto bttvEmotes =

@@ -45,4 +45,4 @@ cmake --build build-clang-tidy --parallel -t \
     LibCommuni_autogen \
     Model_autogen \
     Util_autogen \
-    chatterino-lib_autogen
+    bajerino-lib_autogen

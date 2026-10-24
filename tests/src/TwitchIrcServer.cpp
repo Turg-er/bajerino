@@ -5,14 +5,21 @@
 #include "providers/twitch/TwitchIrcServer.hpp"
 
 #include "controllers/accounts/AccountController.hpp"
+#include "messages/Emote.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "mocks/Helix.hpp"
 #include "mocks/Logging.hpp"
+#include "providers/bttv/BttvLiveUpdates.hpp"
+#include "providers/bttv/liveupdates/BttvLiveUpdateMessages.hpp"
+#include "providers/seventv/eventapi/Dispatch.hpp"
+#include "providers/seventv/SeventvEventAPI.hpp"
+#include "providers/seventv/SeventvPersonalEmotes.hpp"
 #include "providers/twitch/PubSubManager.hpp"
 #include "providers/twitch/TwitchAccount.hpp"
 #include "providers/twitch/TwitchChannel.hpp"
 #include "Test.hpp"
 #include "TwitchChannelTestAccess.hpp"
+#include "util/DebugCount.hpp"
 
 #include <QCoreApplication>
 #include <QJsonArray>
@@ -115,6 +122,137 @@ public:
     PubSub pubSub{"wss://127.0.0.1:1"};
     TwitchIrcServer twitch;
 };
+
+class LiveEmoteApplication : public MockApplication
+{
+public:
+    BttvLiveUpdates *getBttvLiveUpdates() override
+    {
+        return &this->bttv;
+    }
+
+    SeventvEventAPI *getSeventvEventAPI() override
+    {
+        return &this->seventv;
+    }
+
+    SeventvPersonalEmotes *getSeventvPersonalEmotes() override
+    {
+        return &this->personal;
+    }
+
+    KickChatServer *getKickChatServer() override
+    {
+        return nullptr;
+    }
+
+    BttvLiveUpdates bttv{"wss://127.0.0.1:1"};
+    SeventvEventAPI seventv{"wss://127.0.0.1:1"};
+    SeventvPersonalEmotes personal;
+};
+
+TEST(TwitchIrcServer, BttvUpdatesFollowEmoteSourcesAcrossReadModes)
+{
+    LiveEmoteApplication app;
+    app.settings.enableBTTVChannelEmotes = true;
+    app.twitch.initEventAPIs(&app.bttv, nullptr);
+    auto first = std::make_shared<TwitchChannel>("first_emote_source");
+    auto second = std::make_shared<TwitchChannel>("second_emote_source");
+    TwitchIrcServerTestAccess::addAuthenticatedReadChannel(app.twitch, first);
+    TwitchIrcServerTestAccess::addAnonymousChannel(app.twitch, second);
+    ASSERT_TRUE(
+        first->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, "99"));
+    ASSERT_TRUE(
+        second->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, "99"));
+
+    const QJsonObject emote{
+        {"id", "shared-emote"}, {"code", "SharedEmote"}, {"imageType", "png"}};
+    const BttvLiveUpdateEmoteUpdateAddMessage donor(
+        {{"channel", "twitch:99"}, {"emote", emote}});
+    app.bttv.signals_.emoteAdded.invoke(donor);
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(first->bttvEmote(EmoteName{"SharedEmote"}).has_value());
+    EXPECT_TRUE(second->bttvEmote(EmoteName{"SharedEmote"}).has_value());
+
+    ASSERT_TRUE(
+        first->setEmoteSourceOverride(ChannelEmoteProvider::Bttv, "100"));
+    EXPECT_TRUE(first->bttvEmotes()->empty());
+    app.bttv.signals_.emoteAdded.invoke(donor);
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(first->bttvEmotes()->empty());
+    EXPECT_TRUE(second->bttvEmote(EmoteName{"SharedEmote"}).has_value());
+
+    app.bttv.signals_.emoteAdded.invoke(BttvLiveUpdateEmoteUpdateAddMessage(
+        {{"channel", "twitch:100"}, {"emote", emote}}));
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(first->bttvEmote(EmoteName{"SharedEmote"}).has_value());
+}
+
+TEST(TwitchIrcServer, SevenTvSubscriptionsRemainUntilLastUserReleasesThem)
+{
+    LiveEmoteApplication app;
+    auto first = std::make_shared<TwitchChannel>("first_seventv_source");
+    auto second = std::make_shared<TwitchChannel>("second_seventv_source");
+    TwitchIrcServerTestAccess::addAuthenticatedReadChannel(app.twitch, first);
+    TwitchIrcServerTestAccess::addAnonymousChannel(app.twitch, second);
+    const auto subscriptions = [] {
+        return DebugCount::get(DebugObject::LiveUpdatesSubscriptionBacklog) +
+               DebugCount::get(DebugObject::LiveUpdatesSubscription);
+    };
+    const auto baseline = subscriptions();
+
+    first->updateSeventvData("user-a", "set-a");
+    EXPECT_EQ(subscriptions(), baseline + 2);
+    second->updateSeventvData("user-a", "set-a");
+    EXPECT_EQ(subscriptions(), baseline + 2);
+    first->updateSeventvData("user-b", "set-b");
+    EXPECT_EQ(subscriptions(), baseline + 4);
+    second.reset();
+    EXPECT_EQ(subscriptions(), baseline + 2);
+    first->updateSeventvData({}, {});
+    EXPECT_EQ(subscriptions(), baseline);
+
+    app.personal.createEmoteSet("set-a");
+    first->updateSeventvData("user-a", "set-a");
+    first->updateSeventvData({}, {});
+    EXPECT_EQ(subscriptions(), baseline + 1);
+    app.seventv.unsubscribeEmoteSet("set-a");
+    EXPECT_EQ(subscriptions(), baseline);
+}
+
+TEST(TwitchIrcServer, SevenTvUpdatesReachChannelsAndPersonalSets)
+{
+    LiveEmoteApplication app;
+    app.settings.enableSevenTVPersonalEmotes = true;
+    app.twitch.initEventAPIs(nullptr, &app.seventv);
+    auto channel = std::make_shared<TwitchChannel>("shared_seventv_set");
+    TwitchIrcServerTestAccess::addAuthenticatedReadChannel(app.twitch, channel);
+    channel->updateSeventvData("user-a", "set-a");
+    auto emote = std::make_shared<Emote>();
+    emote->id = EmoteId{"emote-a"};
+    emote->name = EmoteName{"Before"};
+    EmoteMap original{{emote->name, emote}};
+    channel->setSeventvEmotes(std::make_shared<const EmoteMap>(original));
+    app.personal.addEmoteSetForTwitchUser("set-a", std::move(original), "99");
+
+    const seventv::eventapi::Dispatch dispatch(
+        {{"type", "emote_set.update"}, {"body", QJsonObject{{"id", "set-a"}}}});
+    const seventv::eventapi::EmoteUpdateDispatch renamed(
+        dispatch, {{"name", "Before"}}, {{"id", "emote-a"}, {"name", "After"}});
+    app.seventv.signals_.emoteUpdated.invoke(renamed);
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(channel->seventvEmotes()->contains(EmoteName{"After"}));
+    EXPECT_NE(app.personal.getEmoteForTwitchUser("99", EmoteName{"After"}),
+              nullptr);
+
+    app.seventv.signals_.emoteRemoved.invoke(
+        seventv::eventapi::EmoteRemoveDispatch(
+            dispatch, {{"id", "emote-a"}, {"name", "After"}}));
+    QCoreApplication::processEvents();
+    EXPECT_TRUE(channel->seventvEmotes()->empty());
+    EXPECT_EQ(app.personal.getEmoteForTwitchUser("99", EmoteName{"After"}),
+              nullptr);
+}
 
 class ReadPoolProbe : public TwitchReadConnectionPool
 {

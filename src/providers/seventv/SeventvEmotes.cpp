@@ -220,6 +220,9 @@ EmotePtr createUpdatedEmote(const EmotePtr &oldEmote,
         .author = oldEmote->author,
         .baseName = makeConditionedOptional(!toNonAliased, baseName),
         .tags = oldEmote->tags,
+        .modifierFlags = oldEmote->modifierFlags,
+        .modifierPlacement = oldEmote->modifierPlacement,
+        .modifierSource = oldEmote->modifierSource,
     }));
     return emote;
 }
@@ -386,26 +389,25 @@ void SeventvEmotes::loadChannelEmotes(
                     << "Loaded" << emoteMap.size() << "7TV Channel Emotes for"
                     << channelId << "manual refresh:" << manualRefresh;
 
-                if (hasEmotes)
+                if (callback)
                 {
                     auto user = json["user"].toObject();
 
                     size_t connectionIdx = 0;
                     for (const auto &conn : user["connections"].toArray())
                     {
-                        if (conn.toObject()["platform"].toString() == "TWITCH")
+                        if (conn.toObject()["platform"].toString() ==
+                                "TWITCH" &&
+                            conn.toObject()["id"].toString() == channelId)
                         {
                             break;
                         }
                         connectionIdx++;
                     }
 
-                    if (callback)
-                    {
-                        callback(std::move(emoteMap),
-                                 {user["id"].toString(),
-                                  emoteSet["id"].toString(), connectionIdx});
-                    }
+                    callback(std::move(emoteMap),
+                             {user["id"].toString(), emoteSet["id"].toString(),
+                              connectionIdx});
                 }
 
                 auto shared = channel.lock();
@@ -535,12 +537,9 @@ void SeventvEmotes::loadKickChannelEmotes(
                         connectionIdx++;
                     }
 
-                    if (callback)
-                    {
-                        callback(std::move(emoteMap),
-                                 {user["id"].toString(),
-                                  emoteSet["id"].toString(), connectionIdx});
-                    }
+                    callback(std::move(emoteMap),
+                             {user["id"].toString(), emoteSet["id"].toString(),
+                              connectionIdx});
                 }
 
                 auto shared = channel.lock();
