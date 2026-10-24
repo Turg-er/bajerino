@@ -1645,20 +1645,21 @@ void TwitchChannel::emoteSourceChanged(ChannelEmoteProvider provider)
     {
         return;
     }
+    // Source changes use the same chat feedback as a manual emote reload.
     switch (provider)
     {
         case ChannelEmoteProvider::SevenTV:
             this->seventvEmotes_.set(EMPTY_EMOTE_MAP);
             this->updateSeventvData({}, {});
-            this->refreshSevenTVChannelEmotes(false);
+            this->refreshSevenTVChannelEmotes(true);
             break;
         case ChannelEmoteProvider::Bttv:
             this->bttvEmotes_.set(EMPTY_EMOTE_MAP);
-            this->refreshBTTVChannelEmotes(false);
+            this->refreshBTTVChannelEmotes(true);
             break;
         case ChannelEmoteProvider::Ffz:
             this->ffzEmotes_.set(EMPTY_EMOTE_MAP);
-            this->refreshFFZChannelEmotes(false);
+            this->refreshFFZChannelEmotes(true);
             break;
     }
 }
