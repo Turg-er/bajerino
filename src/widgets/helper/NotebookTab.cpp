@@ -11,12 +11,15 @@
 #include "controllers/hotkeys/HotkeyCategory.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "controllers/recording/ChatRecordingController.hpp"
+#include "providers/twitch/TwitchChannel.hpp"
 #include "singletons/Fonts.hpp"
 #include "singletons/Settings.hpp"
 #include "singletons/Theme.hpp"
 #include "singletons/WindowManager.hpp"
 #include "util/Helpers.hpp"
+#include "util/MultiChannel.hpp"
 #include "widgets/dialogs/ColorPickerDialog.hpp"
+#include "widgets/dialogs/EmoteSourcesDialog.hpp"
 #include "widgets/dialogs/MoltorinoDialogTheme.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/Notebook.hpp"
@@ -37,6 +40,7 @@
 #include <QLabel>
 #include <QLinearGradient>
 #include <QLineEdit>
+#include <QMap>
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
@@ -52,6 +56,38 @@ using namespace Qt::StringLiterals;
 
 namespace chatterino {
 namespace {
+QMap<QString, std::shared_ptr<TwitchChannel>> emoteSourceChannels(QWidget *page)
+{
+    QMap<QString, std::shared_ptr<TwitchChannel>> channels;
+    auto *container = dynamic_cast<SplitContainer *>(page);
+    if (!container)
+    {
+        return channels;
+    }
+    const auto addChannel = [&channels](const ChannelPtr &channel) {
+        if (auto twitch = std::dynamic_pointer_cast<TwitchChannel>(channel))
+        {
+            channels.insert(twitch->getName(), twitch);
+        }
+    };
+    for (auto *split : container->getSplits())
+    {
+        const auto channel = split->getChannel();
+        if (auto *multi = dynamic_cast<MultiChannel *>(channel.get()))
+        {
+            for (const auto &child : multi->channels())
+            {
+                addChannel(child.channel);
+            }
+        }
+        else
+        {
+            addChannel(channel);
+        }
+    }
+    return channels;
+}
+
 // Translates the given rectangle by an amount in the direction to appear like the tab is selected.
 // For example, if location is Top, the rectangle will be translated in the negative Y direction,
 // or "up" on the screen, by amount.
@@ -359,40 +395,18 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
         return;
     }
 
-    this->menu_.addAction(u"Rename Tab…"_s, this, [this]() {
-        this->showRenameDialog();
-    });
-
-    if (auto *recordings = getApp()->getChatRecordings())
-    {
-        auto *action =
-            this->menu_.addAction("Record tab", this, [this, recordings] {
-                recordings->toggle(dynamic_cast<SplitContainer *>(this->page));
-            });
-        connect(
-            &this->menu_, &QMenu::aboutToShow, this,
-            [this, recordings, action] {
-                auto *tab = dynamic_cast<SplitContainer *>(this->page);
-                const bool active = recordings->isActive(tab);
-                action->setText(active ? "Stop tab recording" : "Record tab");
-                action->setEnabled(active ? recordings->status(tab) != "Saving"
-                                          : recordings->canStart(tab));
-            });
-        connect(recordings, &ChatRecordingController::stateChanged, this,
-                [this] {
-                    this->refreshAndCommitSize(true);
-                    this->update();
-                });
-    }
-
     // XXX: this doesn't update after changing hotkeys
 
     this->menu_.addAction("Close Tab",
                           getApp()->getHotkeys()->getDisplaySequence(
                               HotkeyCategory::Window, "removeTab"),
-                          [this]() {
+                          this, [this]() {
                               this->notebook_->removePage(this->page);
                           });
+
+    this->menu_.addAction(u"Rename Tab…"_s, this, [this]() {
+        this->showRenameDialog();
+    });
 
     this->closeMultipleTabsMenu_ = new QMenu("Close Multiple Tabs", this);
 
@@ -418,6 +432,34 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
     this->menu_.addAction("Duplicate Tab", [this]() {
         this->notebook_->duplicatePage(this->page);
     });
+
+    auto *emoteSources =
+        this->menu_.addAction("Emote sources...", this, [this] {
+            const auto channels = emoteSourceChannels(this->page);
+            if (channels.size() == 1)
+            {
+                showEmoteSourcesDialog(channels.cbegin().value(), this);
+            }
+        });
+    auto *emoteSourcesMenu = this->menu_.addMenu("Emote sources");
+    connect(&this->menu_, &QMenu::aboutToShow, this,
+            [this, emoteSources, emoteSourcesMenu] {
+                const auto channels = emoteSourceChannels(this->page);
+                emoteSources->setVisible(channels.size() == 1);
+                emoteSourcesMenu->menuAction()->setVisible(channels.size() > 1);
+                emoteSourcesMenu->clear();
+                if (channels.size() > 1)
+                {
+                    for (const auto &channel : channels)
+                    {
+                        emoteSourcesMenu->addAction(
+                            "#" + channel->getName(), this,
+                            [this, weak = std::weak_ptr(channel)] {
+                                showEmoteSourcesDialog(weak.lock(), this);
+                            });
+                    }
+                }
+            });
 
     this->tabGroupMenu_ = this->menu_.addMenu("Tab group");
     QObject::connect(this->tabGroupMenu_, &QMenu::aboutToShow, this, [this] {
@@ -485,6 +527,30 @@ NotebookTab::NotebookTab(Notebook *notebook, Role role)
         tabColorMenu, &QMenu::aboutToShow, this, [this, resetTabColorAction] {
             resetTabColorAction->setEnabled(this->hasCustomTabColor());
         });
+
+    this->menu_.addSeparator();
+
+    if (auto *recordings = getApp()->getChatRecordings())
+    {
+        auto *action =
+            this->menu_.addAction("Record tab", this, [this, recordings] {
+                recordings->toggle(dynamic_cast<SplitContainer *>(this->page));
+            });
+        connect(
+            &this->menu_, &QMenu::aboutToShow, this,
+            [this, recordings, action] {
+                auto *tab = dynamic_cast<SplitContainer *>(this->page);
+                const bool active = recordings->isActive(tab);
+                action->setText(active ? "Stop tab recording" : "Record tab");
+                action->setEnabled(active ? recordings->status(tab) != "Saving"
+                                          : recordings->canStart(tab));
+            });
+        connect(recordings, &ChatRecordingController::stateChanged, this,
+                [this] {
+                    this->refreshAndCommitSize(true);
+                    this->update();
+                });
+    }
 
     this->menu_.addSeparator();
 

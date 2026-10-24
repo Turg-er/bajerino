@@ -45,6 +45,7 @@
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/dialogs/ChannelManagementDialog.hpp"
 #include "widgets/dialogs/ChatAutomationDialog.hpp"
+#include "widgets/dialogs/EmoteSourcesDialog.hpp"
 #include "widgets/dialogs/SettingsDialog.hpp"
 #include "widgets/helper/AutoModReviewBar.hpp"
 #include "widgets/helper/ChannelView.hpp"
@@ -56,14 +57,9 @@
 #include "widgets/TooltipWidget.hpp"
 #include "widgets/Window.hpp"
 
-#include <pajlada/signals/scoped-connection.hpp>
 #include <QActionGroup>
-#include <QCheckBox>
-#include <QDialog>
-#include <QDialogButtonBox>
 #include <QDrag>
 #include <QFontMetrics>
-#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -73,7 +69,6 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPointer>
-#include <QPushButton>
 #include <QResizeEvent>
 #include <QScopeGuard>
 #include <QUrl>
@@ -914,26 +909,13 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
     const auto &h = getApp()->getHotkeys();
     auto menu = std::make_unique<QMenu>();
     menu->setToolTipsVisible(true);
-    if (auto *recordings = getApp()->getChatRecordings())
-    {
-        auto *tab = recordingTabFor(this->split_);
-        const auto active = recordings->isActive(tab);
-        auto *action = menu->addAction(
-            active ? "Stop tab recording" : "Record tab", this,
-            [this, recordings] {
-                recordings->toggle(recordingTabFor(this->split_));
-            });
-        action->setEnabled(active ? recordings->status(tab) != "Saving"
-                                  : recordings->canStart(tab));
-        menu->addSeparator();
-    }
+    menu->addAction("Close",
+                    h->getDisplaySequence(HotkeyCategory::Split, "delete"),
+                    this->split_, &Split::deleteFromContainer);
     menu->addAction(
         "Change channel",
         h->getDisplaySequence(HotkeyCategory::Split, "changeChannel"),
         this->split_, &Split::changeChannel);
-    menu->addAction("Close",
-                    h->getDisplaySequence(HotkeyCategory::Split, "delete"),
-                    this->split_, &Split::deleteFromContainer);
     menu->addSeparator();
     menu->addAction(
         "Popup",
@@ -1091,6 +1073,10 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
             menu->addAction("Reload subscriber emotes",
                             subSeq.isEmpty() ? bothSeq : subSeq, this,
                             &SplitHeader::reloadSubscriberEmotes);
+            menu->addAction("Emote sources...", this, [this, selected] {
+                showEmoteSourcesDialog(
+                    std::dynamic_pointer_cast<TwitchChannel>(selected), this);
+            });
         }
     }
 
@@ -1160,6 +1146,19 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
     }
 
     menu->addSeparator();
+
+    if (auto *recordings = getApp()->getChatRecordings())
+    {
+        auto *tab = recordingTabFor(this->split_);
+        const auto active = recordings->isActive(tab);
+        auto *action = menu->addAction(
+            active ? "Stop tab recording" : "Record tab", this,
+            [this, recordings] {
+                recordings->toggle(recordingTabFor(this->split_));
+            });
+        action->setEnabled(active ? recordings->status(tab) != "Saving"
+                                  : recordings->canStart(tab));
+    }
 
     {
         // "How to..." sub menu
@@ -1265,149 +1264,6 @@ std::unique_ptr<QMenu> SplitHeader::createMainMenu()
 
     if (twitchChannel)
     {
-        moreMenu->addAction("Emote sources...", this, [this, selected] {
-            const auto channel =
-                std::dynamic_pointer_cast<TwitchChannel>(selected);
-            if (!channel)
-            {
-                return;
-            }
-            const auto sources = channel->emoteSources();
-            auto *dialog = new QDialog(this);
-            dialog->setAttribute(Qt::WA_DeleteOnClose);
-            dialog->setWindowModality(Qt::WindowModal);
-            dialog->setWindowTitle("Emote sources for #" + channel->getName());
-            auto *layout = new QVBoxLayout(dialog);
-            auto *description = new QLabel(
-                "Use another Twitch channel's emotes in #" +
-                    channel->getName() +
-                    ". These settings only affect this channel. "
-                    "Leave a field blank to use this channel's own emotes.",
-                dialog);
-            description->setWordWrap(true);
-            layout->addWidget(description);
-
-            auto *sharedForm = new QFormLayout;
-            auto *sharedID = new QLineEdit(sources.sharedTwitchID, dialog);
-            sharedID->setObjectName("SharedEmoteSourceID");
-            sharedID->setToolTip(
-                "A numeric Twitch user ID for 7TV, BTTV, and FFZ. Leave blank "
-                "to use this channel's own emotes.");
-            sharedForm->addRow("Twitch user ID for all providers", sharedID);
-            layout->addLayout(sharedForm);
-
-            auto *individual =
-                new QCheckBox("Override providers individually", dialog);
-            individual->setObjectName("IndividualEmoteSources");
-            individual->setChecked(sources.individualProviders);
-            layout->addWidget(individual);
-            auto *providerFields = new QWidget(dialog);
-            auto *providerForm = new QFormLayout(providerFields);
-            providerForm->setContentsMargins(0, 0, 0, 0);
-            const std::array<QString, 3> names{"7TV", "BTTV", "FFZ"};
-            std::array<QLineEdit *, 3> inputs{};
-            for (size_t i = 0; i < inputs.size(); ++i)
-            {
-                inputs.at(i) = new QLineEdit(sources.providerTwitchIDs.at(i),
-                                             providerFields);
-                inputs.at(i)->setObjectName("EmoteSourceID" + names.at(i));
-                providerForm->addRow(names.at(i) + " Twitch user ID",
-                                     inputs.at(i));
-            }
-            layout->addWidget(providerFields);
-            providerFields->setVisible(individual->isChecked());
-            sharedID->setEnabled(!individual->isChecked());
-            const auto updatePlaceholders = [weak = std::weak_ptr(channel),
-                                             sharedID, inputs] {
-                const auto current = weak.lock();
-                const auto id = current ? current->roomId() : QString{};
-                const auto placeholder =
-                    id.isEmpty()
-                        ? QStringLiteral(
-                              "Current channel (ID not available yet)")
-                        : QStringLiteral("Current channel: %1").arg(id);
-                sharedID->setPlaceholderText(placeholder);
-                for (auto *input : inputs)
-                {
-                    input->setPlaceholderText(placeholder);
-                }
-            };
-            updatePlaceholders();
-            // Disconnect even if Qt destroys the callback without invoking it.
-            auto idConnection =
-                std::make_shared<pajlada::Signals::ScopedConnection>(
-                    channel->roomIdChanged.connect(updatePlaceholders));
-            QObject::connect(dialog, &QObject::destroyed, dialog,
-                             [connection = std::move(idConnection)]() mutable {
-                                 connection.reset();
-                             });
-            const bool seedProviders =
-                !sources.individualProviders &&
-                std::ranges::all_of(sources.providerTwitchIDs,
-                                    [](const auto &id) {
-                                        return id.isEmpty();
-                                    });
-            QObject::connect(
-                individual, &QCheckBox::toggled, dialog,
-                [dialog, providerFields, sharedID, inputs,
-                 seedProviders = seedProviders](bool checked) mutable {
-                    if (checked && seedProviders)
-                    {
-                        for (auto *input : inputs)
-                        {
-                            input->setText(sharedID->text());
-                        }
-                        seedProviders = false;
-                    }
-                    sharedID->setEnabled(!checked);
-                    providerFields->setVisible(checked);
-                    dialog->adjustSize();
-                });
-
-            auto *buttons = new QDialogButtonBox(
-                QDialogButtonBox::Save | QDialogButtonBox::Cancel |
-                    QDialogButtonBox::RestoreDefaults,
-                dialog);
-            layout->addWidget(buttons);
-            QObject::connect(buttons, &QDialogButtonBox::rejected, dialog,
-                             &QDialog::reject);
-            QObject::connect(buttons->button(QDialogButtonBox::RestoreDefaults),
-                             &QPushButton::clicked, dialog,
-                             [sharedID, individual, inputs] {
-                                 sharedID->clear();
-                                 individual->setChecked(false);
-                                 for (auto *input : inputs)
-                                 {
-                                     input->clear();
-                                 }
-                             });
-            QObject::connect(
-                buttons, &QDialogButtonBox::accepted, dialog,
-                [dialog, channel, sharedID, individual, inputs] {
-                    ChannelEmoteSources updated{
-                        .sharedTwitchID = sharedID->text(),
-                        .individualProviders = individual->isChecked(),
-                        .providerTwitchIDs = {},
-                    };
-                    for (size_t i = 0; i < inputs.size(); ++i)
-                    {
-                        updated.providerTwitchIDs.at(i) = inputs.at(i)->text();
-                    }
-                    if (!channel->setEmoteSources(std::move(updated)))
-                    {
-                        QMessageBox::warning(
-                            dialog, "Invalid Twitch user ID",
-                            "Use positive numeric Twitch user IDs. "
-                            "Leave a field blank to use its default.");
-                        return;
-                    }
-                    dialog->accept();
-                });
-            dialog->setMinimumWidth(420);
-            dialog->show();
-            sharedID->setFocus();
-        });
-
         {
             auto *action = new QAction(moreMenu);
             action->setText("Mute highlight sounds");

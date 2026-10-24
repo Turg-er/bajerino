@@ -11,6 +11,7 @@
 #include "controllers/completion/TabCompletionModel.hpp"
 #include "controllers/hotkeys/HotkeyController.hpp"
 #include "controllers/plugins/PluginController.hpp"
+#include "controllers/recording/ChatRecordingController.hpp"
 #include "messages/Emote.hpp"
 #include "mocks/BaseApplication.hpp"
 #include "mocks/Channel.hpp"
@@ -34,6 +35,7 @@
 #include "util/MultiChannel.hpp"
 #include "widgets/buttons/SvgButton.hpp"
 #include "widgets/dialogs/PollDialog.hpp"
+#include "widgets/helper/NotebookTab.hpp"
 #include "widgets/helper/ResizingTextEdit.hpp"
 #include "widgets/listview/GenericListView.hpp"
 #include "widgets/Notebook.hpp"
@@ -41,6 +43,7 @@
 #include "widgets/splits/InputCompletionPopup.hpp"
 #include "widgets/splits/PinnedMessageWidget.hpp"
 #include "widgets/splits/Split.hpp"
+#include "widgets/splits/SplitContainer.hpp"
 #include "widgets/splits/SplitHeader.hpp"
 
 #include <QApplication>
@@ -145,6 +148,13 @@ public:
     {
         return &this->personalEmotes;
     }
+
+    ChatRecordingController *getChatRecordings() override
+    {
+        return this->recordings.get();
+    }
+
+    std::unique_ptr<ChatRecordingController> recordings;
 
     SeventvPersonalEmotes personalEmotes;
     BttvEmotes bttv;
@@ -925,16 +935,9 @@ TEST(SplitHeader, EmoteSourcesDialogDefaultsAndIndividualOverrides)
     const auto actions = menu->actions();
     for (auto *action : actions)
     {
-        if (action->text() == "More" && action->menu() != nullptr)
+        if (action->text() == "Emote sources...")
         {
-            const auto entries = action->menu()->actions();
-            for (auto *entry : entries)
-            {
-                if (entry->text() == "Emote sources...")
-                {
-                    editSources = entry;
-                }
-            }
+            editSources = action;
         }
     }
     ASSERT_NE(editSources, nullptr);
@@ -950,18 +953,18 @@ TEST(SplitHeader, EmoteSourcesDialogDefaultsAndIndividualOverrides)
     ASSERT_NE(ffz, nullptr);
     EXPECT_TRUE(shared->text().isEmpty());
     EXPECT_FALSE(individual->isChecked());
-    EXPECT_TRUE(shared->placeholderText().contains("not available"));
+    EXPECT_TRUE(shared->placeholderText().isEmpty());
     EXPECT_FALSE(ffz->isVisibleTo(dialog));
 
     TwitchChannelTestAccess::setRoomId(*channel, "42");
-    EXPECT_EQ(shared->placeholderText(), "Current channel: 42");
+    EXPECT_EQ(shared->placeholderText(), "42");
     shared->setText("99");
     individual->setChecked(true);
     EXPECT_FALSE(shared->isEnabled());
     EXPECT_TRUE(ffz->isVisibleTo(dialog));
     EXPECT_EQ(ffz->text(), "99");
     ffz->clear();
-    EXPECT_EQ(ffz->placeholderText(), "Current channel: 42");
+    EXPECT_EQ(ffz->placeholderText(), "42");
     auto *buttons = dialog->findChild<QDialogButtonBox *>();
     ASSERT_NE(buttons, nullptr);
     buttons->button(QDialogButtonBox::Save)->click();
@@ -973,4 +976,122 @@ TEST(SplitHeader, EmoteSourcesDialogDefaultsAndIndividualOverrides)
     QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
     TwitchChannelTestAccess::setRoomId(*channel, "43");
     EXPECT_EQ(channel->emoteSourceID(ChannelEmoteProvider::Ffz), "43");
+}
+
+TEST(NotebookTab, EmoteSourcesFollowClickedTabAndChannelChanges)
+{
+    MockApplication app;
+    testing::NiceMock<mock::Helix> helix;
+    initializeHelix(&helix);
+    app.recordings = std::make_unique<ChatRecordingController>(app.paths_);
+    app.settings.enableBTTVChannelEmotes = false;
+    app.settings.enableFFZChannelEmotes = false;
+    app.settings.enableSevenTVChannelEmotes = false;
+    const auto first = std::make_shared<TwitchChannel>("emote_tab_first");
+    const auto second = std::make_shared<TwitchChannel>("emote_tab_second");
+    for (const auto &channel : {first, second})
+    {
+        app.twitch.mockChannels[channel->getName()] = channel;
+    }
+    TwitchChannelTestAccess::setRoomId(*first, "42");
+    TwitchChannelTestAccess::setRoomId(*second, "43");
+
+    Notebook notebook(nullptr);
+    notebook.setAllowUserTabManagement(true);
+    auto *page = new SplitContainer(&notebook);
+    auto *tab = notebook.addPage(page);
+    page->setTab(tab);
+    auto *split = new Split(page);
+    split->setChannel(IndirectChannel{first});
+    page->insertSplit(split);
+    auto *otherPage = new SplitContainer(&notebook);
+    otherPage->setTab(notebook.addPage(otherPage, "Other", true));
+    auto *otherSplit = new Split(otherPage);
+    otherSplit->setChannel(IndirectChannel{second});
+    otherPage->insertSplit(otherSplit);
+
+    const auto openMenu = [tab] {
+        QMouseEvent click(QEvent::MouseButtonPress, QPointF(4, 4),
+                          QPointF(4, 4), Qt::RightButton, Qt::RightButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(tab, &click);
+        return qobject_cast<QMenu *>(QApplication::activePopupWidget());
+    };
+    const auto findAction = [](QMenu *menu, const QString &text) -> QAction * {
+        const auto actions = menu->actions();
+        for (auto *action : actions)
+        {
+            if (action->isVisible() && action->text() == text)
+            {
+                return action;
+            }
+        }
+        return nullptr;
+    };
+
+    auto *menu = openMenu();
+    ASSERT_NE(menu, nullptr);
+    EXPECT_EQ(menu->actions().constFirst()->text(), "Close Tab");
+    auto *record = findAction(menu, "Record tab");
+    ASSERT_NE(record, nullptr);
+    EXPECT_GT(menu->actions().indexOf(record),
+              menu->actions().indexOf(findAction(menu, "Tab Color")));
+    auto *edit = findAction(menu, "Emote sources...");
+    ASSERT_NE(edit, nullptr);
+    edit->trigger();
+    menu->close();
+    auto *dialog = tab->findChild<QDialog *>();
+    ASSERT_NE(dialog, nullptr);
+    EXPECT_EQ(dialog->windowTitle(), "Emote sources for #emote_tab_first");
+    auto *shared = dialog->findChild<QLineEdit *>("SharedEmoteSourceID");
+    ASSERT_NE(shared, nullptr);
+    EXPECT_EQ(shared->placeholderText(), "42");
+    shared->setText("99");
+    dialog->reject();
+    QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    EXPECT_TRUE(first->emoteSources().sharedTwitchID.isEmpty());
+
+    const std::array<MultiChannel::Spec, 2> specs{{
+        {.platform = MultiChannel::Platform::Twitch, .name = first->getName()},
+        {.platform = MultiChannel::Platform::Twitch, .name = second->getName()},
+    }};
+    auto multi = std::make_shared<MultiChannel>(
+        specs, MultiChannelIndicatorMode::PlatformBadgeIfUnselected);
+    split->setChannel(IndirectChannel{multi});
+    auto *duplicate = new Split(page);
+    duplicate->setChannel(IndirectChannel{second});
+    page->insertSplit(duplicate);
+
+    menu = openMenu();
+    ASSERT_NE(menu, nullptr);
+    EXPECT_EQ(findAction(menu, "Emote sources..."), nullptr);
+    auto *choose = findAction(menu, "Emote sources");
+    ASSERT_NE(choose, nullptr);
+    ASSERT_NE(choose->menu(), nullptr);
+    EXPECT_EQ(choose->menu()->actions().size(), 2);
+    edit = findAction(choose->menu(), "#emote_tab_second");
+    ASSERT_NE(edit, nullptr);
+    edit->trigger();
+    menu->close();
+    dialog = tab->findChild<QDialog *>();
+    ASSERT_NE(dialog, nullptr);
+    EXPECT_EQ(dialog->windowTitle(), "Emote sources for #emote_tab_second");
+    shared = dialog->findChild<QLineEdit *>("SharedEmoteSourceID");
+    ASSERT_NE(shared, nullptr);
+    EXPECT_EQ(shared->placeholderText(), "43");
+    shared->setText("99");
+    auto *buttons = dialog->findChild<QDialogButtonBox *>();
+    ASSERT_NE(buttons, nullptr);
+    buttons->button(QDialogButtonBox::Save)->click();
+    QApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    EXPECT_EQ(second->emoteSources().sharedTwitchID, "99");
+    EXPECT_TRUE(first->emoteSources().sharedTwitchID.isEmpty());
+
+    split->setChannel(IndirectChannel{Channel::getEmpty()});
+    duplicate->setChannel(IndirectChannel{Channel::getEmpty()});
+    menu = openMenu();
+    ASSERT_NE(menu, nullptr);
+    EXPECT_EQ(findAction(menu, "Emote sources..."), nullptr);
+    EXPECT_EQ(findAction(menu, "Emote sources"), nullptr);
+    menu->close();
 }
